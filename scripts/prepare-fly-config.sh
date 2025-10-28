@@ -119,6 +119,9 @@ EOF
   sed_inplace '/# Monitoring and health checks/,/path = "\/metrics"/d' fly.toml.tmp
   sed_inplace '/\[checks\]/,/timeout = "2s"/d' fly.toml.tmp
 
+  # Remove release_command in CI mode to prevent deployment timeouts
+  sed_inplace '/release_command/d' fly.toml.tmp
+
   # Insert empty services configuration before [machine] section
   if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS sed syntax

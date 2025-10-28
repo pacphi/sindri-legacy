@@ -132,10 +132,10 @@ install() {
     fi
   fi
 
-  # Get latest release
+  # Get latest release (including prereleases since this is an internal tool)
   print_status "Fetching latest release..."
   local tag_name
-  tag_name=$(get_latest_release false)
+  tag_name=$(get_latest_release true)
 
   if [[ -z "$tag_name" ]]; then
     print_error "Failed to get latest release from GitHub"
