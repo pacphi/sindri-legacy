@@ -175,6 +175,13 @@ configure() {
   # Create comprehensive tools summary
   print_status "Creating comprehensive tools summary..."
 
+  # Helper function to run commands with timeout protection
+  run_with_timeout() {
+    local cmd="$1"
+    local timeout_sec="${2:-3}"
+    timeout "${timeout_sec}s" bash -c "$cmd" 2>/dev/null || echo "timeout"
+  }
+
   local summary_file="/workspace/.installed-tools.txt"
   {
     echo "# Installed Development Tools"
@@ -186,7 +193,10 @@ configure() {
     echo "### System & Version Control"
     command_exists git && echo "- Git: $(git --version | head -n1)"
     command_exists gh && echo "- GitHub CLI: $(gh --version | head -n1)"
-    command_exists claude && echo "- Claude Code: $(claude --version 2>/dev/null || echo 'Installed')"
+    if command_exists claude; then
+      local claude_ver=$(run_with_timeout "claude --version" 2)
+      [[ "$claude_ver" != "timeout" ]] && echo "- Claude Code: $claude_ver" || echo "- Claude Code: Installed"
+    fi
     [ -f "/workspace/swarm" ] && echo "- Claude Flow: Installed"
     echo
 
@@ -238,10 +248,11 @@ configure() {
     echo
 
     echo "### .NET"
-    command_exists dotnet && echo "- .NET SDK: $(dotnet --version)"
     if command_exists dotnet; then
+      local dotnet_ver=$(run_with_timeout "dotnet --version" 3)
+      [[ "$dotnet_ver" != "timeout" ]] && echo "- .NET SDK: $dotnet_ver"
       echo "  Installed SDKs:"
-      dotnet --list-sdks 2>/dev/null | head -3 | sed 's/^/    - /'
+      run_with_timeout "dotnet --list-sdks | head -3" 3 | sed 's/^/    - /' 2>/dev/null || echo "    - (timeout)"
     fi
     echo
 
@@ -249,8 +260,14 @@ configure() {
     echo "### Containers & Orchestration"
     command_exists docker && echo "- Docker: $(docker --version)"
     command_exists docker-compose && echo "- Docker Compose: $(docker-compose --version 2>/dev/null | head -n1)"
-    command_exists kubectl && echo "- kubectl: $(kubectl version --client --short 2>/dev/null)"
-    command_exists helm && echo "- Helm: $(helm version --short 2>/dev/null)"
+    if command_exists kubectl; then
+      local kubectl_ver=$(run_with_timeout "kubectl version --client --short" 3)
+      [[ "$kubectl_ver" != "timeout" ]] && echo "- kubectl: $kubectl_ver" || echo "- kubectl: Installed"
+    fi
+    if command_exists helm; then
+      local helm_ver=$(run_with_timeout "helm version --short" 3)
+      [[ "$helm_ver" != "timeout" ]] && echo "- Helm: $helm_ver" || echo "- Helm: Installed"
+    fi
     echo
 
     echo "### Infrastructure as Code"
@@ -260,9 +277,18 @@ configure() {
     echo
 
     echo "### Cloud CLIs"
-    command_exists aws && echo "- AWS CLI: $(aws --version 2>&1 | head -n1)"
-    command_exists az && echo "- Azure CLI: $(az --version 2>/dev/null | grep ^azure-cli)"
-    command_exists gcloud && echo "- Google Cloud SDK: $(gcloud --version 2>/dev/null | head -n1)"
+    if command_exists aws; then
+      local aws_ver=$(run_with_timeout "aws --version" 3)
+      [[ "$aws_ver" != "timeout" ]] && echo "- AWS CLI: $aws_ver" || echo "- AWS CLI: Installed"
+    fi
+    if command_exists az; then
+      local az_ver=$(run_with_timeout "az --version | grep ^azure-cli" 3)
+      [[ "$az_ver" != "timeout" ]] && echo "- Azure CLI: $az_ver" || echo "- Azure CLI: Installed"
+    fi
+    if command_exists gcloud; then
+      local gcloud_ver=$(run_with_timeout "gcloud --version | head -n1" 3)
+      [[ "$gcloud_ver" != "timeout" ]] && echo "- Google Cloud SDK: $gcloud_ver" || echo "- Google Cloud SDK: Installed"
+    fi
     echo
 
     echo "## Active Extensions"
