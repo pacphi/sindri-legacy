@@ -108,20 +108,23 @@ extension-manager list
 #   ✓ docker (docker.sh.example) - activated
 ```
 
-**Activate an extension:**
+**Install extensions (auto-activates):**
 
 ```bash
-# Activate Rust toolchain (adds to manifest)
-extension-manager activate rust
+# Install Rust toolchain
+extension-manager install rust
 
-# Activate Python development tools
-extension-manager activate python
+# Install Python development tools
+extension-manager install python
 
-# Activate Docker utilities
-extension-manager activate docker
+# Install Docker utilities
+extension-manager install docker
+
+# Or use interactive mode for guided setup
+extension-manager --interactive
 ```
 
-**Install activated extensions:**
+**Install all extensions from manifest:**
 
 ```bash
 # Install a specific activated extension
@@ -200,10 +203,10 @@ post-cleanup
 # View current manifest
 cat /workspace/scripts/extensions.d/active-extensions.conf
 
-# Activate extension (adds to manifest)
-extension-manager activate <name>
+# Install extension (auto-activates and adds to manifest)
+extension-manager install <name>
 
-# Deactivate extension (removes from manifest)
+# Deactivate extension (removes from manifest, but doesn't uninstall)
 extension-manager deactivate <name>
 
 # Manually edit manifest (for advanced users)

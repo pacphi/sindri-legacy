@@ -63,13 +63,12 @@ Comprehensive testing for each extension individually using the Extension API v1
 
 For each extension using `extension-manager`:
 
-1. **Activation**: `extension-manager activate <name>` (adds to manifest)
-2. **Installation**: `extension-manager install <name>` (runs prerequisites, install, configure)
-3. **Command Availability**: Verify all expected commands in PATH
-4. **Key Functionality**: Test core capability (compilation, execution, etc.)
-5. **Validation**: `extension-manager validate <name>` confirms working installation
-6. **Idempotency**: Re-run installation to verify safe re-execution
-7. **Resource Cleanup**: Destroy test VM and volumes
+1. **Installation**: `extension-manager install <name>` (auto-activates, runs prerequisites, install, configure)
+2. **Command Availability**: Verify all expected commands in PATH
+3. **Key Functionality**: Test core capability (compilation, execution, etc.)
+4. **Validation**: `extension-manager validate <name>` confirms working installation
+5. **Idempotency**: Re-run installation to verify safe re-execution
+6. **Resource Cleanup**: Destroy test VM and volumes
 
 **When It Runs**:
 
@@ -264,8 +263,7 @@ esac
 ```bash
 # On test VM
 cd /workspace/scripts/lib
-bash extension-manager.sh activate r
-/workspace/scripts/vm-configure.sh --extensions-only
+bash extension-manager.sh install r
 ```
 
 ### 5. Verify Passes All Checks

@@ -441,23 +441,12 @@ jobs:
             exit 1
           fi
 
-          # Test extension activation with retry
-          echo "🔍 Testing extension activation (nodejs)..."
-          if retry_with_backoff 3 10 60 \
-            flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" \
-              -C "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh activate nodejs 2>&1'"; then
-            echo "✅ Extension activation successful"
-          else
-            echo "❌ Extension activation failed"
-            exit 1
-          fi
-
-          # Test extension installation with retry
-          echo "🔍 Testing extension installation (nodejs)..."
+          # Test extension installation (which auto-activates) with retry
+          echo "🔍 Testing extension installation with auto-activation (nodejs)..."
           if retry_with_backoff 3 10 60 \
             flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" \
               -C "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install nodejs 2>&1'"; then
-            echo "✅ Extension installation successful"
+            echo "✅ Extension installation with auto-activation successful"
           else
             echo "❌ Extension installation failed"
             exit 1

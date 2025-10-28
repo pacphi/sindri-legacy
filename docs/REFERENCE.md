@@ -377,24 +377,20 @@ Sindri uses **Extension API v1.0** with manifest-based activation. Extensions ar
 extension-manager list
 ```
 
-**Activate an extension (adds to manifest):**
+**Install an extension (auto-activates and installs):**
 
 ```bash
-extension-manager activate <name>
-
-# Examples:
-extension-manager activate rust
-extension-manager activate python
-extension-manager activate docker
-```
-
-**Install activated extension:**
-
-```bash
-# Install specific extension
 extension-manager install <name>
 
-# Or install all activated extensions
+# Examples:
+extension-manager install rust
+extension-manager install python
+extension-manager install docker
+
+# Or use interactive mode for guided setup
+extension-manager --interactive
+
+# Or install all extensions from manifest
 extension-manager install-all
 ```
 
@@ -492,8 +488,7 @@ remove() {
 }
 EOF
 
-# Activate and install the custom extension
-extension-manager activate custom
+# Install the custom extension (auto-activates)
 extension-manager install custom
 ```
 

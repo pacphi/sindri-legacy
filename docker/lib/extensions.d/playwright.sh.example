@@ -31,7 +31,7 @@ prerequisites() {
   # Check for Node.js and npm
   if ! command_exists node; then
     print_error "Node.js is required but not installed"
-    print_status "Install the nodejs extension first: extension-manager activate nodejs"
+    print_status "Install the nodejs extension first: extension-manager install nodejs"
     return 1
   fi
 

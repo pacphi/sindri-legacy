@@ -170,9 +170,9 @@ Sindri uses **Extension API v1.0** with manifest-based activation for managing d
 ### Extension Lifecycle
 
 1. **Discovery**: Extension scripts stored as `.sh.example` files in `/workspace/scripts/extensions.d/`
-2. **Activation**: Users activate extensions via `extension-manager activate <name>` which adds them to the manifest
+2. **Installation**: Users install extensions via `extension-manager install <name>` which auto-activates and installs
 3. **Manifest Processing**: The `active-extensions.conf` file controls which extensions install and their execution order
-4. **Installation**: `extension-manager install <name>` runs the extension's API functions in sequence:
+4. **API Execution**: `install` command runs the extension's API functions in sequence:
    - `prerequisites()` - Check system requirements
    - `install()` - Install packages and tools
    - `configure()` - Post-installation configuration

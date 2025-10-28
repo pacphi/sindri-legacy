@@ -33,14 +33,14 @@ prerequisites() {
   # Check for Python 3
   if ! command_exists python3; then
     print_error "python3 is required but not installed"
-    print_status "Install the python extension first: extension-manager activate python"
+    print_status "Install the python extension first: extension-manager install python"
     return 1
   fi
 
   # Check for Node.js/npm (for claude-usage-cli)
   if ! command_exists npm; then
     print_error "npm is required but not installed"
-    print_status "Install the nodejs extension first: extension-manager activate nodejs"
+    print_status "Install the nodejs extension first: extension-manager install nodejs"
     return 1
   fi
 

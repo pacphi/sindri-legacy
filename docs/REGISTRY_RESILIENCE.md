@@ -329,7 +329,7 @@ test-extension:
   timeout-minutes: 30
 
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Setup retry utilities
       run: |

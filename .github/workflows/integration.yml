@@ -492,7 +492,7 @@ jobs:
       - name: Test basic extension workflow
         if: success()
         run: |
-          echo "Testing basic extension activation and manifest system..."
+          echo "Testing basic extension installation with auto-activation..."
 
           app_name="${{ steps.app-name.outputs.app_name }}"
 
@@ -506,35 +506,30 @@ jobs:
             echo \"Available extensions:\"
             bash extension-manager.sh list
 
-            # Test activating workspace-structure extension
+            # Test installing workspace-structure extension (auto-activates)
             echo \"\"
-            echo \"Activating workspace-structure extension...\"
-            if bash extension-manager.sh activate workspace-structure; then
-              echo \"✅ Extension activated\"
+            echo \"Installing workspace-structure extension (with auto-activation)...\"
+            if bash extension-manager.sh install workspace-structure; then
+              echo \"✅ Extension installed and activated\"
             else
-              echo \"❌ Extension activation failed\"
+              echo \"❌ Extension installation failed\"
               exit 1
             fi
 
-            # Verify manifest file was created
+            # Verify extension was activated (check for .sh file without .example)
             echo \"\"
-            echo \"Checking manifest file...\"
-            if [ -f extensions.d/active-extensions.conf ]; then
-              echo \"✅ Manifest file created\"
-              echo \"Manifest contents:\"
-              cat extensions.d/active-extensions.conf
+            echo \"Checking extension activation...\"
+            if [ -f extensions.d/workspace-structure.sh ]; then
+              echo \"✅ Extension file activated (copied from .example)\"
             else
-              echo \"❌ Manifest file not created\"
+              echo \"❌ Extension file not activated\"
               exit 1
             fi
 
-            # Verify extension appears in manifest
-            if grep -q \"workspace-structure\" extensions.d/active-extensions.conf; then
-              echo \"✅ Extension added to manifest correctly\"
-            else
-              echo \"❌ Extension not found in manifest\"
-              exit 1
-            fi
+            # Check extension status
+            echo \"\"
+            echo \"Checking extension status...\"
+            bash extension-manager.sh status workspace-structure
 
             echo \"\"
             echo \"✅ Basic extension workflow test passed\"
@@ -676,31 +671,37 @@ jobs:
             elapsed=$((elapsed + interval))
           done
 
-      - name: Activate core extensions
+      - name: Add core extensions to manifest
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          echo "Activating core extensions..."
+          echo "Adding core extensions to manifest..."
           flyctl ssh console --app $app_name --command "/bin/bash -c '
             cd /workspace/scripts/lib
+            manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Activate core extensions
+            # Create manifest if it doesn'\''t exist
+            if [ ! -f \"\$manifest_file\" ]; then
+              cp extensions.d/active-extensions.conf.example \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+            fi
+
+            # Add core extensions to manifest
             for ext in workspace-structure nodejs ssh-environment; do
-              echo \"Activating \$ext...\"
-              if bash extension-manager.sh activate \$ext; then
-                echo \"✅ \$ext activated\"
+              echo \"Adding \$ext to manifest...\"
+              if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
+                echo \"\$ext\" >> \"\$manifest_file\"
+                echo \"✅ \$ext added to manifest\"
               else
-                echo \"❌ \$ext activation failed\"
-                exit 1
+                echo \"✅ \$ext already in manifest\"
               fi
             done
 
             echo \"\"
-            echo \"=== Active Extensions in Manifest ===\"
-            cat extensions.d/active-extensions.conf
+            echo \"=== Extensions in Manifest ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
           '"
 
-      - name: Install all activated extensions
+      - name: Install all extensions from manifest
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 

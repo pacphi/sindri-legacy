@@ -100,10 +100,9 @@ ssh developer@my-claude-env.fly.dev -p 10022
 # Authenticate Claude Code
 claude
 
-# Activate and install required extensions
-extension-manager activate agent-manager
-extension-manager activate tmux-workspace
-extension-manager install-all
+# Install required extensions (auto-activates)
+extension-manager install agent-manager
+extension-manager install tmux-workspace
 
 # Start the tmux workspace
 tmux-workspace
@@ -119,11 +118,10 @@ cf-swarm "Build a modern web application with authentication"
 
 ### Agent Management
 
-**Prerequisites**: Requires the `agent-manager` extension to be activated and installed.
+**Prerequisites**: Requires the `agent-manager` extension to be installed.
 
 ```bash
-# Activate and install the agent-manager extension
-extension-manager activate agent-manager
+# Install the agent-manager extension (auto-activates)
 extension-manager install agent-manager
 ```
 
@@ -184,11 +182,10 @@ context-hierarchy
 
 ### Tmux Workspace
 
-**Prerequisites**: Requires the `tmux-workspace` extension to be activated and installed.
+**Prerequisites**: Requires the `tmux-workspace` extension to be installed.
 
 ```bash
-# Activate and install the tmux-workspace extension
-extension-manager activate tmux-workspace
+# Install the tmux-workspace extension (auto-activates)
 extension-manager install tmux-workspace
 ```
 

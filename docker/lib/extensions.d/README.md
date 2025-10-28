@@ -18,13 +18,14 @@ Sindri uses a manifest-based extension system to manage development tools and en
 # List all available extensions
 extension-manager list
 
-# Activate an extension (adds to manifest)
-extension-manager activate nodejs
-
-# Install activated extension
+# Install an extension (auto-activates if needed)
 extension-manager install nodejs
 
-# Or install all activated extensions
+# Or use interactive mode for guided setup
+extension-manager --interactive
+
+# Or manually edit manifest then install all
+# Edit: /workspace/scripts/lib/extensions.d/active-extensions.conf
 extension-manager install-all
 
 # Check installation status
@@ -279,9 +280,13 @@ extension-manager list
 
 ### Activate Extension
 ```bash
-# Add to manifest (doesn't install yet)
-extension-manager activate nodejs
-extension-manager activate claude-config
+# Manually add to manifest (doesn't install yet)
+# Edit: /workspace/scripts/lib/extensions.d/active-extensions.conf
+# Add lines: nodejs, claude-config
+
+# Or install directly (auto-activates)
+extension-manager install nodejs
+extension-manager install claude-config
 ```
 
 ### Install Extension
@@ -397,8 +402,7 @@ fi
 ./my-extension.sh.example validate
 ./my-extension.sh.example status
 
-# Or use extension-manager
-extension-manager activate my-extension
+# Or use extension-manager (install auto-activates)
 extension-manager install my-extension
 extension-manager validate my-extension
 ```
@@ -424,7 +428,7 @@ Declare dependencies in `prerequisites()`:
 prerequisites() {
   if ! command_exists npm; then
     print_error "nodejs extension required"
-    print_status "Run: extension-manager activate nodejs"
+    print_status "Run: extension-manager install nodejs"
     return 1
   fi
   return 0
@@ -569,9 +573,12 @@ Add `EXT_NAME`, `EXT_VERSION`, `EXT_DESCRIPTION`, `EXT_CATEGORY` at the top.
 ### 3. Wrap in Functions
 Convert script body into `install()` function. Add other 5 API functions.
 
-### 4. Activate in Manifest
+### 4. Install Extension
 ```bash
-extension-manager activate my-tool
+# Install command will auto-activate the extension
+extension-manager install my-tool
+
+# Or manually add to active-extensions.conf then run install-all
 ```
 
 ### 5. Test
