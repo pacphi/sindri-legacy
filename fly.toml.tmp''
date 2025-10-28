@@ -48,7 +48,7 @@ primary_region = "sjc"
 
   # Port mapping for SSH access
   [[services.ports]]
-    port = 10022  # External port for SSH - configurable for testing
+    port = {{SSH_EXTERNAL_PORT}}  # External port for SSH - configurable for testing
 
   # Health check for SSH service
   [[services.tcp_checks]]

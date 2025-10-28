@@ -28,11 +28,10 @@ flyctl deploy --strategy immediate --wait-timeout 60s  # Skip health checks
 ### On-VM Commands
 
 ```bash
-/workspace/scripts/vm-configure.sh                # Complete environment setup
-/workspace/scripts/vm-configure.sh --extension <name>  # Install specific extension
 extension-manager list                            # List available extensions
-extension-manager activate <name>                 # Activate extension
-extension-manager install <name>                  # Install extension
+extension-manager --interactive                   # Interactive extension setup
+extension-manager install <name>                  # Install specific extension
+extension-manager install-all                     # Install all active extensions
 claude                                            # Authenticate Claude Code
 npx claude-flow@alpha init --force               # Initialize Claude Flow in project
 new-project <name> [--type <type>]               # Create new project with enhancements
@@ -82,11 +81,14 @@ Sindri uses a manifest-based extension system to manage development tools and en
 # List all available extensions
 extension-manager list
 
-# Activate an extension (adds to manifest)
-extension-manager activate <name>
+# Interactive setup with prompts (recommended for first-time setup)
+extension-manager --interactive
 
-# Install an extension (runs prerequisites, install, configure)
+# Install an extension (auto-activates if needed)
 extension-manager install <name>
+
+# Install all active extensions from manifest
+extension-manager install-all
 
 # Check extension status
 extension-manager status <name>
@@ -94,11 +96,11 @@ extension-manager status <name>
 # Validate extension installation
 extension-manager validate <name>
 
+# Validate all installed extensions
+extension-manager validate-all
+
 # Uninstall extension
 extension-manager uninstall <name>
-
-# Install all active extensions
-extension-manager install-all
 
 # Reorder extension priority
 extension-manager reorder <name> <position>
@@ -116,6 +118,7 @@ extension-manager reorder <name> <position>
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
 
 **Development Tools:**
+- `github-cli` - GitHub CLI authentication and workflow configuration
 - `python` - Python 3.13 with pip, venv, uv
 - `rust` - Rust toolchain with cargo, clippy, rustfmt
 - `golang` - Go 1.24 with gopls, delve, golangci-lint
@@ -174,7 +177,6 @@ Sindri provides multiple extensions for Node.js development:
 
 **nodejs** (Core - NVM approach):
 ```bash
-extension-manager activate nodejs
 extension-manager install nodejs
 ```
 Provides:
@@ -185,7 +187,6 @@ Provides:
 
 **nodejs-devtools** (Optional):
 ```bash
-extension-manager activate nodejs-devtools
 extension-manager install nodejs-devtools
 ```
 Provides:
@@ -197,7 +198,6 @@ Provides:
 
 **claude-config** (Recommended):
 ```bash
-extension-manager activate claude-config
 extension-manager install claude-config
 ```
 Provides:
@@ -208,13 +208,14 @@ Provides:
 
 **Typical Setup**:
 ```bash
-# Activate all three
-extension-manager activate nodejs
-extension-manager activate claude-config
-extension-manager activate nodejs-devtools
+# Edit manifest to uncomment desired extensions
+# /workspace/scripts/extensions.d/active-extensions.conf
 
-# Install in dependency order
+# Then install all at once
 extension-manager install-all
+
+# Or use interactive mode
+extension-manager --interactive
 ```
 
 ## Testing and Validation
@@ -310,9 +311,6 @@ codex suggest "optimize this function"
 codex edit file.js
 codex run "create REST API"
 
-# Claude Squad - Terminal-based AI assistant
-claude-squad "implement authentication"
-
 # Plandex - Multi-step development tasks
 plandex init                         # Initialize in project
 plandex plan "add user auth"         # Plan task
@@ -376,8 +374,7 @@ export GROK_API_KEY=your_key
 **Enable the extension:**
 
 ```bash
-extension-manager activate ai-tools
-/workspace/scripts/vm-configure.sh --extension ai-tools
+extension-manager install ai-tools
 ```
 
 See `/workspace/ai-tools/README.md` for complete documentation.

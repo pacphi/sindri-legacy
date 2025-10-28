@@ -38,24 +38,25 @@ Like its mythological namesake, Sindri forges powerful development environments 
 git clone https://github.com/pacphi/sindri.git
 cd sindri
 
-# Activate extensions
+# Prepare extension configuration
 cp docker/lib/extensions.d/active-extensions.conf.example docker/lib/extensions.d/active-extensions.conf
 
-# Deploy
+# Deploy (flyctl will be auto-installed if needed)
 ./scripts/vm-setup.sh --app-name my-sindri-dev --region sjc
 
 # Connect
 ssh developer@my-sindri-dev.fly.dev -p 10022
 
-# Run configure script inside VM
-./scripts/vm-configure.sh
+# Configure extensions inside VM
+extension-manager --interactive
 
 # Start developing
 claude
 ```
 
-> **Prerequisites**: [Fly.io CLI](https://fly.io/docs/flyctl/install/) + SSH keys +
-[Claude Max](https://www.anthropic.com/max) or [API key](https://console.anthropic.com/settings/keys)
+> **Prerequisites**: SSH keys + [Claude Max](https://www.anthropic.com/max) or [API key](https://console.anthropic.com/settings/keys)
+>
+> **Note**: The setup script will prompt to install [Fly.io CLI](https://fly.io/docs/flyctl/install/) if not found
 
 ## 📚 Documentation
 

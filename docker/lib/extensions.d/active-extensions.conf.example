@@ -1,13 +1,17 @@
 # Active Extensions Configuration
 # ============================================================================
 # Extensions execute in the order listed below.
-# Uncomment lines to activate extensions.
+# Uncomment lines to activate extensions (remove the # at the start).
 # Lines starting with # are comments and are ignored.
 #
-# To activate an extension:
-#   extension-manager activate <extension-name>
+# To manage extensions:
+#   1. Edit this file to uncomment desired extensions
+#   2. Run: extension-manager install-all
 #
-# To manage this file manually:
+# Or use interactive mode:
+#   extension-manager --interactive
+#
+# Manual editing:
 #   - Uncomment the extension name to activate
 #   - Comment out or remove lines to deactivate
 #   - Reorder lines to change execution priority
@@ -44,6 +48,9 @@ claude-config
 # ============================================================================
 # DEVELOPMENT TOOLS (optional - uncomment as needed)
 # ============================================================================
+
+# GitHub CLI authentication and workflow configuration
+github-cli
 
 # Node.js development tools: TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
 nodejs-devtools
@@ -116,7 +123,8 @@ post-cleanup
 # - Dependencies are checked in prerequisites()
 # - Use extension-manager commands for management:
 #     extension-manager list              # Show all extensions
-#     extension-manager activate <name>   # Add to manifest
-#     extension-manager install <name>    # Install activated extension
-#     extension-manager install-all       # Install all activated
+#     extension-manager install <name>    # Install extension (auto-activates)
+#     extension-manager install-all       # Install all uncommented extensions
+#     extension-manager --interactive     # Interactive setup with prompts
+#     extension-manager validate-all      # Validate all installed extensions
 # ============================================================================

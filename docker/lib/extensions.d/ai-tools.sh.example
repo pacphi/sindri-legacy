@@ -3,7 +3,7 @@
 # Extension API v1.0
 #
 # This extension installs AI CLI tools with:
-# - Autonomous agents (Codex, Claude Squad, Plandex, Hector)
+# - Autonomous agents (Codex, Plandex, Hector)
 # - Platform CLIs (Gemini, GitHub Copilot, AWS Q)
 # - Local models (Ollama)
 # - Framework tools (Fabric, Grok)
@@ -86,10 +86,17 @@ install() {
   if command_exists codex; then
     print_warning "Codex CLI already installed"
   else
-    if npm install -g codex-cli 2>/dev/null; then
-      print_success "Codex CLI installed"
+    local install_output
+    if install_output=$(npm install -g codex-cli 2>&1); then
+      if command_exists codex; then
+        print_success "Codex CLI installed"
+      else
+        print_warning "Failed to install Codex CLI - binary not found after installation"
+        print_debug "npm output: $install_output"
+      fi
     else
       print_warning "Failed to install Codex CLI"
+      echo "$install_output" | grep -i "error\|warn" | head -5
     fi
   fi
 
@@ -98,22 +105,17 @@ install() {
   if command_exists gemini; then
     print_warning "Gemini CLI already installed"
   else
-    if npm install -g @google/gemini-cli 2>/dev/null; then
-      print_success "Gemini CLI installed"
+    local install_output
+    if install_output=$(npm install -g @google/gemini-cli 2>&1); then
+      if command_exists gemini; then
+        print_success "Gemini CLI installed"
+      else
+        print_warning "Failed to install Gemini CLI - binary not found after installation"
+        print_debug "npm output: $install_output"
+      fi
     else
       print_warning "Failed to install Gemini CLI"
-    fi
-  fi
-
-  # Claude Squad
-  print_status "Installing Claude Squad..."
-  if command_exists claude-squad; then
-    print_warning "Claude Squad already installed"
-  else
-    if npm install -g claude-squad 2>/dev/null; then
-      print_success "Claude Squad installed"
-    else
-      print_warning "Failed to install Claude Squad"
+      echo "$install_output" | grep -i "error\|warn" | head -5
     fi
   fi
 
@@ -123,15 +125,17 @@ install() {
     if gh extension list 2>/dev/null | grep -q "github/gh-copilot"; then
       print_warning "GitHub Copilot CLI already installed"
     else
-      if gh extension install github/gh-copilot 2>/dev/null; then
+      local install_output
+      if install_output=$(gh extension install github/gh-copilot 2>&1); then
         print_success "GitHub Copilot CLI installed"
       else
         print_warning "Failed to install GitHub Copilot CLI"
+        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
   else
     print_warning "GitHub CLI (gh) not found - skipping GitHub Copilot CLI"
-    print_status "Install infra-tools or cloud-tools extension for gh"
+    print_status "Install github-cli extension for gh"
   fi
 
   # Check AWS CLI for Amazon Q
@@ -153,11 +157,17 @@ install() {
   if command_exists ollama; then
     print_warning "Ollama already installed"
   else
-    if curl -fsSL https://ollama.ai/install.sh | sh 2>/dev/null; then
-      print_success "Ollama installed"
-      print_status "Start with: nohup ollama serve > ~/ollama.log 2>&1 &"
+    local install_output
+    if install_output=$(curl -fsSL https://ollama.ai/install.sh | sh 2>&1); then
+      if command_exists ollama; then
+        print_success "Ollama installed"
+        print_status "Start with: nohup ollama serve > ~/ollama.log 2>&1 &"
+      else
+        print_warning "Failed to install Ollama - binary not found after installation"
+      fi
     else
       print_warning "Failed to install Ollama"
+      echo "$install_output" | grep -i "error\|warn" | head -3
     fi
   fi
 
@@ -170,30 +180,44 @@ install() {
     local FABRIC_ARCH="amd64"
     [[ "$ARCH" == "aarch64" ]] && FABRIC_ARCH="arm64"
 
-    if curl -L "https://github.com/danielmiessler/fabric/releases/latest/download/fabric-linux-${FABRIC_ARCH}" -o fabric 2>/dev/null; then
+    local install_output
+    if install_output=$(curl -L "https://github.com/danielmiessler/fabric/releases/latest/download/fabric-linux-${FABRIC_ARCH}" -o fabric 2>&1); then
       chmod +x fabric
-      sudo mv fabric /usr/local/bin/
-      print_success "Fabric installed"
-      print_status "Initialize with: fabric --setup"
+      if sudo mv fabric /usr/local/bin/; then
+        print_success "Fabric installed"
+        print_status "Initialize with: fabric --setup"
+      else
+        print_warning "Failed to move Fabric to /usr/local/bin"
+      fi
     else
-      print_warning "Failed to install Fabric"
+      print_warning "Failed to download Fabric"
+      echo "$install_output" | grep -i "error\|warn" | head -3
     fi
   fi
 
   # Go-based tools (require Go)
   if command_exists go; then
     # Set up Go bin path
-    export PATH=$PATH:$HOME/go/bin
+    export GOPATH=$HOME/go
+    export GOBIN=$GOPATH/bin
+    export PATH=$PATH:$GOBIN
+    mkdir -p "$GOBIN"
 
     # Plandex
     print_status "Installing Plandex..."
     if command_exists plandex; then
       print_warning "Plandex already installed"
     else
-      if go install github.com/plandex-ai/plandex@latest 2>/dev/null; then
-        print_success "Plandex installed"
+      local install_output
+      if install_output=$(timeout 300 go install github.com/plandex-ai/plandex@latest 2>&1); then
+        if command_exists plandex; then
+          print_success "Plandex installed"
+        else
+          print_warning "Failed to install Plandex - binary not found after installation"
+        fi
       else
         print_warning "Failed to install Plandex"
+        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
 
@@ -202,10 +226,16 @@ install() {
     if command_exists hector; then
       print_warning "Hector already installed"
     else
-      if go install github.com/kadirpekel/hector/cmd/hector@latest 2>/dev/null; then
-        print_success "Hector installed"
+      local install_output
+      if install_output=$(timeout 300 go install github.com/kadirpekel/hector/cmd/hector@latest 2>&1); then
+        if command_exists hector; then
+          print_success "Hector installed"
+        else
+          print_warning "Failed to install Hector - binary not found after installation"
+        fi
       else
         print_warning "Failed to install Hector"
+        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
   else
@@ -223,10 +253,16 @@ install() {
     if command_exists grok; then
       print_warning "Grok CLI already installed"
     else
-      if $pip_cmd install grok-cli 2>/dev/null; then
-        print_success "Grok CLI installed"
+      local install_output
+      if install_output=$($pip_cmd install grok-cli 2>&1); then
+        if command_exists grok; then
+          print_success "Grok CLI installed"
+        else
+          print_warning "Failed to install Grok CLI - binary not found after installation"
+        fi
       else
         print_warning "Failed to install Grok CLI"
+        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
   else
@@ -262,7 +298,7 @@ configure() {
 
   # Create SSH wrappers
   if command_exists create_tool_wrapper 2>/dev/null; then
-    local ai_tools=(codex gemini claude-squad ollama fabric plandex hector grok)
+    local ai_tools=(codex gemini ollama fabric plandex hector grok)
     for tool in "${ai_tools[@]}"; do
       if command_exists "$tool"; then
         create_tool_wrapper "$tool" "$(which $tool)"
@@ -341,11 +377,6 @@ EOF
   codex edit file.js
   codex run "create a REST API"
   ```
-
-#### Claude Squad
-- **Command**: `claude-squad`
-- **Description**: Terminal-based AI coding assistant
-- **Usage**: `claude-squad "implement authentication"`
 
 #### Plandex
 - **Command**: `plandex`
@@ -497,7 +528,7 @@ validate() {
   local all_valid=true
 
   # Core tools (npm-based)
-  local core_tools=(codex gemini claude-squad)
+  local core_tools=(codex gemini)
   local core_found=0
   for tool in "${core_tools[@]}"; do
     if command_exists "$tool"; then
@@ -553,7 +584,7 @@ status() {
 
   # Core tools
   print_status "Core tools (npm):"
-  local core_tools=(codex gemini claude-squad)
+  local core_tools=(codex gemini)
   for tool in "${core_tools[@]}"; do
     if command_exists "$tool"; then
       local version=$($tool --version 2>/dev/null || echo "installed")
@@ -664,7 +695,7 @@ remove() {
 
   # Remove npm-based tools
   print_status "Removing npm-based tools..."
-  local npm_tools=(codex-cli @google/gemini-cli claude-squad)
+  local npm_tools=(codex-cli @google/gemini-cli)
   for tool in "${npm_tools[@]}"; do
     if npm list -g "$tool" 2>/dev/null | grep -q "$tool"; then
       npm uninstall -g "$tool" 2>/dev/null

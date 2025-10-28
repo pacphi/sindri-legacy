@@ -1,0 +1,256 @@
+#!/bin/bash
+# github-cli.sh.example - GitHub CLI configuration
+# Extension API v1.0
+#
+# This extension configures GitHub CLI (gh) with authentication and aliases:
+# - Configures authentication using GITHUB_TOKEN environment variable
+# - Sets up useful GitHub CLI aliases
+# - Creates workflow helper functions
+# - Validates GitHub CLI access
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+
+# Source GitHub CLI library
+GH_LIB="$(dirname "$SCRIPT_DIR")/gh.sh"
+if [[ -f "$GH_LIB" ]]; then
+  source "$GH_LIB"
+fi
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="github-cli"
+EXT_VERSION="1.0.0"
+EXT_DESCRIPTION="GitHub CLI authentication and workflow configuration"
+EXT_CATEGORY="development"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check if gh CLI is installed
+  if ! command_exists gh; then
+    print_error "GitHub CLI (gh) is not installed"
+    print_status "GitHub CLI should be pre-installed via Docker build"
+    print_status "To install manually: https://github.com/cli/cli#installation"
+    return 1
+  fi
+
+  # Check gh version
+  local version
+  version=$(gh version 2>/dev/null | head -n1 || echo "unknown")
+  print_success "GitHub CLI found: $version"
+
+  # Check if GITHUB_TOKEN is set
+  if [[ -z "$GITHUB_TOKEN" ]]; then
+    print_warning "GITHUB_TOKEN environment variable not set"
+    print_status "GitHub CLI will require manual authentication"
+    print_status "To set: flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>"
+    print_status "Or run: gh auth login"
+  else
+    print_success "GITHUB_TOKEN environment variable is set"
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Configuring GitHub CLI..."
+
+  # GitHub CLI is pre-installed via Docker build
+  # This function focuses on configuration only
+
+  local version
+  version=$(gh version 2>/dev/null | head -n1)
+  print_success "GitHub CLI already installed: $version"
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring GitHub CLI authentication and aliases..."
+
+  # Configure authentication if GITHUB_TOKEN is available
+  if [[ -n "$GITHUB_TOKEN" ]]; then
+    if configure_github_cli; then
+      print_success "GitHub CLI authenticated successfully"
+    else
+      print_warning "GitHub CLI authentication failed"
+      print_status "You may need to run: gh auth login"
+    fi
+  else
+    print_warning "No GITHUB_TOKEN found - skipping automatic authentication"
+    print_status "Run 'gh auth login' to authenticate manually"
+  fi
+
+  # Setup GitHub CLI aliases
+  if setup_gh_aliases; then
+    print_success "GitHub CLI aliases configured"
+  else
+    print_warning "Failed to setup GitHub CLI aliases"
+  fi
+
+  # Setup workflow helpers
+  if setup_gh_workflows; then
+    print_success "GitHub workflow helpers configured"
+  else
+    print_warning "Failed to setup GitHub workflow helpers"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating GitHub CLI installation..."
+
+  # Check if gh command works
+  if ! command_exists gh; then
+    print_error "GitHub CLI command not found"
+    return 1
+  fi
+
+  # Check version
+  if ! gh version >/dev/null 2>&1; then
+    print_error "GitHub CLI version check failed"
+    return 1
+  fi
+
+  local version
+  version=$(gh version 2>/dev/null | head -n1)
+  print_success "GitHub CLI version: $version"
+
+  # Check authentication status
+  if gh auth status >/dev/null 2>&1; then
+    print_success "GitHub CLI authentication: OK"
+    local auth_output
+    auth_output=$(gh auth status 2>&1)
+    local username
+    username=$(echo "$auth_output" | grep -o "Logged in to github.com account [^ ]*" | awk '{print $NF}')
+    if [[ -n "$username" ]]; then
+      print_status "Authenticated as: $username"
+    fi
+  else
+    print_warning "GitHub CLI not authenticated"
+    print_status "Run: gh auth login"
+  fi
+
+  # Check if aliases are configured
+  local aliases
+  aliases=$(gh alias list 2>/dev/null)
+  if [[ -n "$aliases" ]]; then
+    print_success "GitHub CLI aliases configured"
+  else
+    print_warning "No GitHub CLI aliases found"
+  fi
+
+  # Check workflow helpers
+  if [[ -f "$HOME/.gh-workflow-helper.sh" ]]; then
+    print_success "GitHub workflow helpers installed"
+  else
+    print_warning "GitHub workflow helpers not found"
+  fi
+
+  print_success "Validation complete"
+  return 0
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_status "Checking GitHub CLI status..."
+
+  # Check installation
+  if ! command_exists gh; then
+    print_error "Not installed"
+    return 1
+  fi
+
+  # Show version
+  local version
+  version=$(gh version 2>/dev/null | head -n1 || echo "unknown")
+  echo "Version: $version"
+
+  # Show authentication status
+  if gh auth status >/dev/null 2>&1; then
+    echo "Authentication: OK"
+    local auth_output
+    auth_output=$(gh auth status 2>&1)
+    local username
+    username=$(echo "$auth_output" | grep -o "Logged in to github.com account [^ ]*" | awk '{print $NF}')
+    if [[ -n "$username" ]]; then
+      echo "User: $username"
+    fi
+  else
+    echo "Authentication: Not configured"
+  fi
+
+  # Show alias count
+  local alias_count
+  alias_count=$(gh alias list 2>/dev/null | wc -l)
+  echo "Aliases: $alias_count configured"
+
+  # Show workflow helpers
+  if [[ -f "$HOME/.gh-workflow-helper.sh" ]]; then
+    echo "Workflow helpers: Installed"
+  else
+    echo "Workflow helpers: Not installed"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_status "Removing GitHub CLI configuration..."
+
+  # Remove authentication (but keep gh CLI installed)
+  if gh auth status >/dev/null 2>&1; then
+    print_status "Logging out of GitHub CLI..."
+    gh auth logout || print_warning "Failed to logout"
+  fi
+
+  # Remove workflow helpers
+  if [[ -f "$HOME/.gh-workflow-helper.sh" ]]; then
+    print_status "Removing workflow helpers..."
+    rm -f "$HOME/.gh-workflow-helper.sh"
+
+    # Remove from bashrc
+    if [[ -f "$HOME/.bashrc" ]]; then
+      sed -i '/\.gh-workflow-helper\.sh/d' "$HOME/.bashrc"
+    fi
+  fi
+
+  # Note: We don't remove gh CLI itself or aliases as they're user-specific
+  # and don't take up significant space
+
+  print_success "GitHub CLI configuration removed"
+  print_status "GitHub CLI binary remains installed (system package)"
+  return 0
+}

@@ -55,13 +55,6 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     chmod +x /workspace/scripts/lib/*.sh
 fi
 
-# Copy vm-configure.sh if it doesn't exist
-if [ ! -f "/workspace/scripts/vm-configure.sh" ]; then
-    cp /docker/scripts/vm-configure.sh /workspace/scripts/
-    chown developer:developer /workspace/scripts/vm-configure.sh
-    chmod +x /workspace/scripts/vm-configure.sh
-fi
-
 # Create /workspace/bin directory and symlink extension-manager
 if [ ! -d "/workspace/bin" ]; then
     mkdir -p /workspace/bin
@@ -137,6 +130,12 @@ EOF
     # Configure Git to use the credential helper
     sudo -u developer git config --global credential.helper "/workspace/developer/.git-credential-helper.sh"
     echo "✅ GitHub token authentication configured"
+fi
+
+# Setup Message of the Day (MOTD)
+if [ -f "/docker/scripts/setup-motd.sh" ]; then
+    echo "📋 Setting up MOTD banner..."
+    bash /docker/scripts/setup-motd.sh
 fi
 
 # Start SSH daemon (check for CI mode)

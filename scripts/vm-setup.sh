@@ -42,12 +42,50 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to install flyctl
+install_flyctl() {
+    print_status "Installing Fly.io CLI..."
+
+    # Download and run the official installer
+    if curl -L https://fly.io/install.sh | sh; then
+        print_success "Fly.io CLI installed successfully"
+
+        # Add flyctl to PATH for current session
+        export FLYCTL_INSTALL="$HOME/.fly"
+        export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+        # Verify installation
+        if command_exists flyctl; then
+            print_success "flyctl is now available in PATH"
+            return 0
+        else
+            print_error "Installation succeeded but flyctl not found in PATH"
+            print_status "You may need to restart your terminal or add ~/.fly/bin to your PATH"
+            return 1
+        fi
+    else
+        print_error "Failed to install Fly.io CLI"
+        print_status "Please install manually from: https://fly.io/docs/getting-started/installing-flyctl/"
+        return 1
+    fi
+}
+
 # Function to check if flyctl is installed and authenticated
 check_flyctl() {
     if ! command_exists flyctl; then
         print_error "Fly.io CLI (flyctl) is not installed."
-        print_status "Please install it from: https://fly.io/docs/getting-started/installing-flyctl/"
-        exit 1
+        echo ""
+        read -p "Would you like to install it now? (y/n) " -n 1 -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if ! install_flyctl; then
+                exit 1
+            fi
+        else
+            print_status "Please install flyctl manually from: https://fly.io/docs/getting-started/installing-flyctl/"
+            exit 1
+        fi
     fi
 
     # Check if authenticated
@@ -320,7 +358,7 @@ show_connection_info() {
     echo
     print_status "Next Steps:"
     echo "  1. Connect via SSH or IDE remote development"
-    echo "  2. Run: /workspace/scripts/vm-configure.sh"
+    echo "  2. Configure extensions: extension-manager --interactive"
     echo "  3. Authenticate Claude Code: claude"
     echo "  4. Start developing!"
 }

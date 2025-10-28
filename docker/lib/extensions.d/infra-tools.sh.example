@@ -158,21 +158,39 @@ install() {
   print_status "Installing Carvel tools..."
   local CARVEL_TOOLS=(kapp ytt kbld vendir imgpkg)
   local carvel_installed=0
-  for tool in "${CARVEL_TOOLS[@]}"; do
-    if command_exists "$tool"; then
-      print_debug "✓ $tool already installed"
-      ((carvel_installed++))
-    else
-      print_debug "Installing $tool..."
-      if timeout 120 wget --timeout=90 -qO- "https://carvel.dev/install.sh" | bash -s -- "$tool" 2>/dev/null; then
-        sudo mv "$tool" /usr/local/bin/ 2>/dev/null
-        print_debug "✓ $tool installed"
+
+  # Download Carvel install script once
+  local carvel_script="/tmp/carvel-install.sh"
+  if wget --timeout=90 -q -O "$carvel_script" "https://carvel.dev/install.sh"; then
+    chmod +x "$carvel_script"
+
+    for tool in "${CARVEL_TOOLS[@]}"; do
+      if command_exists "$tool"; then
+        print_debug "✓ $tool already installed"
         ((carvel_installed++))
       else
-        print_warning "Failed to install $tool"
+        print_debug "Installing $tool..."
+        if timeout 120 bash "$carvel_script" "$tool" 2>&1 | grep -v "Installing linux-amd64 binaries"; then
+          if [[ -f "./$tool" ]]; then
+            sudo mv "./$tool" /usr/local/bin/ 2>/dev/null
+          fi
+          if command_exists "$tool"; then
+            print_debug "✓ $tool installed"
+            ((carvel_installed++))
+          else
+            print_warning "Failed to install $tool - binary not found after installation"
+          fi
+        else
+          print_warning "Failed to install $tool - installation script failed"
+        fi
       fi
-    fi
-  done
+    done
+
+    rm -f "$carvel_script"
+  else
+    print_warning "Failed to download Carvel install script"
+  fi
+
   print_status "Carvel tools: $carvel_installed/${#CARVEL_TOOLS[@]}"
 
   # Crossplane CLI

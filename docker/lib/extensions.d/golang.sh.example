@@ -95,7 +95,11 @@ install() {
   # Set up environment for tool installation
   export PATH=$PATH:/usr/local/go/bin
   export GOPATH=$HOME/go
-  export PATH=$PATH:$GOPATH/bin
+  export GOBIN=$GOPATH/bin
+  export PATH=$PATH:$GOBIN
+
+  # Ensure GOBIN directory exists
+  mkdir -p "$GOBIN"
 
   # Install Go development tools
   print_status "Installing Go development tools..."
@@ -112,11 +116,15 @@ install() {
   for tool in "${go_tools[@]}"; do
     local tool_name=$(basename "$tool" | cut -d'@' -f1)
     print_debug "Installing $tool_name..."
-    if timeout 120 go install "$tool" 2>/dev/null; then
-      print_debug "✓ $tool_name installed"
-      ((installed_count++))
+    if timeout 300 go install "$tool" 2>&1 | grep -v "^go: downloading"; then
+      if command_exists "$tool_name"; then
+        print_debug "✓ $tool_name installed"
+        ((installed_count++))
+      else
+        print_warning "Failed to install $tool_name - binary not found after installation"
+      fi
     else
-      print_warning "Failed to install $tool_name"
+      print_warning "Failed to install $tool_name - go install command failed"
     fi
   done
 
