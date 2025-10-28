@@ -344,7 +344,7 @@ jobs:
           ```bash
           ./scripts/vm-setup.sh --app-name my-sindri-dev
           flyctl ssh console --app my-sindri-dev
-          /workspace/scripts/vm-configure.sh
+          extension-manager --interactive
           claude
           ```
 

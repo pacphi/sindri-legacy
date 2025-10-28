@@ -28,7 +28,6 @@ jobs:
             "scripts/vm-resume.sh"
             "scripts/vm-teardown.sh"
             "docker/scripts/entrypoint.sh"
-            "docker/scripts/vm-configure.sh"
           )
 
           missing_files=()
