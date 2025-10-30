@@ -441,14 +441,30 @@ jobs:
             exit 1
           fi
 
-          # Test extension installation (which auto-activates) with retry
+          # Test extension installation (which auto-activates) with retry and mise diagnostics
           echo "🔍 Testing extension installation with auto-activation (nodejs)..."
           if retry_with_backoff 3 10 60 \
             flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" \
-              -C "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install nodejs 2>&1'"; then
+              -C "/bin/bash -c '
+                cd /workspace/scripts/lib
+
+                # Install with retry for mise-powered extensions
+                if bash extension-manager.sh install nodejs 2>&1; then
+                  echo \"✅ Extensions installed\"
+                else
+                  echo \"⚠️  Installation failed, checking mise status...\"
+                  if command -v mise >/dev/null 2>&1; then
+                    echo \"Running mise doctor for diagnostics:\"
+                    mise doctor || true
+                  else
+                    echo \"mise not available (this is expected for non-mise extensions)\"
+                  fi
+                  exit 1
+                fi
+              '"; then
             echo "✅ Extension installation with auto-activation successful"
           else
-            echo "❌ Extension installation failed"
+            echo "❌ Extension installation failed after retries"
             exit 1
           fi
 
@@ -459,6 +475,17 @@ jobs:
           else
             echo "❌ Extension validation failed"
             exit 1
+          fi
+
+          # Check if mise is working (if available)
+          echo "🔍 Checking mise availability..."
+          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
+            "/bin/bash -lc 'command -v mise >/dev/null 2>&1'"; then
+            echo "✅ mise is available, running diagnostics..."
+            ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
+              "/bin/bash -lc 'mise doctor'" || echo "⚠️  mise doctor check completed with warnings"
+          else
+            echo "ℹ️  mise not available (this is expected for current extension set)"
           fi
 
       - name: Cleanup test VM
