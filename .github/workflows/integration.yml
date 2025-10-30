@@ -312,7 +312,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           # Check volume mount and permissions
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             echo \"=== Volume Mount Verification ===\"
             echo \"Checking /workspace mount:\"
             df -h /workspace || echo \"WARNING: df command failed\"
@@ -341,7 +341,7 @@ jobs:
 
           # Create test file with explicit sync operations
           echo "Creating test file with content: $test_content"
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             echo \"Creating and syncing test file...\"
             echo \"$test_content\" > $test_file
             sync
@@ -359,7 +359,7 @@ jobs:
 
           # Force filesystem sync before restart
           echo "Forcing filesystem sync before restart..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             echo \"Syncing filesystem before restart...\"
             sync
             echo \"Sync completed\"
@@ -414,7 +414,7 @@ jobs:
             # Enhanced file verification with metadata
             echo "Performing comprehensive file verification..."
 
-            verification_result=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+            verification_result=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
               echo \"=== Post-Restart File Verification ===\"
               if [ -f \"$test_file\" ]; then
                 echo \"✅ File exists\"
@@ -470,7 +470,7 @@ jobs:
               if [ $attempt -eq $max_attempts ]; then
                 echo "❌ Test file disappeared after restart"
                 echo "Debugging - workspace contents:"
-                flyctl ssh console --app $app_name --user developer --command "/bin/bash -c 'ls -la /workspace/ | head -20'"
+                flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc 'ls -la /workspace/ | head -20'"
                 exit 1
               fi
             fi
@@ -708,7 +708,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Setting up manifest with protected core extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -739,7 +739,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Installing all activated extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running install-all...\"
@@ -797,7 +797,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Testing extension status command..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             for ext in workspace-structure nodejs ssh-environment; do
@@ -918,7 +918,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Adding mise-stack extensions to manifest..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -960,7 +960,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Installing all mise-stack extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running install-all for mise-stack...\"

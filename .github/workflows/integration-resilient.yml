@@ -332,7 +332,7 @@ jobs:
 
           # Force filesystem sync before restart (matching integration.yml)
           echo "Forcing filesystem sync before restart..."
-          ssh_command_retry "${{ steps.app-name.outputs.app_name }}" "/bin/bash -c '
+          ssh_command_retry "${{ steps.app-name.outputs.app_name }}" "/bin/bash -lc '
             echo \"Syncing filesystem before restart...\"
             sync
             echo \"Sync completed\"
