@@ -346,7 +346,7 @@ check_dependent_extensions() {
 
   # Get manifest file location
   local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/extensions.d/active-extensions.conf"
+  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
 
   if [[ ! -f "$manifest_file" ]]; then
     return 0

@@ -14,7 +14,7 @@ if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
 elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
     # On VM
     source "/workspace/scripts/lib/common.sh"
-    EXTENSIONS_BASE="/workspace/scripts/extensions.d"
+    EXTENSIONS_BASE="/workspace/scripts/lib/extensions.d"
 else
     # Fallback - define minimal needed functions
     RED='\033[0;31m'
@@ -36,8 +36,8 @@ fi
 # Activation manifest file location (colocated with extensions)
 if [[ -f "$EXTENSIONS_BASE/active-extensions.conf" ]]; then
     MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
-elif [[ -f "/workspace/scripts/extensions.d/active-extensions.conf" ]]; then
-    MANIFEST_FILE="/workspace/scripts/extensions.d/active-extensions.conf"
+elif [[ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]]; then
+    MANIFEST_FILE="/workspace/scripts/lib/extensions.d/active-extensions.conf"
 else
     # Default location
     MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"

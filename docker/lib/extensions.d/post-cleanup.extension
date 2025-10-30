@@ -292,13 +292,13 @@ configure() {
     echo
 
     echo "## Active Extensions"
-    if [ -f "/workspace/scripts/extensions.d/active-extensions.conf" ]; then
+    if [ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]; then
       while IFS= read -r line; do
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${line// }" ]] && continue
         local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         echo "- $ext_name"
-      done < "/workspace/scripts/extensions.d/active-extensions.conf"
+      done < "/workspace/scripts/lib/extensions.d/active-extensions.conf"
     fi
     echo
 

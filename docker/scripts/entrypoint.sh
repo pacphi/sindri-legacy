@@ -59,24 +59,24 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     if [ "$CI_MODE" = "true" ]; then
         # CI mode: Use pre-configured CI manifest with protected extensions
         if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
-            cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/extensions.d/active-extensions.conf
+            cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/lib/extensions.d/active-extensions.conf
             echo "✅ Using CI extension manifest (protected extensions pre-configured)"
         else
             echo "⚠️  CI manifest not found, creating empty manifest"
-            mkdir -p /workspace/scripts/extensions.d
-            touch /workspace/scripts/extensions.d/active-extensions.conf
+            mkdir -p /workspace/scripts/lib/extensions.d
+            touch /workspace/scripts/lib/extensions.d/active-extensions.conf
         fi
     else
         # Production mode: Check if manifest exists, create empty if not
-        if [ ! -f "/workspace/scripts/extensions.d/active-extensions.conf" ]; then
+        if [ ! -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]; then
             echo "Creating default extension manifest..."
             # Use CI manifest as template (has good documentation)
             if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
-                cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/extensions.d/active-extensions.conf
+                cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/lib/extensions.d/active-extensions.conf
                 echo "✅ Extension manifest created from template"
             else
-                mkdir -p /workspace/scripts/extensions.d
-                touch /workspace/scripts/extensions.d/active-extensions.conf
+                mkdir -p /workspace/scripts/lib/extensions.d
+                touch /workspace/scripts/lib/extensions.d/active-extensions.conf
                 echo "✅ Empty extension manifest created"
             fi
         else
@@ -85,8 +85,8 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     fi
 
     # Ensure correct permissions
-    chown developer:developer /workspace/scripts/extensions.d/active-extensions.conf
-    chmod 644 /workspace/scripts/extensions.d/active-extensions.conf
+    chown developer:developer /workspace/scripts/lib/extensions.d/active-extensions.conf
+    chmod 644 /workspace/scripts/lib/extensions.d/active-extensions.conf
 
 fi
 
@@ -174,7 +174,7 @@ if [ -f "/docker/scripts/setup-motd.sh" ]; then
 fi
 
 # Install protected extensions if manifest exists and extensions aren't installed yet
-if [ -f "/workspace/scripts/extensions.d/active-extensions.conf" ] && [ -f "/workspace/scripts/lib/extension-manager.sh" ]; then
+if [ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ] && [ -f "/workspace/scripts/lib/extension-manager.sh" ]; then
     # Check if mise is already installed (indicates protected extensions were installed)
     if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
         echo "🔧 Installing protected extensions..."

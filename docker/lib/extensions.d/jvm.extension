@@ -349,7 +349,7 @@ check_dependent_extensions() {
   local provided_commands=("$@")
   local dependent_extensions=()
   local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/extensions.d/active-extensions.conf"
+  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
   [[ ! -f "$manifest_file" ]] && return 0
 
   while IFS= read -r line; do
