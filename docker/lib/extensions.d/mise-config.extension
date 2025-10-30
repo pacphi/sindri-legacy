@@ -118,6 +118,18 @@ configure() {
         fi
     fi
 
+    # Add mise activation to SSH environment for non-interactive sessions
+    # This is critical for CI/CD and remote command execution
+    local profile_d_mise="/etc/profile.d/01-mise-activation.sh"
+    if [[ ! -f "$profile_d_mise" ]]; then
+        print_status "Adding mise activation to profile.d for SSH sessions..."
+        cat "$(dirname "${BASH_SOURCE[0]}")/mise-config.profile-d.template" | sudo tee "$profile_d_mise" > /dev/null
+        sudo chmod +x "$profile_d_mise"
+        print_success "mise activation added to $profile_d_mise"
+    else
+        print_status "mise already configured in profile.d"
+    fi
+
     # Create mise config directory
     local mise_config_dir="$HOME/.config/mise"
     if [[ ! -d "$mise_config_dir" ]]; then
@@ -185,6 +197,13 @@ validate() {
         print_success "Shell activation configured in .bashrc"
     else
         print_warning "Shell activation not found in .bashrc"
+    fi
+
+    # Check profile.d activation for SSH sessions
+    if [[ -f "/etc/profile.d/01-mise-activation.sh" ]]; then
+        print_success "SSH environment activation configured in profile.d"
+    else
+        print_warning "SSH environment activation not found in profile.d"
     fi
 
     return 0
@@ -274,6 +293,14 @@ remove() {
             sed -i.bak '/# mise - unified tool version manager/,/fi$/d' "$bash_profile"
             print_success "Removed mise activation from .bash_profile"
         fi
+    fi
+
+    # Remove profile.d activation for SSH sessions
+    local profile_d_mise="/etc/profile.d/01-mise-activation.sh"
+    if [[ -f "$profile_d_mise" ]]; then
+        print_status "Removing mise activation from profile.d..."
+        sudo rm -f "$profile_d_mise"
+        print_success "Removed mise activation from profile.d"
     fi
 
     # Ask user if they want to remove mise binary and config

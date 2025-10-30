@@ -74,10 +74,10 @@ install() {
   # Add PHP repository if not already added
   if ! grep -q "ondrej/php" /etc/apt/sources.list.d/*.list 2>/dev/null; then
     print_status "Adding PHP repository..."
-    sudo add-apt-repository -y ppa:ondrej/php 2>/dev/null
+    sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>/dev/null
   fi
 
-  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
 
   # Install PHP and essential extensions
   print_status "Installing PHP 8.3 and extensions..."
@@ -93,7 +93,7 @@ install() {
   local failed_packages=()
   for package in "${php_packages[@]}"; do
     print_debug "Installing $package..."
-    if sudo apt-get install -y "$package" 2>/dev/null; then
+    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" 2>/dev/null; then
       ((installed_count++))
     else
       failed_packages+=("$package")
@@ -462,8 +462,8 @@ remove() {
 
   # Remove PHP packages
   print_status "Removing PHP packages..."
-  sudo apt-get remove -y php8.3* 2>/dev/null
-  sudo apt-get autoremove -y 2>/dev/null
+  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq php8.3* 2>/dev/null
+  sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq 2>/dev/null
 
   # Remove Composer
   [[ -f "/usr/local/bin/composer" ]] && sudo rm -f /usr/local/bin/composer
@@ -483,7 +483,7 @@ remove() {
   cleanup_bashrc "# PHP aliases"
 
   # Remove PHP repository
-  sudo add-apt-repository --remove -y ppa:ondrej/php 2>/dev/null
+  sudo DEBIAN_FRONTEND=noninteractive add-apt-repository --remove -y ppa:ondrej/php 2>/dev/null
 
   # Remove configs
   rm -f "$HOME/.php-cs-fixer.dist.php"

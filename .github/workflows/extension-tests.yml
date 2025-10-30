@@ -425,7 +425,10 @@ jobs:
         id: app-name
         run: |
           timestamp=$(date +%s)
-          app_name="${TEST_APP_PREFIX}-${{ matrix.extension.name }}-${timestamp}"
+          # Sanitize extension name to avoid Fly.io abuse filter (e.g., "github" -> "gh")
+          extension_name="${{ matrix.extension.name }}"
+          extension_name="${extension_name//github/gh}"
+          app_name="${TEST_APP_PREFIX}-${extension_name}-${timestamp}"
           echo "app_name=$app_name" >> $GITHUB_OUTPUT
           echo "Test app name: $app_name"
 
