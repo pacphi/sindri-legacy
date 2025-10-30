@@ -1,0 +1,38 @@
+
+# AI tools aliases
+# Codex
+alias cx="codex"
+alias cxs="codex suggest"
+alias cxe="codex edit"
+alias cxr="codex run"
+
+# Gemini
+alias gm="gemini"
+alias gmc="gemini chat"
+alias gmg="gemini generate"
+
+# Ollama
+alias ol="ollama"
+alias olp="ollama pull"
+alias olr="ollama run"
+alias oll="ollama list"
+
+# Fabric
+alias fb="fabric"
+alias fbex="fabric --pattern explain"
+alias fbsum="fabric --pattern summarize"
+alias fbimp="fabric --pattern improve_code"
+
+# Plandex
+alias px="plandex"
+alias pxi="plandex init"
+alias pxp="plandex plan"
+alias pxe="plandex execute"
+alias pxs="plandex status"
+
+# GitHub Copilot
+alias ghcp="gh copilot suggest"
+alias ghce="gh copilot explain"
+
+# AWS Q
+alias awsq="aws q"

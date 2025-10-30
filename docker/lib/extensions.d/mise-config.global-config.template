@@ -1,0 +1,16 @@
+# Global mise configuration
+# This file is automatically created by the mise-config extension
+
+[settings]
+experimental = true
+verbose = false
+yes = false
+
+# Log level: error, warn, info, debug, trace
+log_level = "info"
+
+# Number of jobs to run in parallel (0 = number of CPU cores)
+jobs = 4
+
+# Disable version checks
+disable_tools = []

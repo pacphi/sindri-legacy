@@ -143,34 +143,7 @@ configure() {
 
   # Create a README in the workspace if it doesn't exist
   if [[ ! -f "$WORKSPACE_DIR/README.md" ]]; then
-    cat > "$WORKSPACE_DIR/README.md" << 'EOF'
-# Sindri Workspace
-
-## Directory Structure
-
-- `src/` - Source code for projects
-- `tests/` - Test files
-- `docs/` - Documentation
-- `scripts/` - Utility and management scripts
-  - `lib/` - Shared script libraries
-  - `extensions.d/` - Extension scripts
-- `examples/` - Example code and templates
-- `config/` - Configuration files
-  - `templates/` - Configuration templates
-- `agents/` - Agent configurations and data
-- `context/` - Context management
-  - `global/` - Global context files
-  - `templates/` - Context templates
-- `bin/` - User binaries and executables
-- `backups/` - Backup files
-
-## Usage
-
-This workspace is managed by Sindri's extension system. Use `extension-manager` to
-activate, install, and manage components.
-
-For more information, see the main project README.
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/workspace-structure.readme.template" > "$WORKSPACE_DIR/README.md"
     print_success "Created workspace README"
   fi
 

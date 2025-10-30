@@ -1198,6 +1198,7 @@ jobs:
       matrix:
         combination:
           - { name: 'core-stack', extensions: 'workspace-structure,nodejs,ssh-environment', description: 'Core Infrastructure' }
+          - { name: 'mise-stack', extensions: 'workspace-structure,mise-config,nodejs,python,rust,golang,ssh-environment', description: 'mise-Powered Languages' }
           - { name: 'full-node', extensions: 'workspace-structure,nodejs,nodejs-devtools,claude-config', description: 'Complete Node.js Development Stack' }
           - { name: 'fullstack', extensions: 'workspace-structure,nodejs,python,docker,cloud-tools', description: 'Python + Docker + Cloud' }
           - { name: 'systems', extensions: 'workspace-structure,rust,golang,docker', description: 'Rust + Go + Docker' }
@@ -1386,6 +1387,48 @@ jobs:
                 test -f /etc/profile.d/00-ssh-environment.sh && echo \"✅ SSH environment configured\"
                 # Verify Node.js
                 node --version && npm --version && echo \"✅ Node.js available\"
+                ;;
+              mise-stack)
+                echo \"Testing mise-Powered Language Stack...\"
+
+                # Verify mise is installed
+                if ! command -v mise >/dev/null 2>&1; then
+                  echo \"❌ mise not installed\"
+                  exit 1
+                fi
+                echo \"✅ mise: \$(mise --version)\"
+
+                # Show all mise-managed tools
+                echo \"\"
+                echo \"mise-managed tools:\"
+                mise ls
+
+                # Test Node.js
+                echo \"\"
+                echo \"Testing Node.js (via mise)...\"
+                node --version && npm --version
+                mise ls node && echo \"✅ Node.js managed by mise\"
+
+                # Test Python
+                echo \"\"
+                echo \"Testing Python (via mise)...\"
+                python3 --version
+                mise ls python && echo \"✅ Python managed by mise\"
+
+                # Test Rust
+                echo \"\"
+                echo \"Testing Rust (via mise)...\"
+                rustc --version && cargo --version
+                mise ls rust && echo \"✅ Rust managed by mise\"
+
+                # Test Go
+                echo \"\"
+                echo \"Testing Go (via mise)...\"
+                go version
+                mise ls go && echo \"✅ Go managed by mise\"
+
+                echo \"\"
+                echo \"✅ mise-powered language stack verified\"
                 ;;
               full-node)
                 echo \"Testing Complete Node.js Stack...\"

@@ -1,0 +1,31 @@
+
+# Cloud CLI aliases
+# AWS
+alias awsl="aws s3 ls"
+alias awse="aws ec2 describe-instances"
+alias awsv="aws --version"
+
+# Azure
+alias azl="az login"
+alias azg="az group list"
+alias azv="az vm list"
+
+# Google Cloud
+alias gcl="gcloud auth login"
+alias gcp="gcloud config set project"
+alias gci="gcloud compute instances list"
+
+# Oracle Cloud
+alias ocis="oci setup config"
+
+# Alibaba Cloud
+alias alic="aliyun configure"
+
+# DigitalOcean
+alias doa="doctl auth init"
+alias dod="doctl compute droplet list"
+alias dok="doctl kubernetes cluster list"
+
+# IBM Cloud
+alias ibml="ibmcloud login"
+alias ibmr="ibmcloud resource groups"

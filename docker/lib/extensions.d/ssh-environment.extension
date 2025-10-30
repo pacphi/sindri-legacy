@@ -80,12 +80,8 @@ configure() {
 
     # Add BASH_ENV configuration for non-interactive SSH sessions
     if [[ ! -f "$env_config_file" ]]; then
-      sudo tee "$env_config_file" > /dev/null << EOF
-# Configure BASH_ENV for non-interactive SSH sessions
-# This allows environment setup for commands executed via SSH
-Match User *
-    SetEnv BASH_ENV=$ssh_env_file
-EOF
+      # Read template and substitute ssh_env_file variable, then write via sudo
+      envsubst < "$(dirname "${BASH_SOURCE[0]}")/ssh-environment.sshd-config.template" | sudo tee "$env_config_file" > /dev/null
       print_success "Created SSH daemon environment config: $env_config_file"
     else
       print_status "SSH daemon environment config already exists"

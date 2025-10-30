@@ -92,32 +92,7 @@ configure() {
 
   # Create global CLAUDE.md with user preferences
   if [[ ! -f "$HOME/.claude/CLAUDE.md" ]]; then
-    cat > "$HOME/.claude/CLAUDE.md" << 'EOF'
-# Global Claude Preferences
-
-## Code Style
-- Use 2 spaces for indentation
-- Use semicolons in JavaScript/TypeScript
-- Prefer const over let
-- Use meaningful variable names
-
-## Git Workflow
-- Use conventional commits (feat:, fix:, docs:, etc.)
-- Create feature branches for new work
-- Write descriptive commit messages
-
-## Development Practices
-- Write tests for new features
-- Add documentation for public APIs
-- Use TypeScript for new JavaScript projects
-- Follow project-specific style guides
-
-## Preferred Libraries
-- React for frontend applications
-- Express.js for Node.js APIs
-- Jest for JavaScript testing
-- Pytest for Python testing
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude-config.claude-md.template" > "$HOME/.claude/CLAUDE.md"
     print_success "Created global preferences: ~/.claude/CLAUDE.md"
   else
     print_status "Global preferences already exist: ~/.claude/CLAUDE.md"
@@ -125,22 +100,7 @@ EOF
 
   # Create settings.json with useful hooks
   if [[ ! -f "$HOME/.claude/settings.json" ]]; then
-    cat > "$HOME/.claude/settings.json" << 'EOF'
-{
-  "hooks": [
-    {
-      "matcher": "Edit|Write",
-      "type": "command",
-      "command": "prettier --write \"$CLAUDE_FILE_PATHS\" 2>/dev/null || echo 'Prettier not available for this file type'"
-    },
-    {
-      "matcher": "Edit",
-      "type": "command",
-      "command": "if [[ \"$CLAUDE_FILE_PATHS\" =~ \\.(ts|tsx)$ ]]; then npx tsc --noEmit --skipLibCheck \"$CLAUDE_FILE_PATHS\" 2>/dev/null || echo '⚠️ TypeScript errors detected - please review'; fi"
-    }
-  ]
-}
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude-config.settings-json.template" > "$HOME/.claude/settings.json"
     print_success "Created Claude hooks: ~/.claude/settings.json"
   else
     print_status "Claude hooks already exist: ~/.claude/settings.json"

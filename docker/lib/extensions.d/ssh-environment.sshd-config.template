@@ -1,0 +1,4 @@
+# Configure BASH_ENV for non-interactive SSH sessions
+# This allows environment setup for commands executed via SSH
+Match User *
+    SetEnv BASH_ENV=$ssh_env_file

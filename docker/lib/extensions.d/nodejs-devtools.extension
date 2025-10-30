@@ -122,55 +122,19 @@ configure() {
 
   # Prettier config
   if [[ ! -f "$templates_dir/.prettierrc" ]]; then
-    cat > "$templates_dir/.prettierrc" << 'EOF'
-{
-  "semi": true,
-  "singleQuote": true,
-  "tabWidth": 2,
-  "trailingComma": "es5",
-  "printWidth": 100
-}
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.prettierrc.template" > "$templates_dir/.prettierrc"
     print_success "Created Prettier config template"
   fi
 
   # ESLint config
   if [[ ! -f "$templates_dir/.eslintrc.json" ]]; then
-    cat > "$templates_dir/.eslintrc.json" << 'EOF'
-{
-  "extends": ["eslint:recommended"],
-  "env": {
-    "node": true,
-    "es2021": true
-  },
-  "parserOptions": {
-    "ecmaVersion": 2021,
-    "sourceType": "module"
-  }
-}
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.eslintrc.template" > "$templates_dir/.eslintrc.json"
     print_success "Created ESLint config template"
   fi
 
   # TypeScript config template
   if [[ ! -f "$templates_dir/tsconfig.json" ]]; then
-    cat > "$templates_dir/tsconfig.json" << 'EOF'
-{
-  "compilerOptions": {
-    "target": "ES2021",
-    "module": "commonjs",
-    "lib": ["ES2021"],
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
-}
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.tsconfig.template" > "$templates_dir/tsconfig.json"
     print_success "Created TypeScript config template"
   fi
 

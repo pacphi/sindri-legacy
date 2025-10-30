@@ -248,11 +248,7 @@ configure() {
 
   if [[ ! -f "$config_file" ]]; then
     mkdir -p "$config_dir"
-    cat > "$config_file" << 'EOF'
-# Example tool configuration
-setting1: value1
-setting2: value2
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/template.config.template" > "$config_file"
     chmod 644 "$config_file"
     print_success "Created config file: $config_file"
   fi

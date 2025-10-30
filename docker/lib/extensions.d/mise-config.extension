@@ -102,13 +102,7 @@ configure() {
     if [[ -f "$bashrc" ]]; then
         if ! grep -q 'mise activate bash' "$bashrc"; then
             print_status "Adding mise activation to .bashrc..."
-            cat >> "$bashrc" << 'EOF'
-
-# mise - unified tool version manager
-if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate bash)"
-fi
-EOF
+            cat "$(dirname "${BASH_SOURCE[0]}")/mise-config.bashrc-activation.template" >> "$bashrc"
             print_success "mise activation added to .bashrc"
         else
             print_status "mise already configured in .bashrc"
@@ -119,13 +113,7 @@ EOF
     if [[ -f "$bash_profile" ]] && ! grep -q 'source.*bashrc' "$bash_profile"; then
         if ! grep -q 'mise activate bash' "$bash_profile"; then
             print_status "Adding mise activation to .bash_profile..."
-            cat >> "$bash_profile" << 'EOF'
-
-# mise - unified tool version manager
-if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate bash)"
-fi
-EOF
+            cat "$(dirname "${BASH_SOURCE[0]}")/mise-config.bash-profile-activation.template" >> "$bash_profile"
             print_success "mise activation added to .bash_profile"
         fi
     fi
@@ -141,24 +129,7 @@ EOF
     local global_config="$mise_config_dir/config.toml"
     if [[ ! -f "$global_config" ]]; then
         print_status "Creating global mise configuration..."
-        cat > "$global_config" << 'EOF'
-# Global mise configuration
-# This file is automatically created by the mise-config extension
-
-[settings]
-experimental = true
-verbose = false
-yes = false
-
-# Log level: error, warn, info, debug, trace
-log_level = "info"
-
-# Number of jobs to run in parallel (0 = number of CPU cores)
-jobs = 4
-
-# Disable version checks
-disable_tools = []
-EOF
+        cat "$(dirname "${BASH_SOURCE[0]}")/mise-config.global-config.template" > "$global_config"
         print_success "Created global mise config"
     else
         print_status "Global mise config already exists"

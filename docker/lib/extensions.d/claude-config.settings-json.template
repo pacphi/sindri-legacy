@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "matcher": "Edit|Write",
+      "type": "command",
+      "command": "prettier --write \"$CLAUDE_FILE_PATHS\" 2>/dev/null || echo 'Prettier not available for this file type'"
+    },
+    {
+      "matcher": "Edit",
+      "type": "command",
+      "command": "if [[ \"$CLAUDE_FILE_PATHS\" =~ \\.(ts|tsx)$ ]]; then npx tsc --noEmit --skipLibCheck \"$CLAUDE_FILE_PATHS\" 2>/dev/null || echo '⚠️ TypeScript errors detected - please review'; fi"
+    }
+  ]
+}

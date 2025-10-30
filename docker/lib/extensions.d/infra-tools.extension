@@ -77,15 +77,7 @@ install() {
     local toml_dest="$HOME/.config/mise/conf.d/infra-tools.toml"
     mkdir -p "$(dirname "$toml_dest")"
 
-    cat > "$toml_dest" << 'EOF'
-[tools]
-terraform = "latest"
-kubectl = "latest"
-helm = "latest"
-
-# k9s via ubi backend (GitHub releases)
-"ubi:derailed/k9s" = "latest"
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.mise-config.template" > "$toml_dest"
 
     print_success "Created mise configuration: $toml_dest"
 
@@ -323,51 +315,7 @@ configure() {
   # Create infrastructure aliases
   if ! grep -q "# Infrastructure aliases" "$HOME/.bashrc" 2>/dev/null; then
     print_status "Creating infrastructure aliases..."
-    cat >> "$HOME/.bashrc" << 'EOF'
-
-# Infrastructure aliases
-alias tf="terraform"
-alias tfi="terraform init"
-alias tfp="terraform plan"
-alias tfa="terraform apply"
-alias tfd="terraform destroy"
-alias tfv="terraform validate"
-alias tff="terraform fmt"
-
-# Kubernetes aliases
-alias k="kubectl"
-alias kg="kubectl get"
-alias kd="kubectl describe"
-alias kdel="kubectl delete"
-alias kl="kubectl logs"
-alias kx="kubectx"
-alias kn="kubens"
-
-# Helm aliases
-alias h="helm"
-alias hi="helm install"
-alias hu="helm upgrade"
-alias hls="helm list"
-alias hdel="helm delete"
-alias hs="helm search"
-
-# Ansible aliases
-alias ap="ansible-playbook"
-alias av="ansible-vault"
-alias ag="ansible-galaxy"
-
-# Pulumi aliases
-alias pu="pulumi"
-alias pup="pulumi up"
-alias pud="pulumi destroy"
-alias pus="pulumi stack"
-
-# Carvel aliases
-alias ka="kapp"
-alias kad="kapp deploy"
-alias kal="kapp list"
-alias kadel="kapp delete"
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.bashrc.template" >> "$HOME/.bashrc"
     print_success "Infrastructure aliases created"
   else
     print_debug "Infrastructure aliases already exist"
@@ -380,74 +328,7 @@ EOF
 
   # Create README guide
   if [[ ! -f "$WORKSPACE_DIR/infrastructure/README.md" ]]; then
-    cat > "$WORKSPACE_DIR/infrastructure/README.md" << 'EOF'
-# Infrastructure as Code Workspace
-
-## Available Tools
-
-### Core IaC Tools
-- **Terraform**: Infrastructure provisioning and management
-- **Pulumi**: Infrastructure as code using general-purpose languages
-- **Crossplane**: Kubernetes-native infrastructure management
-
-### Kubernetes Tools
-- **kubectl**: Kubernetes command-line tool
-- **Helm**: Kubernetes package manager
-- **k9s**: Terminal UI for Kubernetes clusters
-- **kubectx/kubens**: Context and namespace switching
-
-### Carvel Suite
-- **kapp**: Deploy and view groups of Kubernetes resources
-- **ytt**: Template and overlay Kubernetes configuration
-- **kbld**: Build or reference container images in Kubernetes configuration
-- **vendir**: Declaratively state directory contents
-- **imgpkg**: Bundle and relocate application configuration and images
-
-## Directory Structure
-```
-infrastructure/
-├── terraform/     # Terraform configurations
-├── kubernetes/    # Raw Kubernetes manifests
-├── helm-charts/   # Helm charts
-├── crossplane/    # Crossplane compositions
-└── pulumi/        # Pulumi projects
-```
-
-## Quick Start
-
-### Terraform
-```bash
-cd terraform/
-terraform init
-terraform plan
-terraform apply
-```
-
-### Kubernetes
-```bash
-kubectl config get-contexts
-kubectl apply -f kubernetes/
-```
-
-### Helm
-```bash
-helm repo add stable https://charts.helm.sh/stable
-helm search repo stable
-helm install myapp ./helm-charts/myapp
-```
-
-### Carvel
-```bash
-# Deploy with kapp
-kapp deploy -a myapp -f kubernetes/
-
-# Template with ytt
-ytt -f config/ --data-values-file values.yaml
-
-# Bundle with imgpkg
-imgpkg push -b registry.example.com/my-bundle:v1.0.0 -f config/
-```
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.readme.template" > "$WORKSPACE_DIR/infrastructure/README.md"
     print_success "Infrastructure README created"
   fi
 

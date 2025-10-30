@@ -1,0 +1,36 @@
+source 'https://rubygems.org'
+ruby '3.3.0'
+
+# Core gems
+gem 'bundler'
+gem 'rake'
+
+# Web frameworks (uncomment as needed)
+# gem 'rails', '~> 7.1'
+# gem 'sinatra'
+# gem 'sinatra-contrib'
+
+# Database adapters (uncomment as needed)
+# gem 'pg'
+# gem 'sqlite3'
+# gem 'mysql2'
+
+# Web servers
+# gem 'puma'
+# gem 'unicorn'
+
+group :development, :test do
+  gem 'pry'
+  gem 'pry-byebug'
+  gem 'rspec'
+  gem 'rubocop', require: false
+  gem 'rubocop-rails', require: false
+  gem 'rubocop-performance', require: false
+end
+
+group :test do
+  gem 'factory_bot'
+  gem 'faker'
+  gem 'database_cleaner'
+  gem 'simplecov', require: false
+end

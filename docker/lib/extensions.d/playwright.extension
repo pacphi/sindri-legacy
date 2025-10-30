@@ -148,24 +148,7 @@ configure() {
     print_success "TypeScript configuration copied"
   else
     # Create basic tsconfig.json if template not found
-    cat > tsconfig.json << 'EOF'
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "ES2020",
-    "moduleResolution": "node",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
-  },
-  "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist"]
-}
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.tsconfig.template" > tsconfig.json
     print_success "Basic TypeScript configuration created"
   fi
 
@@ -176,27 +159,7 @@ EOF
     print_success "Playwright configuration copied"
   else
     # Create basic playwright.config.ts if template not found
-    cat > playwright.config.ts << 'EOF'
-import { defineConfig, devices } from '@playwright/test';
-
-export default defineConfig({
-  testDir: './tests',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
-  use: {
-    trace: 'on-first-retry',
-  },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
-});
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.playwright-config.template" > playwright.config.ts
     print_success "Basic Playwright configuration created"
   fi
 
@@ -204,14 +167,7 @@ EOF
   print_status "Creating example test..."
   mkdir -p tests
   if [[ ! -f "tests/example.spec.ts" ]]; then
-    cat > tests/example.spec.ts << 'EOF'
-import { test, expect } from '@playwright/test';
-
-test('environment validation', async ({ page }) => {
-  // Basic test to verify Playwright works
-  expect(true).toBe(true);
-});
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.test-spec.template" > tests/example.spec.ts
     print_success "Example test created: tests/example.spec.ts"
   else
     print_debug "Example test already exists"

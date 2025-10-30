@@ -127,91 +127,13 @@ configure() {
   if ! grep -q 'mise activate bash' "$HOME/.bashrc" 2>/dev/null; then
     print_warning "mise activation not found in .bashrc"
     print_status "Adding mise activation..."
-    cat >> "$HOME/.bashrc" << 'EOF'
-
-# mise - unified tool version manager
-if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate bash)"
-fi
-EOF
+    cat "$(dirname "${BASH_SOURCE[0]}")/python.bashrc-mise.template" >> "$HOME/.bashrc"
     print_success "Added mise activation to .bashrc"
   fi
 
   # Create project template script
   print_status "Creating Python project template..."
-  cat > /workspace/scripts/create-python-project.sh << 'EOF'
-#!/bin/bash
-# Create a new Python project with virtual environment
-
-project_name="$1"
-if [[ -z "$project_name" ]]; then
-    echo "Usage: $0 <project-name>"
-    exit 1
-fi
-
-mkdir -p "/workspace/projects/active/$project_name"
-cd "/workspace/projects/active/$project_name"
-
-python3 -m venv venv
-source venv/bin/activate
-
-mkdir -p src tests docs
-touch src/__init__.py tests/__init__.py
-
-cat > requirements.txt << 'REQ'
-# Production dependencies
-REQ
-
-cat > requirements-dev.txt << 'REQ'
-# Development dependencies
-pytest>=7.0.0
-black>=22.0.0
-flake8>=4.0.0
-mypy>=0.910
-ipython>=8.0.0
-REQ
-
-cat > setup.py << SETUP
-from setuptools import setup, find_packages
-
-setup(
-    name="$project_name",
-    version="0.1.0",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
-    python_requires=">=3.8",
-)
-SETUP
-
-cat > README.md << README
-# $project_name
-
-## Setup
-\`\`\`bash
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-\`\`\`
-
-## Testing
-\`\`\`bash
-pytest tests/
-\`\`\`
-
-## Formatting
-\`\`\`bash
-black src/ tests/
-flake8 src/ tests/
-mypy src/
-\`\`\`
-README
-
-pip install -r requirements-dev.txt
-
-echo "Python project '$project_name' created!"
-echo "To activate: source /workspace/projects/active/$project_name/venv/bin/activate"
-EOF
-
+  cat "$(dirname "${BASH_SOURCE[0]}")/python.create-project.template" > /workspace/scripts/create-python-project.sh
   chmod +x /workspace/scripts/create-python-project.sh
   print_success "Project template created"
 

@@ -1,0 +1,52 @@
+
+# PHP aliases
+alias php="php -d memory_limit=-1"
+alias phpunit="vendor/bin/phpunit"
+alias phpstan="vendor/bin/phpstan"
+alias psalm="vendor/bin/psalm"
+alias phpcbf="vendor/bin/phpcbf"
+alias phpcs="vendor/bin/phpcs"
+alias php-cs-fixer="vendor/bin/php-cs-fixer"
+
+# Composer aliases
+alias c="composer"
+alias ci="composer install"
+alias cu="composer update"
+alias cr="composer require"
+alias crd="composer require --dev"
+alias cda="composer dump-autoload"
+alias co="composer outdated"
+alias cg="composer global"
+
+# Symfony aliases
+alias sf="php bin/console"
+alias sfc="php bin/console cache:clear"
+alias sfcc="php bin/console cache:clear && php bin/console cache:warmup"
+alias sfmm="php bin/console make:migration"
+alias sfdm="php bin/console doctrine:migrations:migrate"
+alias sfdd="php bin/console doctrine:database:drop --force"
+alias sfdc="php bin/console doctrine:database:create"
+alias sfds="php bin/console doctrine:schema:update --force"
+alias sfs="symfony server:start"
+alias sfsd="symfony server:start -d"
+alias sfss="symfony server:stop"
+alias sfsl="symfony server:log"
+
+# Laravel aliases
+alias art="php artisan"
+alias arts="php artisan serve"
+alias artm="php artisan migrate"
+alias artmr="php artisan migrate:rollback"
+alias artmf="php artisan migrate:fresh"
+alias artms="php artisan migrate:fresh --seed"
+alias artdb="php artisan db:seed"
+alias arttc="php artisan tinker"
+alias artcc="php artisan cache:clear"
+alias artoc="php artisan optimize:clear"
+
+# Testing aliases
+alias t="phpunit"
+alias tf="phpunit --filter"
+alias tc="phpunit --coverage-html coverage"
+alias stan="phpstan analyse"
+alias psalm="psalm --show-info=true"

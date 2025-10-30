@@ -1,0 +1,22 @@
+<?php
+
+$finder = PhpCsFixer\Finder::create()
+    ->in(__DIR__)
+    ->exclude('var')
+    ->exclude('vendor')
+    ->exclude('node_modules')
+;
+
+$config = new PhpCsFixer\Config();
+return $config->setRules([
+        '@Symfony' => true,
+        '@PSR12' => true,
+        'array_syntax' => ['syntax' => 'short'],
+        'ordered_imports' => true,
+        'no_unused_imports' => true,
+        'linebreak_after_opening_tag' => true,
+        'phpdoc_order' => true,
+        'phpdoc_summary' => false,
+    ])
+    ->setFinder($finder)
+;
