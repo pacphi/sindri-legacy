@@ -359,20 +359,22 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 10
       matrix:
         extension:
           # Core extensions (always needed)
-          - { name: 'workspace-structure', commands: 'mkdir,ls', key_tool: 'mkdir', timeout: '15m' }
+          - { name: 'workspace-structure', commands: 'mkdir,ls', key_tool: 'mkdir', timeout: '10m' }
           - { name: 'ssh-environment', commands: 'ssh,sshd', key_tool: 'ssh', timeout: '15m' }
-          - { name: 'nodejs', commands: 'node,npm,nvm', key_tool: 'node', timeout: '20m' }
+          - { name: 'mise-config', commands: 'mise', key_tool: 'mise', timeout: '10m', uses_mise: 'true' }
+          # mise-powered language extensions (faster with mise)
+          - { name: 'nodejs', commands: 'node,npm', key_tool: 'node', timeout: '15m', depends_on: 'mise-config', uses_mise: 'true' }
+          - { name: 'python', commands: 'python3,pip3', key_tool: 'python3', timeout: '15m', depends_on: 'mise-config', uses_mise: 'true' }
+          - { name: 'rust', commands: 'rustc,cargo', key_tool: 'rustc', timeout: '20m', depends_on: 'mise-config', uses_mise: 'true' }
+          - { name: 'golang', commands: 'go', key_tool: 'go', timeout: '20m', depends_on: 'mise-config', uses_mise: 'true' }
+          - { name: 'nodejs-devtools', commands: 'tsc,eslint,prettier', key_tool: 'tsc', timeout: '15m', depends_on: 'mise-config,nodejs', uses_mise: 'true' }
           # Claude AI extensions
-          - { name: 'nodejs-devtools', commands: 'tsc,eslint,prettier,nodemon', key_tool: 'tsc', timeout: '20m', depends_on: 'nodejs' }
           - { name: 'claude-config', commands: 'claude', key_tool: 'claude', timeout: '15m', depends_on: 'nodejs' }
-          # Language runtimes
-          - { name: 'python', commands: 'python3,pip3,uv', key_tool: 'python3', timeout: '30m' }
-          - { name: 'rust', commands: 'rustc,cargo', key_tool: 'rustc', timeout: '30m' }
-          - { name: 'golang', commands: 'go', key_tool: 'go', timeout: '30m' }
+          # Traditional extensions (unchanged)
           - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m' }
           - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m' }
           - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m' }
@@ -746,6 +748,77 @@ jobs:
             fi
           done
 
+      - name: Verify mise-managed tools
+        timeout-minutes: 2
+        if: steps.should-test.outputs.should_test == 'true' && matrix.extension.uses_mise == 'true'
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          extension_name="${{ matrix.extension.name }}"
+
+          echo "Verifying mise-managed tools for $extension_name..."
+
+          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+            # Source mise activation
+            eval \"\$(mise activate bash)\"
+
+            echo \"=== mise Tool Verification ===\"
+            mise ls
+
+            case \"$extension_name\" in
+              mise-config)
+                echo \"✅ mise-config extension verified\"
+                mise --version
+                ;;
+              nodejs)
+                if mise ls node 2>/dev/null | grep -q node; then
+                  echo \"✅ Node.js managed by mise\"
+                else
+                  echo \"❌ Node.js not managed by mise\"
+                  exit 1
+                fi
+                ;;
+              python)
+                if mise ls python 2>/dev/null | grep -q python; then
+                  echo \"✅ Python managed by mise\"
+                else
+                  echo \"❌ Python not managed by mise\"
+                  exit 1
+                fi
+                if mise ls pipx 2>/dev/null | grep -q pipx || mise ls | grep -q \"pipx:\"; then
+                  echo \"✅ pipx tools managed by mise\"
+                else
+                  echo \"⚠️  No pipx tools found (may not be installed yet)\"
+                fi
+                ;;
+              rust)
+                if mise ls rust 2>/dev/null | grep -q rust; then
+                  echo \"✅ Rust managed by mise\"
+                else
+                  echo \"❌ Rust not managed by mise\"
+                  exit 1
+                fi
+                ;;
+              golang)
+                if mise ls go 2>/dev/null | grep -q go; then
+                  echo \"✅ Go managed by mise\"
+                else
+                  echo \"❌ Go not managed by mise\"
+                  exit 1
+                fi
+                ;;
+              nodejs-devtools)
+                if mise ls | grep -q \"npm:\"; then
+                  echo \"✅ npm tools managed by mise\"
+                else
+                  echo \"⚠️  No npm tools found in mise (may not be installed yet)\"
+                fi
+                ;;
+            esac
+
+            echo \"\"
+            echo \"✅ mise tool verification completed\"
+          '"
+
       - name: Diagnose environment on failure
         timeout-minutes: 3
         if: failure() && steps.should-test.outputs.should_test == 'true'
@@ -1028,6 +1101,39 @@ jobs:
 
             echo \"✅ Key functionality test passed\"
           '"
+
+      - name: Test enhanced status() output
+        timeout-minutes: 2
+        if: steps.should-test.outputs.should_test == 'true'
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          extension_name="${{ matrix.extension.name }}"
+
+          echo "Testing enhanced status() output for $extension_name..."
+
+          status_output=$(flyctl ssh console --app $app_name --command "/bin/bash -c '
+            cd /workspace/scripts/lib
+            bash extension-manager.sh status $extension_name
+          '")
+
+          echo "$status_output"
+
+          # Verify status output format
+          if echo "$status_output" | grep -q "Extension:"; then
+            echo "✅ Status shows extension metadata"
+          else
+            echo "❌ Status missing extension metadata"
+            exit 1
+          fi
+
+          if echo "$status_output" | grep -q "Status:"; then
+            echo "✅ Status shows installation status"
+          else
+            echo "❌ Status missing installation status"
+            exit 1
+          fi
+
+          echo "✅ Enhanced status() output verified"
 
       - name: Test idempotency
         timeout-minutes: 10

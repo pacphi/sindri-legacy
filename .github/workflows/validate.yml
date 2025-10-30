@@ -145,6 +145,32 @@ jobs:
 
           echo "✅ All shell scripts pass shellcheck"
 
+      - name: Validate TOML syntax
+        run: |
+          echo "Validating extension TOML files..."
+          pip install toml
+
+          for toml in docker/lib/extensions.d/*.toml; do
+            echo "Validating $toml..."
+            python3 -c "import toml; toml.load(open('$toml'))" || exit 1
+          done
+
+          echo "✅ All TOML files are valid"
+
+      - name: Verify extension-TOML pairs
+        run: |
+          echo "Checking mise-powered extensions have TOML files..."
+
+          mise_extensions=("nodejs" "python" "rust" "golang" "nodejs-devtools")
+
+          for ext in "${mise_extensions[@]}"; do
+            if [[ ! -f "docker/lib/extensions.d/${ext}.toml" ]]; then
+              echo "❌ Missing TOML for mise-powered extension: $ext"
+              exit 1
+            fi
+            echo "✅ $ext.extension + $ext.toml pair verified"
+          done
+
       - name: Check script permissions
         run: |
           echo "Checking script permissions..."
