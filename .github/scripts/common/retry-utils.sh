@@ -81,15 +81,15 @@ flyctl_deploy_retry() {
 ssh_command_retry() {
   local app_name=$1
   shift
-  local command="$@"
+  local command="$*"
   local max_attempts=5
   local attempt=1
 
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SSH attempt $attempt of $max_attempts..."
 
-    # Use login shell to ensure .bashrc is sourced (mise activation)
-    if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc '$command'"; then
+    # Execute command directly - caller provides complete command with shell invocation
+    if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
       echo "✅ SSH command succeeded"
       return 0
     else

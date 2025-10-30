@@ -309,7 +309,7 @@ jobs:
 
           # Create test file with explicit sync operations (matching integration.yml)
           echo "Creating test file with content: $TEST_DATA"
-          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" "/bin/bash -c '
+          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" "/bin/bash -lc '
             echo \"Creating and syncing test file...\"
             echo \"$TEST_DATA\" > $TEST_FILE
             sync
@@ -369,7 +369,7 @@ jobs:
           echo "Expected content: $TEST_DATA"
 
           # Use comprehensive verification (same as integration.yml)
-          verification_result=$(flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer -C "/bin/bash -c '
+          verification_result=$(flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer -C "/bin/bash -lc '
             echo \"=== Post-Restart File Verification ===\"
             if [ -f \"$TEST_FILE\" ]; then
               echo \"✅ File exists\"
@@ -430,7 +430,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/integration/setup-manifest.sh /tmp/setup-manifest.sh
-            bye
+            quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/setup-manifest.sh'"
@@ -459,7 +459,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/integration/verify-protected.sh /tmp/verify-protected.sh
-            bye
+            quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-protected.sh'"
@@ -473,7 +473,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/integration/test-extension-system.sh /tmp/test-extension-system.sh
-            bye
+            quit
           SFTP_EOF
 
           if retry_with_backoff 3 10 60 \

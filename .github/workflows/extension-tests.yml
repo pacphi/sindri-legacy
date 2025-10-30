@@ -524,7 +524,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh
-            bye
+            quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
@@ -1948,7 +1948,7 @@ jobs:
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/workflows/test-fixtures/manifest-reorder-test.conf /tmp/manifest-reorder.conf
             put .github/workflows/test-fixtures/manifest-with-comments.conf /tmp/manifest-comments.conf
-            bye
+            quit
           SFTP_EOF
 
       - name: Test reorder functionality
@@ -2142,7 +2142,7 @@ jobs:
           echo "Copying test fixture to VM..."
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/workflows/test-fixtures/manifest-only-top-level.conf /tmp/manifest-top-level.conf
-            bye
+            quit
           SFTP_EOF
 
       - name: Test transitive dependency installation

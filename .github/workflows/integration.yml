@@ -300,7 +300,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/integration/verify-manifest.sh /tmp/verify-manifest.sh
-            bye
+            quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
@@ -562,7 +562,7 @@ jobs:
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/integration/test-basic-workflow.sh /tmp/test-basic-workflow.sh
-            bye
+            quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/test-basic-workflow.sh'"

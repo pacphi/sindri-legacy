@@ -185,7 +185,7 @@ validate() {
   if ! command_exists go; then
     print_error "go command not found"
     print_debug "PATH: $PATH"
-    print_debug "mise shims: $(ls -la ~/.local/share/mise/shims/ 2>/dev/null | grep -E 'go$' || echo 'none')"
+    print_debug "mise shims: $(find ~/.local/share/mise/shims/ -name 'go' -type f 2>/dev/null || echo 'none')"
     all_valid=false
   else
     print_success "Go: $(go version)"
