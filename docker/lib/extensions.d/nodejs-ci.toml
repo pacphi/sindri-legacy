@@ -1,0 +1,15 @@
+# nodejs-ci.toml - Minimal Node.js configuration for CI
+# Lightweight config for CI/CD pipelines
+
+[tools]
+# Node.js LTS for CI
+node = "lts"
+
+[env]
+NODE_ENV = "test"
+CI = "true"
+
+[settings]
+experimental = true
+# Reduce verbosity in CI
+verbose = false

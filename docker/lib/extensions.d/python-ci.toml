@@ -1,0 +1,18 @@
+# python-ci.toml - Minimal Python configuration for CI
+# Lightweight config for CI/CD pipelines
+
+[tools]
+# Python 3.13 only
+python = "3.13"
+
+# Essential tools only
+"pipx:uv" = "latest"
+
+[env]
+PYTHONUNBUFFERED = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+CI = "true"
+
+[settings]
+experimental = true
+verbose = false

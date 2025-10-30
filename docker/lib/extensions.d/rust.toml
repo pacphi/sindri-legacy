@@ -1,0 +1,20 @@
+# rust.toml - Rust stable + cargo tools configuration for mise
+# Full Rust development environment
+
+[tools]
+# Rust stable channel
+rust = "stable"
+
+# Cargo tools via cargo backend
+"cargo:ripgrep" = "latest"
+"cargo:fd-find" = "latest"
+"cargo:exa" = "latest"
+"cargo:bat" = "latest"
+"cargo:tokei" = "latest"
+
+[env]
+RUST_BACKTRACE = "1"
+CARGO_HOME = "${HOME}/.cargo"
+
+[settings]
+experimental = true

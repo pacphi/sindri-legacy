@@ -1,0 +1,16 @@
+# golang-ci.toml - Minimal Go configuration for CI
+# Lightweight config for CI/CD pipelines
+
+[tools]
+# Go 1.24 only
+go = "1.24"
+
+[env]
+GOPATH = "${HOME}/go"
+GO111MODULE = "on"
+GOPROXY = "https://proxy.golang.org,direct"
+CI = "true"
+
+[settings]
+experimental = true
+verbose = false

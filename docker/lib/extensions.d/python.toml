@@ -1,0 +1,22 @@
+# python.toml - Python 3.13 + pipx tools configuration for mise
+# Full Python development environment
+
+[tools]
+# Python 3.13
+python = "3.13"
+
+# Python tools via pipx backend
+"pipx:virtualenv" = "latest"
+"pipx:poetry" = "latest"
+"pipx:flake8" = "latest"
+"pipx:mypy" = "latest"
+"pipx:black" = "latest"
+"pipx:jupyterlab" = "latest"
+"pipx:uv" = "latest"
+
+[env]
+PYTHONUNBUFFERED = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+
+[settings]
+experimental = true

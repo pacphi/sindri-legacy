@@ -1,0 +1,151 @@
+# template.toml - Template for mise-powered extension configurations
+# Copy this file to create new mise tool configurations
+
+# ============================================================================
+# TOOLS SECTION
+# ============================================================================
+# Define tools to be managed by mise
+# Syntax: tool-name = "version"
+# Special versions: "latest", "lts", "stable"
+# Specific versions: "1.2.3", "20.11.0"
+
+[tools]
+# Language runtimes
+# node = "lts"                    # Node.js LTS version
+# python = "3.13"                 # Python 3.13
+# rust = "stable"                 # Rust stable
+# go = "1.24"                     # Go 1.24
+
+# npm-based tools (requires Node.js)
+# "npm:typescript" = "latest"     # TypeScript compiler
+# "npm:eslint" = "latest"         # ESLint linter
+# "npm:prettier" = "latest"       # Prettier formatter
+
+# pipx-based tools (requires Python)
+# "pipx:poetry" = "latest"        # Poetry package manager
+# "pipx:black" = "latest"         # Black code formatter
+# "pipx:mypy" = "latest"          # mypy type checker
+
+# cargo-based tools (requires Rust)
+# "cargo:ripgrep" = "latest"      # ripgrep search tool
+# "cargo:fd-find" = "latest"      # fd file finder
+# "cargo:exa" = "latest"          # exa modern ls
+
+# go-based tools (requires Go)
+# "go:golang.org/x/tools/gopls@latest" = "latest"  # Go language server
+# "go:github.com/golangci/golangci-lint/cmd/golangci-lint@latest" = "latest"
+
+# ubi-based tools (GitHub releases)
+# "ubi:derailed/k9s" = "latest"   # k9s Kubernetes CLI
+
+# Direct mise tools
+# terraform = "latest"            # Terraform
+# kubectl = "latest"              # kubectl
+# helm = "latest"                 # Helm
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+# Set environment variables for tools
+
+[env]
+# Load from .env file (if exists)
+# _.file = ".env"
+
+# Custom environment variables
+# NODE_ENV = "development"
+# PYTHONUNBUFFERED = "1"
+# RUST_BACKTRACE = "1"
+# GO111MODULE = "on"
+
+# Path modifications
+# PATH = ["${HOME}/.local/bin", "${HOME}/go/bin"]
+
+# ============================================================================
+# TASKS
+# ============================================================================
+# Define custom tasks/scripts that can be run with `mise run <task>`
+
+# [tasks.test]
+# description = "Run tests"
+# run = "npm test"
+
+# [tasks.build]
+# description = "Build project"
+# run = "npm run build"
+
+# [tasks.format]
+# description = "Format code"
+# run = "prettier --write ."
+
+# [tasks.lint]
+# description = "Lint code"
+# run = "eslint ."
+
+# [tasks.dev]
+# description = "Start development server"
+# run = "npm run dev"
+
+# ============================================================================
+# SETTINGS
+# ============================================================================
+# Global mise settings
+
+[settings]
+# Enable experimental features
+experimental = true
+
+# Logging verbosity (false for quiet, true for verbose)
+verbose = false
+
+# Skip confirmation prompts
+# yes = false
+
+# Number of parallel jobs (0 = number of CPU cores)
+# jobs = 4
+
+# Tools to disable
+# disable_tools = []
+
+# ============================================================================
+# PLUGINS (Advanced)
+# ============================================================================
+# Configure custom plugins (optional)
+
+# [plugins]
+# Add custom plugin configurations here if needed
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+#
+# 1. Copy this template to create a new TOML file:
+#    cp template.toml myproject.toml
+#
+# 2. Edit the TOML file to define your tools
+#
+# 3. Copy to mise config directory:
+#    cp myproject.toml ~/.config/mise/conf.d/
+#
+# 4. Install all defined tools:
+#    mise install
+#
+# 5. List installed tools:
+#    mise ls
+#
+# 6. Run a defined task:
+#    mise run test
+#
+# 7. Check mise configuration:
+#    mise config
+#
+# 8. Update all tools to latest versions:
+#    mise upgrade
+#
+# ============================================================================
+# REFERENCES
+# ============================================================================
+# - mise documentation: https://mise.jdx.dev
+# - Tool backends: https://mise.jdx.dev/dev-tools/backends.html
+# - Configuration: https://mise.jdx.dev/configuration.html
+# - Tasks: https://mise.jdx.dev/tasks/
