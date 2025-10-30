@@ -1,10 +1,10 @@
 #!/bin/bash
-# golang.sh.example - Go toolchain and development tools
+# golang.extension - Go toolchain and development tools via mise
 # Extension API v1.0
 #
 # This extension installs Go with:
-# - Go toolchain from official releases
-# - Development tools (gopls, delve, golangci-lint, air)
+# - Go 1.24 via mise
+# - Development tools (gopls, delve, golangci-lint, air) via mise go backend
 # - Project template generator
 # - CI mode detection for lightweight installs
 
@@ -17,8 +17,8 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="golang"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="Go toolchain with development tools"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="Go toolchain with development tools via mise"
 EXT_CATEGORY="language"
 
 # Initialize extension environment
@@ -31,22 +31,16 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for wget
-  if ! command_exists wget; then
-    print_error "wget is required but not installed"
-    print_status "Install with: sudo apt-get install wget"
-    return 1
-  fi
-
-  # Check for sudo
-  if ! command_exists sudo; then
-    print_error "sudo is required but not installed"
+  # Check for mise
+  if ! command_exists mise; then
+    print_error "mise is required but not installed"
+    print_status "Install mise-config extension first: extension-manager install mise-config"
     return 1
   fi
 
   # Check disk space (Go needs ~500MB)
   local available_space
-  available_space=$(df -BM /usr/local 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/M//')
+  available_space=$(df -BM "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/M//')
   if [[ -n "$available_space" ]] && [[ $available_space -lt 600 ]]; then
     print_warning "Low disk space: ${available_space}MB available (600MB recommended for Go)"
   fi
@@ -60,75 +54,58 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing Go toolchain..."
+  print_status "Installing Go toolchain via mise..."
 
-  # Check if Go is already installed
-  if command_exists go; then
-    local go_version
-    go_version=$(go version 2>/dev/null)
-    print_warning "Go is already installed: $go_version"
-    print_status "Skipping installation (remove first to reinstall)"
-    return 0
+  # Ensure mise config directory exists
+  local mise_config_dir="$HOME/.config/mise/conf.d"
+  mkdir -p "$mise_config_dir"
+
+  # Determine which config to use (CI vs full)
+  local source_config="${SCRIPT_DIR}/golang.toml"
+  if [[ "$CI_MODE" == "true" ]]; then
+    print_status "CI mode detected - using minimal golang-ci.toml"
+    source_config="${SCRIPT_DIR}/golang-ci.toml"
   fi
 
-  # Install Go
-  local GO_VERSION="1.24.6"
-  local GO_ARCHIVE="go${GO_VERSION}.linux-amd64.tar.gz"
-
-  print_status "Downloading Go $GO_VERSION..."
-  if wget -q "https://go.dev/dl/$GO_ARCHIVE"; then
-    print_status "Extracting Go..."
-    sudo tar -C /usr/local -xzf "$GO_ARCHIVE"
-    rm "$GO_ARCHIVE"
-    print_success "Go installed: $GO_VERSION"
+  # Copy appropriate golang.toml to mise config directory
+  local target_config="${mise_config_dir}/golang.toml"
+  if [[ -f "$source_config" ]]; then
+    print_status "Copying $(basename "$source_config") to mise config..."
+    cp "$source_config" "$target_config"
+    print_success "Go configuration installed"
   else
-    print_error "Failed to download Go"
+    print_error "Source config not found: $source_config"
     return 1
   fi
 
-  # Check if running in CI mode
-  if [[ "$CI_MODE" == "true" ]]; then
-    print_status "CI mode detected - skipping Go development tools"
-    return 0
+  # Activate mise for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
   fi
 
-  # Set up environment for tool installation
-  export PATH=$PATH:/usr/local/go/bin
-  export GOPATH=$HOME/go
-  export GOBIN=$GOPATH/bin
-  export PATH=$PATH:$GOBIN
+  # Install Go and tools via mise
+  print_status "Installing Go 1.24 and tools via mise..."
+  if mise install 2>&1 | grep -v "^mise"; then
+    print_success "Go and tools installed via mise"
+  else
+    print_error "Failed to install Go via mise"
+    return 1
+  fi
 
-  # Ensure GOBIN directory exists
-  mkdir -p "$GOBIN"
+  # Verify Go is available
+  if ! command_exists go; then
+    print_warning "go command not immediately available (may need shell reload)"
+    # Try to add mise shims to PATH
+    export PATH="$HOME/.local/share/mise/shims:$PATH"
+  fi
 
-  # Install Go development tools
-  print_status "Installing Go development tools..."
-  local go_tools=(
-    "golang.org/x/tools/gopls@latest"
-    "github.com/go-delve/delve/cmd/dlv@latest"
-    "golang.org/x/tools/cmd/goimports@latest"
-    "github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
-    "github.com/air-verse/air@latest"
-    "github.com/goreleaser/goreleaser@latest"
-  )
+  if command_exists go; then
+    print_success "Go $(go version 2>&1 | awk '{print $3}' | sed 's/go//') installed"
+  else
+    print_warning "Go installation completed but command not found in current session"
+    print_status "Run: source ~/.bashrc to activate"
+  fi
 
-  local installed_count=0
-  for tool in "${go_tools[@]}"; do
-    local tool_name=$(basename "$tool" | cut -d'@' -f1)
-    print_debug "Installing $tool_name..."
-    if timeout 300 go install "$tool" 2>&1 | grep -v "^go: downloading"; then
-      if command_exists "$tool_name"; then
-        print_debug "✓ $tool_name installed"
-        ((installed_count++))
-      else
-        print_warning "Failed to install $tool_name - binary not found after installation"
-      fi
-    else
-      print_warning "Failed to install $tool_name - go install command failed"
-    fi
-  done
-
-  print_status "Installed $installed_count/${#go_tools[@]} development tools"
   return 0
 }
 
@@ -139,34 +116,18 @@ install() {
 configure() {
   print_status "Configuring Go environment..."
 
-  # Configure PATH for SSH sessions
-  if command_exists setup_tool_path 2>/dev/null; then
-    setup_tool_path "golang" \
-      'export PATH=$PATH:/usr/local/go/bin' \
-      'export GOPATH=$HOME/go; export PATH=$PATH:$GOPATH/bin'
-  else
-    # Fallback: add to bashrc
-    if ! grep -q "/usr/local/go/bin" "$HOME/.bashrc" 2>/dev/null; then
-      echo "" >> "$HOME/.bashrc"
-      echo "# ${EXT_NAME} - Go toolchain" >> "$HOME/.bashrc"
-      echo 'export PATH=$PATH:/usr/local/go/bin' >> "$HOME/.bashrc"
-      echo 'export GOPATH=$HOME/go' >> "$HOME/.bashrc"
-      echo 'export PATH=$PATH:$GOPATH/bin' >> "$HOME/.bashrc"
-      print_success "Added Go to PATH"
-    fi
+  # mise manages PATH automatically via activation
+  # No manual PATH configuration needed
+
+  # Activate mise for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+    export PATH="$HOME/.local/share/mise/shims:$PATH"
   fi
 
-  # Set for current session
-  export PATH=$PATH:/usr/local/go/bin
+  # Set GOPATH for current session (mise sets this via env in golang.toml)
   export GOPATH=$HOME/go
-  export PATH=$PATH:$GOPATH/bin
-
-  # Create SSH wrappers
-  if command_exists create_tool_wrapper 2>/dev/null; then
-    create_tool_wrapper "go" "/usr/local/go/bin/go"
-    create_tool_wrapper "gofmt" "/usr/local/go/bin/gofmt"
-    [[ -f "/usr/local/go/bin/godoc" ]] && create_tool_wrapper "godoc" "/usr/local/go/bin/godoc"
-  fi
+  mkdir -p "$GOPATH"
 
   # Create Go project template script
   print_status "Creating Go project template..."
@@ -302,6 +263,20 @@ validate() {
 
   local all_valid=true
 
+  # Activate mise for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+    export PATH="$HOME/.local/share/mise/shims:$PATH"
+  fi
+
+  # Check mise has Go installed
+  if ! mise ls go 2>/dev/null | grep -q "1.24"; then
+    print_error "Go 1.24 not found in mise"
+    all_valid=false
+  else
+    print_success "mise: Go 1.24 installed"
+  fi
+
   # Check go command
   if ! command_exists go; then
     print_error "go command not found"
@@ -317,13 +292,23 @@ validate() {
     print_warning "GOPATH not set"
   fi
 
-  # Check development tools
-  local tools=(gopls dlv goimports golangci-lint air goreleaser)
-  local tools_found=0
-  for tool in "${tools[@]}"; do
-    command_exists "$tool" && ((tools_found++))
-  done
-  print_status "Development tools: $tools_found/${#tools[@]}"
+  # Check development tools (skip in CI mode)
+  if [[ "$CI_MODE" != "true" ]]; then
+    local tools=(gopls dlv goimports golangci-lint air goreleaser)
+    local tools_found=0
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        ((tools_found++))
+        print_debug "✓ $tool"
+      elif mise ls "go:*${tool}*" 2>/dev/null | grep -q "$tool"; then
+        ((tools_found++))
+        print_debug "✓ $tool (mise-managed)"
+      fi
+    done
+    print_status "Development tools: $tools_found/${#tools[@]}"
+  else
+    print_status "CI mode - skipping development tools check"
+  fi
 
   # Check project template
   [[ -f "/workspace/scripts/create-go-project.sh" ]] && print_success "Project template: installed"
@@ -349,18 +334,32 @@ status() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
+  # Activate mise for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+    export PATH="$HOME/.local/share/mise/shims:$PATH"
+  fi
+
   # Check installation status
   if ! command_exists go; then
     echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  echo "Status: ✓ INSTALLED"
+  echo "Status: ✓ INSTALLED (mise-powered)"
   echo ""
 
-  # Show installed tools with versions
-  print_status "Installed tools:"
-  echo "  ✓ Go $(go version | awk '{print $3}' | sed 's/go//')"
+  # Show mise-managed Go version
+  print_status "Installed tools (via mise):"
+  if command_exists go; then
+    local go_version=$(go version 2>&1 | awk '{print $3}' | sed 's/go//')
+    echo "  ✓ Go $go_version"
+  fi
+
+  # Show mise-managed Go tools
+  if mise ls go 2>/dev/null | grep -q "1.24"; then
+    echo "  ✓ Go 1.24 (mise-managed)"
+  fi
 
   if [[ -n "$GOPATH" ]]; then
     echo "  ✓ GOPATH: $GOPATH"
@@ -368,12 +367,19 @@ status() {
     echo "  ⚠ GOPATH not set"
   fi
 
-  echo ""
-  print_status "Installed development tools:"
-  local tools=(gopls dlv goimports golangci-lint air goreleaser)
-  for tool in "${tools[@]}"; do
-    command_exists "$tool" && echo "  ✓ $tool"
-  done
+  # Show development tools (skip in CI mode)
+  if [[ "$CI_MODE" != "true" ]]; then
+    echo ""
+    print_status "Development tools (via mise go backend):"
+    local tools=(gopls dlv goimports golangci-lint air goreleaser)
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        echo "  ✓ $tool"
+      elif mise ls "go:*${tool}*" 2>/dev/null | grep -q "$tool"; then
+        echo "  ✓ $tool (mise-managed)"
+      fi
+    done
+  fi
 
   [[ -f "/workspace/scripts/create-go-project.sh" ]] && echo "" && print_status "Project template: installed"
 
@@ -435,13 +441,27 @@ remove() {
     return 1
   fi
 
-  # Remove Go installation
-  if [[ -d "/usr/local/go" ]]; then
-    print_status "Removing Go installation..."
-    sudo rm -rf /usr/local/go
-    print_success "Go removed"
-  else
-    print_warning "Go installation directory not found"
+  # Remove mise golang config
+  local mise_config="${HOME}/.config/mise/conf.d/golang.toml"
+  if [[ -f "$mise_config" ]]; then
+    print_status "Removing mise Go configuration..."
+    rm -f "$mise_config"
+    print_success "mise Go config removed"
+  fi
+
+  # Uninstall Go and tools via mise
+  if command_exists mise; then
+    print_status "Uninstalling Go via mise..."
+    mise uninstall go 2>/dev/null || true
+
+    # Uninstall go tools if in non-CI mode
+    if [[ "$CI_MODE" != "true" ]]; then
+      local tools=(gopls dlv goimports golangci-lint air goreleaser)
+      for tool in "${tools[@]}"; do
+        mise uninstall "go:*${tool}*" 2>/dev/null || true
+      done
+    fi
+    print_success "Go uninstalled via mise"
   fi
 
   # Remove GOPATH
@@ -455,12 +475,11 @@ remove() {
 
   # Cleanup
   rm -f "/workspace/scripts/create-go-project.sh"
-  cleanup_bashrc "# ${EXT_NAME}"
   command_exists git && git config --global --unset-all alias.gotest 2>/dev/null
   command_exists git && git config --global --unset-all alias.gofmt 2>/dev/null
 
   print_success "Go uninstalled"
-  print_warning "Restart shell: source ~/.bashrc"
+  print_warning "Reload shell: source ~/.bashrc"
   return 0
 }
 

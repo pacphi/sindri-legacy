@@ -1,10 +1,10 @@
 #!/bin/bash
-# nodejs.sh.example - Node.js and npm installation via NVM
+# nodejs.extension - Node.js and npm installation via mise
 # Extension API v1.0
 #
-# This extension installs Node.js LTS and npm using NVM (Node Version Manager).
+# This extension installs Node.js LTS and npm using mise.
 # It provides the JavaScript runtime needed by Playwright, monitoring tools, and other extensions.
-# NVM allows easy switching between Node versions and user-space global package management.
+# mise provides unified version management with declarative configuration.
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,8 +15,8 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="nodejs"
-EXT_VERSION="2.0.0"
-EXT_DESCRIPTION="Node.js LTS and npm via NVM (Node Version Manager)"
+EXT_VERSION="3.0.0"
+EXT_DESCRIPTION="Node.js LTS and npm via mise"
 EXT_CATEGORY="language"
 
 # Initialize extension environment
@@ -29,18 +29,18 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for curl (required by NVM installer)
-  if ! command_exists curl; then
-    print_error "curl is required but not installed"
-    print_status "Install with: sudo apt-get install curl"
+  # Check for mise (required by this extension)
+  if ! command_exists mise; then
+    print_error "mise is required but not installed"
+    print_status "Install with: extension-manager install mise-config"
     return 1
   fi
 
-  # Check disk space (NVM + Node.js needs ~500MB)
+  # Check disk space (Node.js needs ~500MB)
   local available_space
   available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
   if [[ $available_space -lt 600 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (600MB recommended for NVM + Node)"
+    print_warning "Low disk space: ${available_space}MB available (600MB recommended for Node.js)"
   fi
 
   print_success "All prerequisites met"
@@ -52,59 +52,48 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing Node Version Manager (NVM)..."
+  print_status "Installing Node.js via mise..."
 
-  # Check if already installed
-  if [ -d "$HOME/.nvm" ]; then
-    print_warning "NVM already installed at $HOME/.nvm"
-    # Still verify Node is installed via NVM
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    if command_exists node; then
-      print_success "Node.js: $(node -v) via NVM"
-      return 0
-    fi
-  fi
-
-  # Install NVM v0.40.3
-  local nvm_version="v0.40.3"
-  if ! curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_version}/install.sh" | bash; then
-    print_error "Failed to install NVM"
+  # Verify mise is available
+  if ! command_exists mise; then
+    print_error "mise is required - install mise-config extension first"
     return 1
   fi
 
-  # Load NVM
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  # Determine paths
+  local ext_dir="$SCRIPT_DIR"
+  local toml_source
+  local toml_dest="$HOME/.config/mise/conf.d/nodejs.toml"
 
-  # Install latest LTS Node.js
-  print_status "Installing Node.js LTS via NVM..."
-  if ! nvm install --lts; then
-    print_error "Failed to install Node.js via NVM"
+  # Select config based on CI_MODE
+  if [[ "${CI_MODE:-false}" == "true" ]] && [[ -f "$ext_dir/nodejs-ci.toml" ]]; then
+    toml_source="$ext_dir/nodejs-ci.toml"
+    print_status "Using CI configuration (nodejs-ci.toml)"
+  else
+    toml_source="$ext_dir/nodejs.toml"
+    print_status "Using development configuration (nodejs.toml)"
+  fi
+
+  # Validate and copy TOML
+  if [[ ! -f "$toml_source" ]]; then
+    print_error "TOML configuration not found: $toml_source"
     return 1
   fi
 
-  nvm use --lts
-  nvm alias default lts/*
+  mkdir -p "$HOME/.config/mise/conf.d"
+  cp "$toml_source" "$toml_dest"
+  print_success "Configuration copied to $toml_dest"
 
-  # Update npm to latest
-  print_status "Updating npm to latest version..."
-  npm install -g npm@latest
-
-  # Verify installation
-  if ! command_exists node; then
-    print_error "Node.js installation failed - command not found after install"
+  # Install all tools from configuration
+  print_status "Installing Node.js LTS..."
+  if mise install; then
+    print_success "Node.js installed: $(node -v 2>/dev/null || echo 'installed')"
+    print_success "npm installed: v$(npm -v 2>/dev/null || echo 'installed')"
+  else
+    print_error "mise install failed"
     return 1
   fi
 
-  if ! command_exists npm; then
-    print_error "npm is not available after Node.js installation"
-    return 1
-  fi
-
-  print_success "Node.js $(node -v) and npm v$(npm -v) installed via NVM"
   return 0
 }
 
@@ -115,54 +104,27 @@ install() {
 configure() {
   print_status "Configuring Node.js..."
 
-  # Load NVM for configuration
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-  # NOTE: Do NOT set npm prefix when using NVM
-  # NVM manages global packages in version-specific directories:
-  # $NVM_DIR/versions/node/vX.X.X/lib/node_modules
-  # Setting a custom prefix is incompatible with NVM and causes errors.
-  # NVM already provides user-space global installs without sudo.
-
-  # Add NVM to shell configuration
-  if ! grep -q "NVM_DIR" "$HOME/.bashrc" 2>/dev/null; then
-    echo "" >> "$HOME/.bashrc"
-    echo "# ${EXT_NAME} - NVM (Node Version Manager)" >> "$HOME/.bashrc"
-    echo "export NVM_DIR=\"\$HOME/.nvm\"" >> "$HOME/.bashrc"
-    echo "[ -s \"\$NVM_DIR/nvm.sh\" ] && \\. \"\$NVM_DIR/nvm.sh\"" >> "$HOME/.bashrc"
-    echo "[ -s \"\$NVM_DIR/bash_completion\" ] && \\. \"\$NVM_DIR/bash_completion\"" >> "$HOME/.bashrc"
-    print_success "Added NVM loading to .bashrc"
-  fi
-
-  # Setup SSH wrapper for node/npm/nvm
+  # Setup SSH wrapper for node/npm
   if command_exists node; then
     local node_path=$(which node)
     local npm_path=$(which npm)
 
     if command_exists setup_tool_path 2>/dev/null; then
       setup_tool_path "${EXT_NAME}" \
-        "export NVM_DIR=\"\$HOME/.nvm\"; [ -s \"\$NVM_DIR/nvm.sh\" ] && \\. \"\$NVM_DIR/nvm.sh\""
+        "eval \"\$(mise activate bash --shims)\""
     fi
 
     if command_exists create_tool_wrapper 2>/dev/null; then
       create_tool_wrapper "node" "$node_path"
       create_tool_wrapper "npm" "$npm_path"
-      create_tool_wrapper "nvm" "$NVM_DIR/nvm.sh"
     fi
   fi
 
   # Set npm to use less verbose output
   npm config set loglevel warn 2>/dev/null || true
 
-  # Clean up any existing prefix configuration that conflicts with NVM
-  if npm config get prefix 2>/dev/null | grep -q "npm-global"; then
-    print_warning "Removing incompatible npm prefix configuration..."
-    npm config delete prefix 2>/dev/null || true
-  fi
-
   print_success "Node.js configuration completed"
-  print_status "Global packages will be installed to: \$NVM_DIR/versions/node/\$(nvm current)/bin"
+  print_status "Global packages will be managed by mise"
   return 0
 }
 
@@ -175,24 +137,12 @@ validate() {
 
   local all_valid=true
 
-  # Load NVM for validation
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-  # Check NVM is installed
-  if [[ ! -d "$NVM_DIR" ]]; then
-    print_error "NVM directory not found at $NVM_DIR"
+  # Check mise shows Node.js
+  if ! mise ls node 2>/dev/null | grep -q "node"; then
+    print_error "Node.js not installed via mise"
     all_valid=false
   else
-    print_success "NVM installed at $NVM_DIR"
-
-    # Verify NVM command works
-    if type nvm &>/dev/null; then
-      local nvm_version=$(nvm --version 2>/dev/null || echo "unknown")
-      print_success "NVM version: $nvm_version"
-    else
-      print_warning "NVM command not loaded (may need to reload shell)"
-    fi
+    print_success "Node.js managed by mise"
   fi
 
   # Check node command
@@ -234,24 +184,6 @@ validate() {
     fi
   fi
 
-  # Check npm global directory - should be NVM-managed, not custom prefix
-  local npm_prefix=$(npm config get prefix 2>/dev/null || echo "")
-  if [[ -n "$npm_prefix" ]]; then
-    # Verify it's an NVM-managed path (contains .nvm in the path)
-    if [[ "$npm_prefix" == *".nvm"* ]]; then
-      print_success "npm prefix: $npm_prefix (NVM-managed)"
-    else
-      print_warning "npm prefix: $npm_prefix (not NVM-managed, may cause issues)"
-    fi
-  fi
-
-  # Test NVM version switching capability
-  if type nvm &>/dev/null; then
-    if nvm list 2>/dev/null | grep -q "lts"; then
-      print_success "NVM can manage Node versions"
-    fi
-  fi
-
   if [[ "$all_valid" == "true" ]]; then
     print_success "Validation passed"
     return 0
@@ -267,15 +199,11 @@ validate() {
 
 status() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Extension: $EXT_NAME v$EXT_VERSION (mise-powered)"
   echo "Description: $EXT_DESCRIPTION"
   echo "Category: $EXT_CATEGORY"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
-
-  # Load NVM
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
   # Check installation status
   if ! command_exists node; then
@@ -286,43 +214,30 @@ status() {
   echo "Status: ✓ INSTALLED"
   echo ""
 
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Node.js)"
+  echo ""
+
   # Show installed tools with versions
-  print_status "Installed tools:"
-
-  if type nvm &>/dev/null; then
-    local nvm_version=$(nvm --version 2>/dev/null || echo "unknown")
-    echo "  ✓ NVM v$nvm_version"
+  print_status "mise-Managed Tools:"
+  if command_exists mise; then
+    # Show node and npm tools from mise
+    mise ls node npm:* 2>/dev/null | sed 's/^/  • /' || {
+      # Fallback if mise ls doesn't work
+      echo "  • Node.js $(node -v 2>/dev/null || echo 'installed')"
+      echo "  • npm v$(npm -v 2>/dev/null || echo 'installed')"
+    }
+  else
+    echo "  • Node.js $(node -v 2>/dev/null || echo 'unknown')"
+    echo "  • npm v$(npm -v 2>/dev/null || echo 'unknown')"
   fi
 
-  local node_version=$(node -v)
-  echo "  ✓ Node.js $node_version"
-
-  if command_exists npm; then
-    local npm_version=$(npm -v)
-    echo "  ✓ npm v$npm_version"
-  fi
-
-  # Show current and available Node versions
-  if type nvm &>/dev/null; then
-    echo ""
-    print_status "Current Node version: $(nvm current 2>/dev/null || echo 'unknown')"
-    local installed_versions
-    installed_versions=$(nvm list 2>/dev/null | grep -v "system" | wc -l || echo "0")
-    print_status "Installed Node versions: $installed_versions"
-
-    # Show npm global directory (should be NVM-managed)
-    local npm_prefix=$(npm config get prefix 2>/dev/null || echo "unknown")
-    if [[ "$npm_prefix" == *".nvm"* ]]; then
-      print_status "npm global prefix: $npm_prefix (NVM-managed ✓)"
-    else
-      print_warning "npm global prefix: $npm_prefix (should be NVM-managed)"
-    fi
-
-    # Show global packages count
-    local global_count
-    global_count=$(npm list -g --depth=0 2>/dev/null | grep -c '^[├└]' || echo "0")
-    print_status "Global packages installed: $global_count"
-  fi
+  # Show global packages count
+  echo ""
+  local global_count
+  global_count=$(npm list -g --depth=0 2>/dev/null | grep -c '^[├└]' || echo "0")
+  print_status "Global packages installed: $global_count"
 
   return 0
 }
@@ -332,47 +247,43 @@ status() {
 # ============================================================================
 
 remove() {
-  print_warning "Uninstalling Node.js and NVM..."
+  print_warning "Uninstalling Node.js..."
 
   # Check for dependent extensions and show warning
-  show_dependent_extensions_warning "node" "npm" "npx" "nvm"
+  show_dependent_extensions_warning "node" "npm" "npx"
 
   # Confirm removal
-  if ! prompt_confirmation "Continue with Node.js/NVM removal?"; then
+  if ! prompt_confirmation "Continue with Node.js removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Load NVM to uninstall Node versions
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-  # Uninstall Node versions via NVM
-  if type nvm &>/dev/null; then
-    print_status "Uninstalling Node versions via NVM..."
-    if nvm uninstall --lts 2>/dev/null; then
-      print_success "LTS Node version uninstalled"
-    fi
-  fi
-
-  # Remove NVM directory
-  if [[ -d "$NVM_DIR" ]]; then
-    print_status "Removing NVM directory..."
-    rm -rf "$NVM_DIR"
-    print_success "NVM directory removed"
+  # Remove mise configuration
+  local toml_dest="$HOME/.config/mise/conf.d/nodejs.toml"
+  if [[ -f "$toml_dest" ]]; then
+    print_status "Removing mise configuration..."
+    rm -f "$toml_dest"
+    print_success "Configuration removed: $toml_dest"
   else
-    print_warning "NVM is not installed"
+    print_warning "Configuration file not found: $toml_dest"
   fi
 
-  # Note: NVM manages global packages in version-specific directories
-  # These are automatically removed when NVM directory is deleted
-  print_status "Global packages are managed by NVM and will be removed with NVM directory"
+  # Note: We don't run 'mise prune' here as tools may be shared with other extensions
+  print_status "Node.js tools remain available until 'mise prune' is run"
 
-  # Remove bashrc entries
-  cleanup_bashrc "# ${EXT_NAME} - NVM"
+  # Clean up SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    print_status "Cleaning up SSH wrappers..."
+    rm -f /usr/local/bin/node 2>/dev/null || true
+    rm -f /usr/local/bin/npm 2>/dev/null || true
+  fi
 
-  print_success "Node.js and NVM uninstalled"
-  print_warning "Restart your shell or run: source ~/.bashrc"
+  # Remove bashrc entries if any
+  cleanup_bashrc "# ${EXT_NAME}"
+
+  print_success "Node.js configuration removed"
+  print_warning "Run 'mise prune' to remove unused Node.js installations"
+  print_warning "Restart your shell or run: exec bash"
 
   return 0
 }

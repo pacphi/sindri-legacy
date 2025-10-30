@@ -1,8 +1,9 @@
 #!/bin/bash
-# nodejs-devtools.sh.example - Node.js development tools
+# nodejs-devtools.extension - Node.js development tools via mise npm backend
 # Extension API v1.0
 #
-# This extension installs TypeScript, ESLint, Prettier, and other Node.js development tools.
+# This extension installs TypeScript, ESLint, Prettier, and other Node.js development tools
+# using mise npm backend for unified tool management.
 # Requires the nodejs extension to be installed first.
 
 # Source shared extension library
@@ -14,8 +15,8 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="nodejs-devtools"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="TypeScript, ESLint, Prettier, and Node.js development tools"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="TypeScript, ESLint, Prettier, and Node.js development tools via mise npm backend"
 EXT_CATEGORY="dev-tools"
 
 # Initialize extension environment
@@ -28,17 +29,23 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Hard requirement: npm must be available
+  # Hard requirement: nodejs extension must be installed (provides Node.js/npm)
+  if ! command_exists node; then
+    print_error "Node.js is required but not found"
+    print_status "Install the nodejs extension first"
+    return 1
+  fi
+
   if ! command_exists npm; then
     print_error "npm is required but not found"
     print_status "Install the nodejs extension first"
     return 1
   fi
 
-  # Check npm can install global packages
-  local npm_prefix=$(npm config get prefix 2>/dev/null)
-  if [[ -z "$npm_prefix" ]]; then
-    print_error "npm global prefix not configured"
+  # Hard requirement: mise must be available
+  if ! command_exists mise; then
+    print_error "mise is required but not found"
+    print_status "Install the mise-config extension first"
     return 1
   fi
 
@@ -51,44 +58,51 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing Node.js development tools..."
+  print_status "Installing Node.js development tools via mise..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-  local npm_packages=(
-    "typescript"
-    "ts-node"
-    "nodemon"
-    "prettier"
-    "eslint"
-    "@typescript-eslint/parser"
-    "@typescript-eslint/eslint-plugin"
-    "goalie"
-  )
-
-  local installed_count=0
-  local failed_packages=()
-
-  for package in "${npm_packages[@]}"; do
-    print_debug "Installing $package..."
-    if npm install -g "$package" 2>/dev/null; then
-      ((installed_count++))
-      print_success "Installed $package"
-    else
-      failed_packages+=("$package")
-      print_warning "Failed to install $package"
-    fi
-  done
-
-  print_status "Installed $installed_count/${#npm_packages[@]} packages"
-
-  if [[ ${#failed_packages[@]} -gt 0 ]]; then
-    print_warning "Failed packages: ${failed_packages[*]}"
+  # Ensure mise is activated for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
   fi
 
-  [[ $installed_count -gt 0 ]] && return 0 || return 1
+  # Create mise config directory if it doesn't exist
+  local mise_conf_dir="$HOME/.config/mise/conf.d"
+  if [[ ! -d "$mise_conf_dir" ]]; then
+    mkdir -p "$mise_conf_dir"
+    print_success "Created mise config directory: $mise_conf_dir"
+  fi
+
+  # Copy nodejs-devtools.toml to mise config directory
+  local toml_source="${SCRIPT_DIR}/nodejs-devtools.toml"
+  local toml_dest="${mise_conf_dir}/nodejs-devtools.toml"
+
+  if [[ ! -f "$toml_source" ]]; then
+    print_error "nodejs-devtools.toml not found at: $toml_source"
+    return 1
+  fi
+
+  if cp "$toml_source" "$toml_dest"; then
+    print_success "Copied nodejs-devtools.toml to mise config"
+  else
+    print_error "Failed to copy nodejs-devtools.toml"
+    return 1
+  fi
+
+  # Install all tools defined in the TOML file
+  print_status "Installing npm development tools via mise..."
+  if mise install; then
+    print_success "All npm development tools installed successfully"
+  else
+    print_error "Failed to install npm development tools via mise"
+    return 1
+  fi
+
+  # Verify mise reshim to ensure binaries are available
+  if mise reshim; then
+    print_debug "mise reshim completed"
+  fi
+
+  return 0
 }
 
 # ============================================================================
@@ -180,13 +194,14 @@ EOF
 validate() {
   print_status "Validating Node.js development tools..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure mise is activated for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+  fi
 
   local all_valid=true
 
-  # Check each tool
+  # Check each required npm tool
   local tools=(
     "tsc:TypeScript compiler"
     "ts-node:TypeScript execution"
@@ -206,6 +221,18 @@ validate() {
       all_valid=false
     fi
   done
+
+  # Verify mise is tracking these npm tools
+  print_status "Checking mise-managed npm tools..."
+  if command_exists mise; then
+    local mise_tools=$(mise ls 'npm:*' 2>/dev/null | grep -c "npm:" || echo "0")
+    if [[ $mise_tools -gt 0 ]]; then
+      print_success "Found $mise_tools npm tools managed by mise"
+    else
+      print_warning "No npm tools found in mise ls output"
+      all_valid=false
+    fi
+  fi
 
   # Test TypeScript compilation
   if command_exists tsc; then
@@ -249,12 +276,14 @@ status() {
   echo "Extension: $EXT_NAME v$EXT_VERSION"
   echo "Description: $EXT_DESCRIPTION"
   echo "Category: $EXT_CATEGORY"
+  echo "Tool Manager: mise (npm backend)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure mise is activated for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+  fi
 
   # Check installation status
   if ! command_exists tsc; then
@@ -262,11 +291,11 @@ status() {
     return 1
   fi
 
-  echo "Status: ✓ INSTALLED"
+  echo "Status: ✓ INSTALLED (mise-powered)"
   echo ""
 
   # Extension-specific tool listing with versions
-  print_status "Installed tools:"
+  print_status "Installed npm development tools:"
 
   local tools=(
     "typescript:tsc"
@@ -292,10 +321,37 @@ status() {
   echo ""
   print_status "Summary: $installed_count/${#tools[@]} tools installed"
 
+  # Show mise-managed npm tools
+  if command_exists mise; then
+    echo ""
+    print_status "mise-managed npm tools:"
+    mise ls 'npm:*' 2>/dev/null | sed 's/^/  /' || echo "  (none found)"
+  fi
+
+  # Show available mise tasks
+  if command_exists mise; then
+    echo ""
+    print_status "Available mise tasks:"
+    if mise tasks ls 2>/dev/null | grep -E '(format|lint|typecheck)' >/dev/null; then
+      echo "  • mise run format     - Format code with Prettier"
+      echo "  • mise run lint       - Lint code with ESLint"
+      echo "  • mise run typecheck  - Type check with TypeScript"
+    else
+      echo "  (no tasks configured)"
+    fi
+  fi
+
   # Show template locations
   if [[ -d "/workspace/templates" ]]; then
     echo ""
     print_status "Config templates: /workspace/templates"
+  fi
+
+  # Show mise config location
+  local toml_dest="$HOME/.config/mise/conf.d/nodejs-devtools.toml"
+  if [[ -f "$toml_dest" ]]; then
+    echo ""
+    print_status "mise config: $toml_dest"
   fi
 
   return 0
@@ -308,26 +364,44 @@ status() {
 remove() {
   print_warning "Uninstalling Node.js development tools..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure mise is activated for current session
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+  fi
 
-  local npm_packages=(
-    "typescript"
-    "ts-node"
-    "nodemon"
-    "prettier"
-    "eslint"
-    "@typescript-eslint/parser"
-    "@typescript-eslint/eslint-plugin"
-    "goalie"
-  )
+  # Remove mise configuration file
+  local toml_dest="$HOME/.config/mise/conf.d/nodejs-devtools.toml"
+  if [[ -f "$toml_dest" ]]; then
+    print_status "Removing mise configuration..."
+    if rm -f "$toml_dest"; then
+      print_success "Removed nodejs-devtools.toml from mise config"
+    else
+      print_warning "Failed to remove nodejs-devtools.toml"
+    fi
+  else
+    print_debug "nodejs-devtools.toml not found in mise config"
+  fi
 
-  # Uninstall npm packages
-  if command_exists npm; then
-    print_status "Uninstalling npm packages..."
+  # Uninstall npm packages via mise
+  if command_exists mise; then
+    print_status "Uninstalling npm packages via mise..."
+    local npm_packages=(
+      "npm:typescript"
+      "npm:ts-node"
+      "npm:nodemon"
+      "npm:prettier"
+      "npm:eslint"
+      "npm:@typescript-eslint/parser"
+      "npm:@typescript-eslint/eslint-plugin"
+      "npm:goalie"
+    )
+
     for package in "${npm_packages[@]}"; do
-      npm uninstall -g "$package" 2>/dev/null && print_success "Uninstalled $package"
+      if mise uninstall "$package" 2>/dev/null; then
+        print_success "Uninstalled $package"
+      else
+        print_debug "Package $package not installed or already removed"
+      fi
     done
   fi
 

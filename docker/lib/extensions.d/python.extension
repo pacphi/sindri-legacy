@@ -1,12 +1,9 @@
 #!/bin/bash
-# python.sh.example - Python development environment
+# python.extension - Python development environment via mise
 # Extension API v1.0
 #
-# This extension installs Python 3 with comprehensive development tools:
-# - System Python packages (requests, numpy, pandas, pytest, black)
-# - pipx for global CLI tools
-# - Development tools (virtualenv, pipenv, poetry, flake8, mypy)
-# - Jupyter Lab with data science packages
+# This extension installs Python 3.13 with development tools using mise.
+# mise manages Python and pipx-based CLI tools declaratively via TOML config.
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,37 +14,32 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="python"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="Python 3 development environment with pipx and Jupyter"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="Python 3.13 development environment via mise"
 EXT_CATEGORY="language"
 
 # Initialize extension environment
 extension_init
 
+# ============================================================================
 # PREREQUISITES
 # ============================================================================
 
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for apt-get (Debian/Ubuntu based system)
-  if ! command_exists apt-get; then
-    print_error "apt-get is required but not found"
-    print_status "This extension requires a Debian/Ubuntu based system"
+  # Check for mise
+  if ! command_exists mise; then
+    print_error "mise is required but not installed"
+    print_status "Install mise-config extension first: extension-manager install mise-config"
     return 1
   fi
 
-  # Check for sudo
-  if ! command_exists sudo; then
-    print_error "sudo is required but not installed"
-    return 1
-  fi
-
-  # Check disk space (Python packages need ~500MB)
+  # Check disk space (Python + pipx tools need ~1GB)
   local available_space
   available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 800 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (800MB recommended)"
+  if [[ $available_space -lt 1200 ]]; then
+    print_warning "Low disk space: ${available_space}MB available (1200MB recommended)"
   fi
 
   print_success "All prerequisites met"
@@ -59,126 +51,68 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing Python development environment..."
+  print_status "Installing Python development environment via mise..."
 
-  # Check if Python3 is already sufficient
-  if command_exists python3 && command_exists pip3; then
-    local current_version
-    current_version=$(python3 --version 2>&1 | head -n1)
-    print_status "Python already installed: $current_version"
+  # Ensure mise config directory exists
+  local mise_config_dir="$HOME/.config/mise/conf.d"
+  if [[ ! -d "$mise_config_dir" ]]; then
+    mkdir -p "$mise_config_dir"
+    print_debug "Created mise config directory: $mise_config_dir"
+  fi
+
+  # Determine which TOML file to use based on CI_MODE
+  local source_toml
+  local ci_mode="${CI_MODE:-false}"
+
+  if [[ "$ci_mode" == "true" ]]; then
+    source_toml="$SCRIPT_DIR/python-ci.toml"
+    print_status "CI mode detected - using minimal Python configuration"
   else
-    print_error "Python3 not found in system packages"
-    print_status "Python should be pre-installed on most systems"
+    source_toml="$SCRIPT_DIR/python.toml"
+    print_status "Using full Python development configuration"
+  fi
+
+  # Verify source TOML exists
+  if [[ ! -f "$source_toml" ]]; then
+    print_error "Python configuration not found: $source_toml"
     return 1
   fi
 
-  # Install system dependencies
-  print_status "Installing system dependencies..."
-  sudo apt-get update -qq
-
-  local system_packages=(
-    python3-full
-    python3-dev
-    python3-pip
-    python3-venv
-    python3-requests
-    python3-numpy
-    python3-pandas
-    python3-pytest
-    black
-    pipx
-    build-essential
-    libffi-dev
-    libssl-dev
-    libbz2-dev
-    libreadline-dev
-    libsqlite3-dev
-    libncurses5-dev
-    libncursesw5-dev
-    xz-utils
-    tk-dev
-    libxml2-dev
-    libxmlsec1-dev
-    liblzma-dev
-  )
-
-  if sudo apt-get install -y "${system_packages[@]}"; then
-    print_success "System packages installed"
+  # Copy TOML to mise config directory
+  local dest_toml="$mise_config_dir/python.toml"
+  if cp "$source_toml" "$dest_toml"; then
+    print_success "Copied Python configuration to $dest_toml"
   else
-    print_warning "Failed to install some system dependencies"
+    print_error "Failed to copy Python configuration"
+    return 1
   fi
 
-  # Install CLI tools with pipx
-  local pipx_packages=(
-    virtualenv
-    pipenv
-    poetry
-    flake8
-    autopep8
-    mypy
-  )
-
-  print_status "Installing Python CLI tools with pipx..."
-  local installed_pipx=0
-  local max_install_time=300  # 5 minute timeout per package
-
-  for package in "${pipx_packages[@]}"; do
-    print_debug "Installing $package with pipx (max ${max_install_time}s timeout)..."
-
-    # Use timeout to prevent hanging, show stderr for debugging
-    if timeout "${max_install_time}" pipx install "$package" 2>&1 | grep -v "^\s*$"; then
-      print_debug "✓ $package installed"
-      ((installed_pipx++))
-    else
-      local exit_code=$?
-      if [[ $exit_code -eq 124 ]]; then
-        print_warning "Timeout installing $package (exceeded ${max_install_time}s)"
-      else
-        print_warning "Failed to install $package (exit code: $exit_code)"
-      fi
-    fi
-  done
-
-  print_status "Installed $installed_pipx/${#pipx_packages[@]} pipx tools"
-
-  # Install Jupyter Lab
-  print_status "Installing Jupyter Lab (max 10min timeout)..."
-  if timeout 600 pipx install jupyterlab --include-deps; then
-    print_success "Jupyter Lab installed"
-
-    # Inject data science packages
-    local jupyter_packages=(pandas numpy matplotlib requests)
-    for pkg in "${jupyter_packages[@]}"; do
-      print_debug "Injecting $pkg (max 3min timeout)..."
-      timeout 180 pipx inject jupyterlab "$pkg" 2>&1 | grep -v "^\s*$" || true
-    done
-  else
-    local exit_code=$?
-    if [[ $exit_code -eq 124 ]]; then
-      print_warning "Timeout installing Jupyter Lab (exceeded 600s)"
-    else
-      print_warning "Failed to install Jupyter Lab (exit code: $exit_code)"
-    fi
+  # Activate mise for current session (needed for mise install to work)
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
   fi
 
-  # Install uv (fast Python package manager)
-  print_status "Installing uv (max 3min timeout)..."
-  if command_exists uv; then
-    print_warning "uv already installed: $(uv --version)"
+  # Install Python and pipx tools via mise
+  print_status "Installing Python 3.13 and pipx tools (this may take several minutes)..."
+  if mise install 2>&1 | grep -v "^\s*$"; then
+    print_success "Python and tools installed via mise"
   else
-    if timeout 180 bash -c "curl --max-time 60 -LsSf https://astral.sh/uv/install.sh | sh"; then
-      export PATH="$HOME/.local/bin:$PATH"
-      print_success "uv installed: $(uv --version 2>&1 || echo 'installed')"
-    else
-      local exit_code=$?
-      if [[ $exit_code -eq 124 ]]; then
-        print_warning "Timeout installing uv (exceeded 180s)"
-      else
-        print_warning "Failed to install uv (exit code: $exit_code)"
-      fi
-    fi
+    print_error "Failed to install Python via mise"
+    return 1
   fi
 
+  # Verify core tools are available
+  if ! command_exists python3; then
+    print_error "python3 not found after mise install"
+    return 1
+  fi
+
+  if ! command_exists pip3; then
+    print_error "pip3 not found after mise install"
+    return 1
+  fi
+
+  print_success "Python $(python3 --version 2>&1 | awk '{print $2}') installed via mise"
   return 0
 }
 
@@ -189,17 +123,18 @@ install() {
 configure() {
   print_status "Configuring Python environment..."
 
-  # Setup pipx PATH
-  if command_exists pipx; then
-    pipx ensurepath
-    export PATH="$HOME/.local/bin:$PATH"
+  # Ensure mise activation in .bashrc (should already be there from mise-config extension)
+  if ! grep -q 'mise activate bash' "$HOME/.bashrc" 2>/dev/null; then
+    print_warning "mise activation not found in .bashrc"
+    print_status "Adding mise activation..."
+    cat >> "$HOME/.bashrc" << 'EOF'
 
-    if ! grep -q "$HOME/.local/bin" "$HOME/.bashrc" 2>/dev/null; then
-      echo "" >> "$HOME/.bashrc"
-      echo "# ${EXT_NAME} - pipx tools" >> "$HOME/.bashrc"
-      echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.bashrc"
-      print_success "Added pipx path to .bashrc"
-    fi
+# mise - unified tool version manager
+if command -v mise >/dev/null 2>&1; then
+    eval "$(mise activate bash)"
+fi
+EOF
+    print_success "Added mise activation to .bashrc"
   fi
 
   # Create project template script
@@ -282,9 +217,9 @@ EOF
 
   # Add git aliases
   if command_exists git; then
-    git config --global alias.pytest '!python -m pytest'
-    git config --global alias.black '!black .'
-    git config --global alias.flake '!flake8 .'
+    git config --global alias.pytest '!python -m pytest' 2>/dev/null || true
+    git config --global alias.black '!black .' 2>/dev/null || true
+    git config --global alias.flake '!flake8 .' 2>/dev/null || true
     print_debug "Git aliases configured"
   fi
 
@@ -309,6 +244,19 @@ validate() {
 
   local all_valid=true
 
+  # Activate mise for validation
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+  fi
+
+  # Check mise shows Python
+  if ! mise ls python 2>/dev/null | grep -q "python"; then
+    print_error "Python not managed by mise"
+    all_valid=false
+  else
+    print_success "mise manages Python: $(mise ls python 2>/dev/null | head -n1)"
+  fi
+
   # Check Python3
   if ! command_exists python3; then
     print_error "python3 not found"
@@ -325,29 +273,35 @@ validate() {
     print_success "pip: $(pip3 --version 2>&1 | awk '{print $2}')"
   fi
 
-  # Check system packages
-  local packages=(requests numpy pandas pytest)
-  local available=0
-  for pkg in "${packages[@]}"; do
-    python3 -c "import $pkg" 2>/dev/null && ((available++))
-  done
-  print_status "System packages: $available/${#packages[@]}"
-
-  # Check pipx tools
-  if command_exists pipx; then
-    local tools=(virtualenv poetry flake8)
-    local tools_available=0
-    for tool in "${tools[@]}"; do
-      (command_exists "$tool" || pipx list 2>/dev/null | grep -q "$tool") && ((tools_available++))
-    done
-    print_status "pipx tools: $tools_available/${#tools[@]}"
+  # Check uv (always installed via pipx in both configs)
+  if ! command_exists uv; then
+    print_error "uv not found"
+    all_valid=false
+  else
+    print_success "uv: $(uv --version 2>&1)"
   fi
 
-  # Check uv
-  if command_exists uv; then
-    print_success "uv: $(uv --version 2>&1)"
-  else
-    print_warning "uv not installed"
+  # Check pipx tools (only in full config, not CI)
+  local ci_mode="${CI_MODE:-false}"
+  if [[ "$ci_mode" != "true" ]]; then
+    local pipx_tools_output
+    pipx_tools_output=$(mise ls 'pipx:*' 2>/dev/null)
+    if [[ -z "$pipx_tools_output" ]]; then
+      print_warning "No pipx tools found via mise"
+    else
+      local tool_count
+      tool_count=$(echo "$pipx_tools_output" | wc -l)
+      print_success "pipx tools managed by mise: $tool_count tools"
+
+      # Verify some key tools are available
+      for tool in virtualenv poetry flake8 black; do
+        if command_exists "$tool"; then
+          print_debug "✓ $tool available"
+        else
+          print_warning "$tool not available as command"
+        fi
+      done
+    fi
   fi
 
   if [[ "$all_valid" == "true" ]]; then
@@ -365,11 +319,16 @@ validate() {
 
 status() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Extension: $EXT_NAME v$EXT_VERSION (mise-powered)"
   echo "Description: $EXT_DESCRIPTION"
   echo "Category: $EXT_CATEGORY"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
+
+  # Activate mise for status
+  if command_exists mise; then
+    eval "$(mise activate bash)" 2>/dev/null || true
+  fi
 
   # Check installation status
   if ! command_exists python3; then
@@ -380,24 +339,44 @@ status() {
   echo "Status: ✓ INSTALLED"
   echo ""
 
-  # Show installed tools with versions
-  print_status "Installed tools:"
-  echo "  ✓ Python $(python3 --version 2>&1 | awk '{print $2}')"
-  command_exists pip3 && echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
-  command_exists pipx && echo "  ✓ pipx"
-  command_exists uv && echo "  ✓ uv $(uv --version 2>&1 | awk '{print $2}')"
-
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Python + pipx tools)"
   echo ""
-  print_status "System packages:"
-  for pkg in requests numpy pandas pytest black; do
-    python3 -c "import $pkg" 2>/dev/null && echo "  ✓ $pkg"
-  done
 
-  if command_exists pipx; then
-    echo ""
-    print_status "pipx tools:"
-    pipx list 2>/dev/null | grep "package" | awk '{print "  ✓ " $2}' || echo "  (none)"
+  # Show mise-managed Python
+  print_status "mise-Managed Python:"
+  local python_info
+  python_info=$(mise ls python 2>/dev/null)
+  if [[ -n "$python_info" ]]; then
+    echo "$python_info" | sed 's/^/  • /'
+  else
+    echo "  (none)"
   fi
+  echo ""
+
+  # Show mise-managed pipx tools
+  print_status "mise-Managed pipx Tools:"
+  local pipx_info
+  pipx_info=$(mise ls 'pipx:*' 2>/dev/null)
+  if [[ -n "$pipx_info" ]]; then
+    echo "$pipx_info" | sed 's/^/  • /'
+  else
+    echo "  (none - CI mode or not installed)"
+  fi
+  echo ""
+
+  # Show available commands
+  print_status "Available Commands:"
+  command_exists python3 && echo "  ✓ python3 $(python3 --version 2>&1 | awk '{print $2}')"
+  command_exists pip3 && echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
+  command_exists uv && echo "  ✓ uv $(uv --version 2>&1 | awk '{print $2}')"
+  command_exists virtualenv && echo "  ✓ virtualenv"
+  command_exists poetry && echo "  ✓ poetry"
+  command_exists flake8 && echo "  ✓ flake8"
+  command_exists mypy && echo "  ✓ mypy"
+  command_exists black && echo "  ✓ black"
+  command_exists jupyter && echo "  ✓ jupyterlab"
 
   [[ -f "/workspace/scripts/create-python-project.sh" ]] && echo "" && print_status "Project template: installed"
 
@@ -411,52 +390,38 @@ status() {
 remove() {
   print_warning "Uninstalling Python development environment..."
 
-  local dependent_exts=()
-  mapfile -t dependent_exts < <(check_dependent_extensions "python3" "pip3" "pipx" "jupyter")
-  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
-    print_warning "The following extensions depend on Python and may stop working:"
-    for ext in "${dependent_exts[@]}"; do
-      echo "  - $ext"
-    done
-    echo ""
-  fi
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "python3" "pip3" "pipx" "uv"
 
-  print_warning "This removes packages but NOT the Python interpreter"
-  if ! prompt_confirmation "Continue?"; then
+  # Confirm removal
+  if ! prompt_confirmation "Continue with Python removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Remove pipx packages
-  if command_exists pipx; then
-    print_status "Removing pipx packages..."
-    for pkg in virtualenv pipenv poetry flake8 autopep8 mypy jupyterlab; do
-      pipx list 2>/dev/null | grep -q "$pkg" && pipx uninstall "$pkg" 2>/dev/null
-    done
+  # Remove mise configuration
+  local mise_config="$HOME/.config/mise/conf.d/python.toml"
+  if [[ -f "$mise_config" ]]; then
+    print_status "Removing mise Python configuration..."
+    rm -f "$mise_config"
+    print_success "Removed $mise_config"
   fi
 
-  # Remove uv
-  if command_exists uv; then
-    print_status "Removing uv..."
-    rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
-    rm -rf "$HOME/.local/share/uv"
-  fi
+  # Note about mise prune
+  print_status "Note: Python and pipx tools are still installed by mise"
+  print_status "Run 'mise prune' to remove unused tools, or 'mise uninstall python@3.13' to remove Python"
 
-  # Remove system packages
-  read -p "Remove pipx and system packages? (y/N): " -r
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    sudo apt-get remove -y python3-requests python3-numpy python3-pandas python3-pytest black pipx 2>/dev/null
-    sudo apt-get autoremove -y 2>/dev/null
-  fi
-
-  # Cleanup
+  # Cleanup project template
   rm -f "/workspace/scripts/create-python-project.sh"
-  cleanup_bashrc "# ${EXT_NAME}"
-  command_exists git && git config --global --unset-all alias.pytest 2>/dev/null
-  command_exists git && git config --global --unset-all alias.black 2>/dev/null
-  command_exists git && git config --global --unset-all alias.flake 2>/dev/null
 
-  print_success "Python packages uninstalled"
+  # Remove git aliases
+  if command_exists git; then
+    git config --global --unset-all alias.pytest 2>/dev/null || true
+    git config --global --unset-all alias.black 2>/dev/null || true
+    git config --global --unset-all alias.flake 2>/dev/null || true
+  fi
+
+  print_success "Python extension configuration removed"
   print_warning "Restart shell: source ~/.bashrc"
   return 0
 }
