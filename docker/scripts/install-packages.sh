@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Suppress systemd tmpfiles warnings by pre-creating system users/groups
+# This prevents "Failed to resolve user" warnings during package installation
+groupadd -f -g 999 systemd-journal 2>/dev/null || true
+groupadd -f -g 998 systemd-network 2>/dev/null || true
+useradd -r -g systemd-network -u 998 -s /usr/sbin/nologin systemd-network 2>/dev/null || true
+
 # Update package lists
 apt-get update
 
@@ -19,9 +25,6 @@ apt-get install -y \
     unzip \
     build-essential \
     pkg-config \
-    python3 \
-    python3-pip \
-    python3-venv \
     sqlite3 \
     postgresql-client \
     redis-tools \

@@ -53,6 +53,40 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     cp -r /docker/lib /workspace/scripts/
     chown -R developer:developer /workspace/scripts/lib
     chmod +x /workspace/scripts/lib/*.sh
+
+    # Setup extension manifest based on CI mode
+    echo "📋 Configuring extension manifest..."
+    if [ "$CI_MODE" = "true" ]; then
+        # CI mode: Use pre-configured CI manifest with protected extensions
+        if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
+            cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/extensions.d/active-extensions.conf
+            echo "✅ Using CI extension manifest (protected extensions pre-configured)"
+        else
+            echo "⚠️  CI manifest not found, creating empty manifest"
+            mkdir -p /workspace/scripts/extensions.d
+            touch /workspace/scripts/extensions.d/active-extensions.conf
+        fi
+    else
+        # Production mode: Check if manifest exists, create empty if not
+        if [ ! -f "/workspace/scripts/extensions.d/active-extensions.conf" ]; then
+            echo "Creating default extension manifest..."
+            # Use CI manifest as template (has good documentation)
+            if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
+                cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/extensions.d/active-extensions.conf
+                echo "✅ Extension manifest created from template"
+            else
+                mkdir -p /workspace/scripts/extensions.d
+                touch /workspace/scripts/extensions.d/active-extensions.conf
+                echo "✅ Empty extension manifest created"
+            fi
+        else
+            echo "✅ Existing extension manifest found"
+        fi
+    fi
+
+    # Ensure correct permissions
+    chown developer:developer /workspace/scripts/extensions.d/active-extensions.conf
+    chmod 644 /workspace/scripts/extensions.d/active-extensions.conf
 fi
 
 # Create /workspace/bin directory and symlink extension-manager

@@ -79,11 +79,11 @@ jobs:
             while [ $attempt -le $max_attempts ]; do
               echo "▶️  Deployment attempt $attempt of $max_attempts for $app_name..."
 
-              # Add timeout to prevent indefinite hangs
-              if timeout 180s flyctl deploy \
+              # Add timeout to prevent indefinite hangs (increased for image build)
+              if timeout 300s flyctl deploy \
                 --app "$app_name" \
                 --strategy immediate \
-                --wait-timeout 120s \
+                --wait-timeout 300s \
                 --yes; then
                 echo "✅ Deployment successful"
                 return 0
@@ -122,7 +122,7 @@ jobs:
             while [ $attempt -le $max_attempts ]; do
               echo "▶️  SSH attempt $attempt of $max_attempts..."
 
-              if timeout 30s flyctl ssh console -a "$app_name" -C "$command"; then
+              if timeout 45s flyctl ssh console -a "$app_name" -C "$command"; then
                 echo "✅ SSH command succeeded"
                 return 0
               else
@@ -144,7 +144,7 @@ jobs:
           # Machine readiness check with retry
           wait_for_machine_ready() {
             local app_name=$1
-            local max_attempts=60  # 120 seconds total (increased from 30)
+            local max_attempts=90  # 180 seconds total (increased for CI stability)
             local attempt=1
 
             echo "⏳ Waiting for machine to be ready..."
@@ -158,8 +158,8 @@ jobs:
                 echo "✅ Machine is started"
                 echo "$status_output"
 
-                # Give SSH daemon a moment to initialize
-                sleep 3
+                # Give SSH daemon time to fully initialize (critical for CI)
+                sleep 15
 
                 # Additional check: can we execute a simple command?
                 if timeout 15s flyctl ssh console -a "$app_name" -C "echo ready" &>/dev/null; then

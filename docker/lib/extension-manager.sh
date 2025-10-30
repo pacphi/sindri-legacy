@@ -753,6 +753,16 @@ validate_extension() {
         return 1
     fi
 
+    # Ensure mise is activated for extensions that depend on it
+    # This provides access to mise-managed tools (python, node, etc.)
+    if command -v mise &>/dev/null; then
+        eval "$(mise activate bash)" 2>/dev/null || true
+        # Also add mise shims to PATH as fallback
+        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+            export PATH="$HOME/.local/share/mise/shims:$PATH"
+        fi
+    fi
+
     # Source the extension
     source "$activated_file"
 
@@ -794,6 +804,14 @@ status_extension() {
         print_success "Active in manifest (position: $position)"
     else
         print_warning "File exists but not in manifest"
+    fi
+
+    # Ensure mise is activated for extensions that depend on it
+    if command -v mise &>/dev/null; then
+        eval "$(mise activate bash)" 2>/dev/null || true
+        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+            export PATH="$HOME/.local/share/mise/shims:$PATH"
+        fi
     fi
 
     # Source the extension

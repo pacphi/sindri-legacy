@@ -123,19 +123,24 @@ jobs:
 
           # Deploy the application using immediate strategy to skip health checks
           # This prevents health check loops caused by port 22 conflicts with hallpass
-          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 60s --yes
+          echo "Starting deployment (this may take 3-5 minutes for image build)..."
+          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 300s --yes || {
+            echo "⚠️  Initial deployment command completed with warnings"
+            echo "Checking deployment status..."
+            flyctl status --app ${{ steps.app-name.outputs.app_name }}
+          }
 
       - name: Wait for deployment
         run: |
           echo "Verifying deployment success..."
 
           app_name="${{ steps.app-name.outputs.app_name }}"
-          timeout=120
+          timeout=240
           elapsed=0
           interval=10
 
           while [ $elapsed -lt $timeout ]; do
-            # Get deployment status
+            # Get deployment status with machine details
             status_output=$(flyctl status --app $app_name 2>&1)
 
             echo "=== Status Check (${elapsed}s/${timeout}s) ==="
@@ -143,13 +148,28 @@ jobs:
 
             # Check if machines are started (immediate deployment bypasses health checks)
             if echo "$status_output" | grep -q "started"; then
-              echo "✅ Deployment successful - machine is started"
+              echo "✅ Machine reported as started"
+
+              # Get machine ID for detailed checks
+              machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
+
+              if [[ -n "$machine_id" ]]; then
+                echo "Machine ID: $machine_id"
+                echo "Machine details:"
+                flyctl machine status "$machine_id" --app $app_name || true
+              fi
+
+              # Give SSH daemon time to fully initialize (critical for CI)
+              echo "Waiting 15s for SSH daemon initialization..."
+              sleep 15
+
+              echo "✅ Deployment successful"
               break
             elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
               echo "❌ Deployment failed"
               echo "App status: $status_output"
               echo "Recent logs:"
-              flyctl logs --app $app_name
+              flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
               exit 1
             else
               echo "Waiting for deployment to complete... (${elapsed}s/${timeout}s)"
@@ -163,8 +183,10 @@ jobs:
             echo "❌ Timeout waiting for deployment to complete"
             echo "Final status:"
             flyctl status --app $app_name
+            echo "Machine list:"
+            flyctl machines list --app $app_name --json | jq '.' || flyctl machines list --app $app_name
             echo "Recent logs:"
-            flyctl logs --app $app_name
+            flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
             exit 1
           fi
 
@@ -173,30 +195,61 @@ jobs:
           echo "Testing SSH connectivity..."
 
           app_name="${{ steps.app-name.outputs.app_name }}"
-          max_attempts=5
+          max_attempts=8
           attempt=1
+          wait_between=15
 
           while [ $attempt -le $max_attempts ]; do
-            echo "SSH attempt $attempt/$max_attempts..."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "SSH connectivity attempt $attempt/$max_attempts..."
 
-            # Test SSH connection with timeout using flyctl
-            if timeout 30 flyctl ssh console --app $app_name --command "/bin/bash -c 'echo \"SSH connection successful\" && whoami && pwd'" 2>/dev/null; then
+            # Test SSH connection with timeout using flyctl console
+            # Use explicit bash invocation to ensure command execution
+            if timeout 45s flyctl ssh console --app $app_name -C "echo 'SSH_TEST_SUCCESS' && whoami && pwd" 2>&1 | grep -q "SSH_TEST_SUCCESS"; then
               echo "✅ SSH connection successful"
+
+              # Verify environment is ready
+              echo "Verifying SSH environment..."
+              flyctl ssh console --app $app_name -C "echo \"User: \$(whoami)\" && echo \"Home: \$HOME\" && echo \"Path: \$PATH\" && ls -la /workspace/ | head -5"
+
+              echo "✅ SSH connectivity verified"
               break
             else
               echo "⚠️  SSH attempt $attempt failed"
-              if [ $attempt -eq $max_attempts ]; then
-                echo "❌ All SSH attempts failed"
 
-                # Debug information
-                echo "App status:"
+              if [ $attempt -eq $max_attempts ]; then
+                echo "❌ All SSH attempts failed after $max_attempts tries"
+
+                # Comprehensive debug information
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "DIAGNOSTIC INFORMATION"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                echo ""
+                echo "=== App Status ==="
                 flyctl status --app $app_name
-                echo "App logs:"
-                flyctl logs --app $app_name
+
+                echo ""
+                echo "=== Machine List ==="
+                flyctl machines list --app $app_name
+
+                echo ""
+                echo "=== Recent Logs (last 100 lines) ==="
+                flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
+
+                echo ""
+                echo "=== Machine Events ==="
+                machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
+                if [[ -n "$machine_id" ]]; then
+                  flyctl machine status "$machine_id" --app $app_name || echo "Could not get machine status"
+                fi
+
                 exit 1
               fi
 
-              sleep 30
+              echo "Waiting ${wait_between}s before retry..."
+              sleep $wait_between
             fi
 
             attempt=$((attempt + 1))
@@ -238,6 +291,51 @@ jobs:
             ls -la /workspace/ || { echo "❌ workspace directory issue"; exit 1; }
 
             echo "✅ Basic VM tests passed"
+            '
+
+      - name: Verify CI extension manifest
+        run: |
+          echo "Verifying CI extension manifest configuration..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          flyctl ssh console --app $app_name --command '
+            echo "=== Extension Manifest Verification ==="
+
+            # Check manifest exists
+            if [ ! -f "/workspace/scripts/extensions.d/active-extensions.conf" ]; then
+              echo "❌ Extension manifest not found at /workspace/scripts/extensions.d/active-extensions.conf"
+              exit 1
+            fi
+
+            echo "✅ Extension manifest found"
+            echo ""
+
+            # Verify protected extensions are present
+            echo "Checking for protected extensions..."
+            manifest="/workspace/scripts/extensions.d/active-extensions.conf"
+
+            missing_protected=()
+            for ext in workspace-structure mise-config ssh-environment; do
+              if ! grep -q "^${ext}$" "$manifest"; then
+                missing_protected+=("$ext")
+              else
+                echo "  ✓ $ext"
+              fi
+            done
+
+            if [ ${#missing_protected[@]} -gt 0 ]; then
+              echo ""
+              echo "❌ Missing protected extensions:"
+              printf "  - %s\n" "${missing_protected[@]}"
+              exit 1
+            fi
+
+            echo ""
+            echo "✅ All protected extensions present in manifest"
+            echo ""
+            echo "=== Active Extensions ==="
+            grep -v "^#" "$manifest" | grep -v "^$" || echo "(no active extensions)"
             '
 
       - name: Verify volume mount
