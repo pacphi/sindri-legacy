@@ -107,8 +107,9 @@ install() {
     return 1
   fi
 
-  if ! command_exists pip3; then
-    print_error "pip3 not found after mise install"
+  # Check for pip (Python 3.13+ uses 'pip' not 'pip3')
+  if ! command_exists pip && ! command_exists pip3; then
+    print_error "pip not found after mise install"
     return 1
   fi
 
@@ -149,7 +150,9 @@ configure() {
   if command_exists python3; then
     if command_exists create_tool_wrapper 2>/dev/null; then
       create_tool_wrapper "python3" "$(which python3)"
-      create_tool_wrapper "pip3" "$(which pip3)"
+      # Wrap both pip and pip3 if they exist
+      command_exists pip && create_tool_wrapper "pip" "$(which pip)"
+      command_exists pip3 && create_tool_wrapper "pip3" "$(which pip3)"
     fi
   fi
 
@@ -187,12 +190,14 @@ validate() {
     print_success "Python: $(python3 --version 2>&1)"
   fi
 
-  # Check pip3
-  if ! command_exists pip3; then
-    print_error "pip3 not found"
-    all_valid=false
-  else
+  # Check pip (Python 3.13+ uses 'pip' not 'pip3')
+  if command_exists pip; then
+    print_success "pip: $(pip --version 2>&1 | awk '{print $2}')"
+  elif command_exists pip3; then
     print_success "pip: $(pip3 --version 2>&1 | awk '{print $2}')"
+  else
+    print_error "pip not found"
+    all_valid=false
   fi
 
   # Check uv (always installed via pipx in both configs)
@@ -291,7 +296,11 @@ status() {
   # Show available commands
   print_status "Available Commands:"
   command_exists python3 && echo "  ✓ python3 $(python3 --version 2>&1 | awk '{print $2}')"
-  command_exists pip3 && echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
+  if command_exists pip; then
+    echo "  ✓ pip $(pip --version 2>&1 | awk '{print $2}')"
+  elif command_exists pip3; then
+    echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
+  fi
   command_exists uv && echo "  ✓ uv $(uv --version 2>&1 | awk '{print $2}')"
   command_exists virtualenv && echo "  ✓ virtualenv"
   command_exists poetry && echo "  ✓ poetry"
@@ -313,7 +322,7 @@ remove() {
   print_warning "Uninstalling Python development environment..."
 
   # Show dependent extensions warning
-  show_dependent_extensions_warning "python3" "pip3" "pipx" "uv"
+  show_dependent_extensions_warning "python3" "pip" "pip3" "pipx" "uv"
 
   # Confirm removal
   if ! prompt_confirmation "Continue with Python removal?"; then

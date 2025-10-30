@@ -295,48 +295,15 @@ jobs:
 
       - name: Verify CI extension manifest
         run: |
-          echo "Verifying CI extension manifest configuration..."
-
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --user developer --command '
-            echo "=== Extension Manifest Verification ==="
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/verify-manifest.sh /tmp/verify-manifest.sh
+            bye
+          SFTP_EOF
 
-            # Check manifest exists
-            if [ ! -f "/workspace/scripts/extensions.d/active-extensions.conf" ]; then
-              echo "❌ Extension manifest not found at /workspace/scripts/extensions.d/active-extensions.conf"
-              exit 1
-            fi
-
-            echo "✅ Extension manifest found"
-            echo ""
-
-            # Verify protected extensions are present
-            echo "Checking for protected extensions..."
-            manifest="/workspace/scripts/extensions.d/active-extensions.conf"
-
-            missing_protected=()
-            for ext in workspace-structure mise-config ssh-environment; do
-              if ! grep -q "^${ext}$" "$manifest"; then
-                missing_protected+=("$ext")
-              else
-                echo "  ✓ $ext"
-              fi
-            done
-
-            if [ ${#missing_protected[@]} -gt 0 ]; then
-              echo ""
-              echo "❌ Missing protected extensions:"
-              printf "  - %s\n" "${missing_protected[@]}"
-              exit 1
-            fi
-
-            echo ""
-            echo "✅ All protected extensions present in manifest"
-            echo ""
-            echo "=== Active Extensions ==="
-            grep -v "^#" "$manifest" | grep -v "^$" || echo "(no active extensions)"
-            '
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Verify volume mount
         run: |
@@ -590,48 +557,15 @@ jobs:
       - name: Test basic extension workflow
         if: success()
         run: |
-          echo "Testing basic extension installation with auto-activation..."
-
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
-            cd /workspace/scripts/lib
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/test-basic-workflow.sh /tmp/test-basic-workflow.sh
+            bye
+          SFTP_EOF
 
-            echo \"=== Testing Extension Manager Workflow ===\"
-
-            # Test listing extensions
-            echo \"\"
-            echo \"Available extensions:\"
-            bash extension-manager.sh list
-
-            # Test installing workspace-structure extension (auto-activates)
-            echo \"\"
-            echo \"Installing workspace-structure extension (with auto-activation)...\"
-            if bash extension-manager.sh install workspace-structure; then
-              echo \"✅ Extension installed and activated\"
-            else
-              echo \"❌ Extension installation failed\"
-              exit 1
-            fi
-
-            # Verify extension is in manifest (already installed by entrypoint)
-            echo \"\"
-            echo \"Checking extension in manifest...\"
-            if grep -q \"^workspace-structure\$\" extensions.d/active-extensions.conf; then
-              echo \"✅ Extension in manifest (already installed by entrypoint)\"
-            else
-              echo \"❌ Extension not found in manifest\"
-              exit 1
-            fi
-
-            # Check extension status
-            echo \"\"
-            echo \"Checking extension status...\"
-            bash extension-manager.sh status workspace-structure
-
-            echo \"\"
-            echo \"✅ Basic extension workflow test passed\"
-          '"
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/test-basic-workflow.sh'"
 
       - name: Cleanup test resources
         if: always() && !inputs.skip_cleanup

@@ -156,10 +156,21 @@ validate() {
 
   local all_valid=true
 
-  # Activate mise for current session
+  # Activate mise for current session - ensure Go binaries are accessible
   if command_exists mise; then
     eval "$(mise activate bash)" 2>/dev/null || true
-    export PATH="$HOME/.local/share/mise/shims:$PATH"
+    # Add mise shims to PATH
+    if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+      export PATH="$HOME/.local/share/mise/shims:$PATH"
+    fi
+    # Also add go install directory to PATH as fallback
+    if [[ -d "$HOME/.local/share/mise/installs/go" ]]; then
+      for go_dir in "$HOME/.local/share/mise/installs/go"/*/bin; do
+        if [[ -d "$go_dir" ]]; then
+          export PATH="$go_dir:$PATH"
+        fi
+      done
+    fi
   fi
 
   # Check mise has Go installed
@@ -173,6 +184,8 @@ validate() {
   # Check go command
   if ! command_exists go; then
     print_error "go command not found"
+    print_debug "PATH: $PATH"
+    print_debug "mise shims: $(ls -la ~/.local/share/mise/shims/ 2>/dev/null | grep -E 'go$' || echo 'none')"
     all_valid=false
   else
     print_success "Go: $(go version)"

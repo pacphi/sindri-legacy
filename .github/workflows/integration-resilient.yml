@@ -32,8 +32,14 @@ jobs:
         id: retry-setup
         shell: bash
         run: |
-          # Create comprehensive retry function
-          cat > /tmp/retry_utils.sh << 'RETRY_EOF'
+          # Copy retry utilities from repository
+          cp .github/scripts/common/retry-utils.sh /tmp/retry_utils.sh
+          source /tmp/retry_utils.sh
+
+          echo "✅ Retry utilities configured"
+
+          # OLD inline version - now using external script
+          : << 'RETRY_EOF'
           #!/bin/bash
 
           # Generic retry with exponential backoff
@@ -183,16 +189,7 @@ jobs:
             return 1
           }
 
-          export -f retry_with_backoff
-          export -f flyctl_deploy_retry
-          export -f ssh_command_retry
-          export -f wait_for_machine_ready
           RETRY_EOF
-
-          chmod +x /tmp/retry_utils.sh
-          source /tmp/retry_utils.sh
-
-          echo "✅ Retry utilities configured"
 
       - name: Generate unique app name
         id: app-name
@@ -430,20 +427,13 @@ jobs:
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          echo "Setting up manifest with protected core extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest_file=\"extensions.d/active-extensions.conf\"
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/setup-manifest.sh /tmp/setup-manifest.sh
+            bye
+          SFTP_EOF
 
-            # Create manifest from CI template (has protected extensions: workspace-structure, mise-config, ssh-environment)
-            if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
-            fi
-
-            echo \"\"
-            echo \"=== Protected Extensions in Manifest (from CI config) ===\"
-            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
-          '"
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/setup-manifest.sh'"
 
       - name: Install protected extensions
         timeout-minutes: 8
@@ -466,89 +456,32 @@ jobs:
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          echo "Verifying protected extensions are installed..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            echo \"Checking mise availability...\"
-            if command -v mise >/dev/null 2>&1; then
-              echo \"✅ mise available\"
-              mise --version
-            else
-              echo \"❌ mise not found - mise-config installation may have failed\"
-              exit 1
-            fi
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/verify-protected.sh /tmp/verify-protected.sh
+            bye
+          SFTP_EOF
 
-            echo \"\"
-            echo \"Checking workspace structure...\"
-            if [ -d /workspace ]; then
-              echo \"✅ /workspace directory exists\"
-              ls -la /workspace | head -10
-            else
-              echo \"❌ /workspace directory missing\"
-              exit 1
-            fi
-          '"
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-protected.sh'"
 
       - name: Test extension system with retry
         timeout-minutes: 10
         run: |
           source /tmp/retry_utils.sh
+          app_name="${{ steps.app-name.outputs.app_name }}"
 
-          echo "🔍 Testing extension system..."
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/test-extension-system.sh /tmp/test-extension-system.sh
+            bye
+          SFTP_EOF
 
-          # Test extension-manager availability
-          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
-            "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh list'"; then
-            echo "✅ Extension manager available"
-          else
-            echo "❌ Extension manager not found"
-            exit 1
-          fi
-
-          # Test extension installation (mise-config already installed from protected extensions)
-          echo "🔍 Testing extension installation with auto-activation (nodejs)..."
           if retry_with_backoff 3 10 60 \
-            flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer \
-              -C "/bin/bash -lc '
-                cd /workspace/scripts/lib
-
-                # Install with retry for mise-powered extensions
-                if bash extension-manager.sh install nodejs 2>&1; then
-                  echo \"✅ Extensions installed\"
-                else
-                  echo \"⚠️  Installation failed, checking mise status...\"
-                  if command -v mise >/dev/null 2>&1; then
-                    echo \"Running mise doctor for diagnostics:\"
-                    mise doctor || true
-                  else
-                    echo \"mise not available (this is expected for non-mise extensions)\"
-                  fi
-                  exit 1
-                fi
-              '"; then
-            echo "✅ Extension installation with auto-activation successful"
+            flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc 'bash /tmp/test-extension-system.sh'"; then
+            echo "✅ Extension system test passed"
           else
-            echo "❌ Extension installation failed after retries"
+            echo "❌ Extension system test failed"
             exit 1
-          fi
-
-          # Verify nodejs installation via mise
-          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
-            "/bin/bash -lc 'eval \"\$(mise activate bash)\" && command -v node && node --version'"; then
-            echo "✅ Extension validation successful (nodejs available via mise)"
-          else
-            echo "❌ Extension validation failed"
-            exit 1
-          fi
-
-          # Verify mise is managing nodejs
-          echo "🔍 Verifying mise is managing nodejs..."
-          if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
-            "/bin/bash -lc 'command -v mise >/dev/null 2>&1'"; then
-            echo "✅ mise is available, running diagnostics..."
-            ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
-              "/bin/bash -lc 'mise doctor'" || echo "⚠️  mise doctor check completed with warnings"
-          else
-            echo "ℹ️  mise not available (this is expected for current extension set)"
           fi
 
       - name: Cleanup test VM
