@@ -1,13 +1,12 @@
 #!/bin/bash
-# ai-tools.sh.example - AI CLI tools and coding assistants
+# ai-tools.extension - AI CLI tools and coding assistants
 # Extension API v1.0
 #
-# This extension installs AI CLI tools with:
-# - Autonomous agents (Codex, Plandex, Hector)
-# - Platform CLIs (Gemini, GitHub Copilot, AWS Q)
-# - Local models (Ollama)
-# - Framework tools (Fabric, Grok)
-# - AI workspace setup
+# This extension installs AI CLI tools using a hybrid approach:
+# - Native installs: Ollama (binary), Fabric (git clone)
+# - mise npm backend: codex-cli, @google/gemini-cli (if Node.js available)
+# - mise go backend: plandex, hector (if Go available)
+# - Fallback: Direct npm/go install if mise unavailable
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,8 +17,8 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="ai-tools"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="AI CLI tools and coding assistants (Codex, Gemini, Ollama, Fabric, etc.)"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="AI CLI tools and coding assistants (hybrid: native + mise-managed)"
 EXT_CATEGORY="ai-tools"
 
 # Initialize extension environment
@@ -32,16 +31,9 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for npm (required for most tools)
-  if ! command_exists npm; then
-    print_error "npm is required but not found"
-    print_status "Install the nodejs extension first"
-    return 1
-  fi
-
-  # Check for required tools
+  # Check for required system tools
   local missing_tools=()
-  for tool in curl wget sudo; do
+  for tool in curl git sudo; do
     if ! command_exists "$tool"; then
       missing_tools+=("$tool")
     fi
@@ -60,14 +52,23 @@ prerequisites() {
     print_warning "Low disk space: ${available_space}MB available (1.5GB recommended for AI tools)"
   fi
 
-  # Optional dependencies (not required but enable more tools)
-  local optional_deps=(go pip gh aws)
-  local available_deps=()
-  for dep in "${optional_deps[@]}"; do
-    command_exists "$dep" && available_deps+=("$dep")
-  done
-  if [[ ${#available_deps[@]} -gt 0 ]]; then
-    print_status "Optional dependencies available: ${available_deps[*]}"
+  # Optional: Check for mise (preferred method)
+  if command_exists mise; then
+    print_status "mise detected - will use for npm/go tools"
+  else
+    print_warning "mise not available - will use fallback installations"
+  fi
+
+  # Optional dependencies (enable additional tools)
+  local optional_deps=()
+  command_exists npm && optional_deps+=("npm")
+  command_exists go && optional_deps+=("go")
+  command_exists pip && optional_deps+=("pip")
+  command_exists gh && optional_deps+=("gh")
+  command_exists aws && optional_deps+=("aws")
+
+  if [[ ${#optional_deps[@]} -gt 0 ]]; then
+    print_status "Optional dependencies available: ${optional_deps[*]}"
   fi
 
   print_success "All prerequisites met"
@@ -79,45 +80,189 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing AI CLI tools and coding assistants..."
+  print_status "Installing AI CLI tools using hybrid approach..."
 
-  # Codex CLI
-  print_status "Installing Codex CLI..."
-  if command_exists codex; then
-    print_warning "Codex CLI already installed"
+  # ========================================================================
+  # NATIVE INSTALLATIONS (Always installed this way)
+  # ========================================================================
+
+  # Check if running in CI mode
+  if [[ "$CI_MODE" == "true" ]]; then
+    print_status "CI mode detected - skipping native tools (Ollama, Fabric)"
   else
-    local install_output
-    if install_output=$(npm install -g codex-cli 2>&1); then
+    # Ollama - Native binary installation
+    print_status "Installing Ollama (native binary)..."
+    if command_exists ollama; then
+      print_warning "Ollama already installed"
+    else
+      local install_output
+      if install_output=$(curl -fsSL https://ollama.com/install.sh | sh 2>&1); then
+        if command_exists ollama; then
+          print_success "Ollama installed"
+          print_status "Start with: nohup ollama serve > ~/ollama.log 2>&1 &"
+        else
+          print_warning "Failed to install Ollama - binary not found after installation"
+        fi
+      else
+        print_warning "Failed to install Ollama"
+        echo "$install_output" | grep -i "error\|warn" | head -3
+      fi
+    fi
+
+    # Fabric - Git clone + Go build (if Go available)
+    print_status "Installing Fabric (git clone)..."
+    if command_exists fabric; then
+      print_warning "Fabric already installed"
+    elif ! command_exists go; then
+      print_warning "Go not found - skipping Fabric (requires Go to build)"
+      print_status "Install golang extension for Fabric"
+    else
+      local FABRIC_DIR="$HOME/.local/share/fabric"
+      mkdir -p "$HOME/.local/bin"
+
+      if [[ -d "$FABRIC_DIR" ]]; then
+        print_warning "Fabric repository already exists"
+      else
+        if git clone --depth 1 https://github.com/danielmiessler/fabric.git "$FABRIC_DIR" 2>&1; then
+          print_success "Fabric repository cloned"
+        else
+          print_warning "Failed to clone Fabric repository"
+        fi
+      fi
+
+      if [[ -d "$FABRIC_DIR" ]]; then
+        cd "$FABRIC_DIR" || return 1
+        if go build -o fabric 2>&1; then
+          ln -sf "$FABRIC_DIR/fabric" "$HOME/.local/bin/fabric"
+          export PATH="$HOME/.local/bin:$PATH"
+          print_success "Fabric built and linked"
+          print_status "Initialize with: fabric --setup"
+        else
+          print_warning "Failed to build Fabric"
+        fi
+        cd - > /dev/null || true
+      fi
+    fi
+  fi
+
+  # ========================================================================
+  # MISE-MANAGED INSTALLATIONS (Preferred method)
+  # ========================================================================
+
+  if command_exists mise; then
+    print_status "Installing AI tools via mise..."
+
+    # Create mise config for ai-tools
+    local MISE_CONF_DIR="$HOME/.config/mise/conf.d"
+    mkdir -p "$MISE_CONF_DIR"
+    local TOML_FILE="$MISE_CONF_DIR/ai-tools.toml"
+
+    # Build toml content dynamically based on available runtimes
+    local toml_content="# AI Tools - mise configuration\n# Auto-generated by ai-tools extension\n\n[tools]\n"
+
+    # Add npm-based tools if Node.js is available
+    if command_exists npm || command_exists node; then
+      toml_content+="# npm-based tools (requires nodejs extension)\n"
+      toml_content+='"npm:codex-cli" = "latest"\n'
+      toml_content+='"npm:@google/gemini-cli" = "latest"\n'
+      toml_content+="\n"
+    fi
+
+    # Add Go-based tools if Go is available
+    if command_exists go; then
+      toml_content+="# Go-based tools (requires golang extension)\n"
+      toml_content+='"go:github.com/plandex-ai/plandex" = "latest"\n'
+      toml_content+='"go:github.com/kadirpekel/hector/cmd/hector" = "latest"\n'
+      toml_content+="\n"
+    fi
+
+    # Write toml file
+    echo -e "$toml_content" > "$TOML_FILE"
+    print_success "Created mise config: $TOML_FILE"
+
+    # Install tools via mise
+    if mise install 2>&1 | tee /tmp/mise-install.log; then
+      print_success "mise install completed"
+    else
+      print_warning "mise install encountered issues - check /tmp/mise-install.log"
+    fi
+
+  else
+    # ========================================================================
+    # FALLBACK INSTALLATIONS (Direct npm/go install)
+    # ========================================================================
+    print_warning "mise not available - using fallback installations"
+
+    # Fallback: npm global installs
+    if command_exists npm; then
+      print_status "Installing npm-based tools (fallback)..."
+
+      # Codex CLI
       if command_exists codex; then
-        print_success "Codex CLI installed"
+        print_warning "Codex CLI already installed"
       else
-        print_warning "Failed to install Codex CLI - binary not found after installation"
-        print_debug "npm output: $install_output"
+        if npm install -g codex-cli 2>&1; then
+          command_exists codex && print_success "Codex CLI installed"
+        else
+          print_warning "Failed to install Codex CLI"
+        fi
+      fi
+
+      # Gemini CLI
+      if command_exists gemini; then
+        print_warning "Gemini CLI already installed"
+      else
+        if npm install -g @google/gemini-cli 2>&1; then
+          command_exists gemini && print_success "Gemini CLI installed"
+        else
+          print_warning "Failed to install Gemini CLI"
+        fi
       fi
     else
-      print_warning "Failed to install Codex CLI"
-      echo "$install_output" | grep -i "error\|warn" | head -5
+      print_warning "npm not found - skipping npm-based tools"
+      print_status "Install nodejs extension for npm-based tools"
+    fi
+
+    # Fallback: go install
+    if command_exists go; then
+      print_status "Installing Go-based tools (fallback)..."
+
+      # Set up Go bin path
+      export GOPATH=$HOME/go
+      export GOBIN=$GOPATH/bin
+      export PATH=$PATH:$GOBIN
+      mkdir -p "$GOBIN"
+
+      # Plandex
+      if command_exists plandex; then
+        print_warning "Plandex already installed"
+      else
+        if timeout 300 go install github.com/plandex-ai/plandex@latest 2>&1; then
+          command_exists plandex && print_success "Plandex installed"
+        else
+          print_warning "Failed to install Plandex"
+        fi
+      fi
+
+      # Hector
+      if command_exists hector; then
+        print_warning "Hector already installed"
+      else
+        if timeout 300 go install github.com/kadirpekel/hector/cmd/hector@latest 2>&1; then
+          command_exists hector && print_success "Hector installed"
+        else
+          print_warning "Failed to install Hector"
+        fi
+      fi
+    else
+      print_warning "Go not found - skipping Go-based tools"
+      print_status "Install golang extension for Go-based tools"
     fi
   fi
 
-  # Gemini CLI
-  print_status "Installing Gemini CLI..."
-  if command_exists gemini; then
-    print_warning "Gemini CLI already installed"
-  else
-    local install_output
-    if install_output=$(npm install -g @google/gemini-cli 2>&1); then
-      if command_exists gemini; then
-        print_success "Gemini CLI installed"
-      else
-        print_warning "Failed to install Gemini CLI - binary not found after installation"
-        print_debug "npm output: $install_output"
-      fi
-    else
-      print_warning "Failed to install Gemini CLI"
-      echo "$install_output" | grep -i "error\|warn" | head -5
-    fi
-  fi
+  # ========================================================================
+  # PLATFORM CLIs (No change - installed via platform-specific methods)
+  # ========================================================================
 
   # GitHub Copilot CLI
   print_status "Installing GitHub Copilot CLI..."
@@ -125,12 +270,10 @@ install() {
     if gh extension list 2>/dev/null | grep -q "github/gh-copilot"; then
       print_warning "GitHub Copilot CLI already installed"
     else
-      local install_output
-      if install_output=$(gh extension install github/gh-copilot 2>&1); then
+      if gh extension install github/gh-copilot 2>&1; then
         print_success "GitHub Copilot CLI installed"
       else
         print_warning "Failed to install GitHub Copilot CLI"
-        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
   else
@@ -138,7 +281,7 @@ install() {
     print_status "Install github-cli extension for gh"
   fi
 
-  # Check AWS CLI for Amazon Q
+  # AWS Q Developer
   if command_exists aws; then
     print_status "AWS CLI available - Amazon Q Developer accessible via 'aws q' commands"
   else
@@ -146,123 +289,19 @@ install() {
     print_status "Install cloud-tools extension for AWS CLI"
   fi
 
-  # Check if running in CI mode
-  if [[ "$CI_MODE" == "true" ]]; then
-    print_status "CI mode detected - skipping optional tools (Ollama, Fabric, Go/Python tools)"
-    return 0
-  fi
-
-  # Ollama
-  print_status "Installing Ollama..."
-  if command_exists ollama; then
-    print_warning "Ollama already installed"
-  else
-    local install_output
-    if install_output=$(curl -fsSL https://ollama.ai/install.sh | sh 2>&1); then
-      if command_exists ollama; then
-        print_success "Ollama installed"
-        print_status "Start with: nohup ollama serve > ~/ollama.log 2>&1 &"
-      else
-        print_warning "Failed to install Ollama - binary not found after installation"
-      fi
-    else
-      print_warning "Failed to install Ollama"
-      echo "$install_output" | grep -i "error\|warn" | head -3
-    fi
-  fi
-
-  # Fabric
-  print_status "Installing Fabric..."
-  if command_exists fabric; then
-    print_warning "Fabric already installed"
-  else
-    local ARCH=$(uname -m)
-    local FABRIC_ARCH="amd64"
-    [[ "$ARCH" == "aarch64" ]] && FABRIC_ARCH="arm64"
-
-    local install_output
-    if install_output=$(curl -L "https://github.com/danielmiessler/fabric/releases/latest/download/fabric-linux-${FABRIC_ARCH}" -o fabric 2>&1); then
-      chmod +x fabric
-      if sudo mv fabric /usr/local/bin/; then
-        print_success "Fabric installed"
-        print_status "Initialize with: fabric --setup"
-      else
-        print_warning "Failed to move Fabric to /usr/local/bin"
-      fi
-    else
-      print_warning "Failed to download Fabric"
-      echo "$install_output" | grep -i "error\|warn" | head -3
-    fi
-  fi
-
-  # Go-based tools (require Go)
-  if command_exists go; then
-    # Set up Go bin path
-    export GOPATH=$HOME/go
-    export GOBIN=$GOPATH/bin
-    export PATH=$PATH:$GOBIN
-    mkdir -p "$GOBIN"
-
-    # Plandex
-    print_status "Installing Plandex..."
-    if command_exists plandex; then
-      print_warning "Plandex already installed"
-    else
-      local install_output
-      if install_output=$(timeout 300 go install github.com/plandex-ai/plandex@latest 2>&1); then
-        if command_exists plandex; then
-          print_success "Plandex installed"
-        else
-          print_warning "Failed to install Plandex - binary not found after installation"
-        fi
-      else
-        print_warning "Failed to install Plandex"
-        echo "$install_output" | grep -i "error\|warn" | head -3
-      fi
-    fi
-
-    # Hector
-    print_status "Installing Hector..."
-    if command_exists hector; then
-      print_warning "Hector already installed"
-    else
-      local install_output
-      if install_output=$(timeout 300 go install github.com/kadirpekel/hector/cmd/hector@latest 2>&1); then
-        if command_exists hector; then
-          print_success "Hector installed"
-        else
-          print_warning "Failed to install Hector - binary not found after installation"
-        fi
-      else
-        print_warning "Failed to install Hector"
-        echo "$install_output" | grep -i "error\|warn" | head -3
-      fi
-    fi
-  else
-    print_warning "Go not found - skipping Plandex and Hector"
-    print_status "Install golang extension for Go-based tools"
-  fi
-
-  # Python-based tools (require pip)
+  # Python-based tools (Grok CLI)
   if command_exists pip || command_exists pip3; then
     local pip_cmd="pip"
     command_exists pip3 && pip_cmd="pip3"
 
-    # Grok CLI
     print_status "Installing Grok CLI..."
     if command_exists grok; then
       print_warning "Grok CLI already installed"
     else
-      local install_output
-      if install_output=$($pip_cmd install grok-cli 2>&1); then
-        if command_exists grok; then
-          print_success "Grok CLI installed"
-        else
-          print_warning "Failed to install Grok CLI - binary not found after installation"
-        fi
+      if $pip_cmd install grok-cli 2>&1; then
+        command_exists grok && print_success "Grok CLI installed"
       else
         print_warning "Failed to install Grok CLI"
-        echo "$install_output" | grep -i "error\|warn" | head -3
       fi
     fi
   else
@@ -279,6 +318,22 @@ install() {
 
 configure() {
   print_status "Configuring AI CLI tools..."
+
+  # Configure ~/.local/bin PATH for Fabric
+  if [[ -d "$HOME/.local/bin" ]]; then
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "local-bin" 'export PATH=$HOME/.local/bin:$PATH'
+    else
+      # Fallback: add to bashrc
+      if ! grep -q '$HOME/.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+        echo "" >> "$HOME/.bashrc"
+        echo "# ${EXT_NAME} - Local bin" >> "$HOME/.bashrc"
+        echo 'export PATH=$HOME/.local/bin:$PATH' >> "$HOME/.bashrc"
+        print_success "Added ~/.local/bin to PATH"
+      fi
+    fi
+    export PATH=$HOME/.local/bin:$PATH
+  fi
 
   # Configure Go bin PATH for SSH sessions (if Go tools were installed)
   if command_exists go && [[ -d "$HOME/go/bin" ]]; then
@@ -523,40 +578,78 @@ EOF
 # ============================================================================
 
 validate() {
-  print_status "Validating AI CLI tools installation..."
+  print_status "Validating AI CLI tools installation (hybrid approach)..."
 
   local all_valid=true
+  local tools_found=0
 
-  # Core tools (npm-based)
-  local core_tools=(codex gemini)
-  local core_found=0
-  for tool in "${core_tools[@]}"; do
-    if command_exists "$tool"; then
-      ((core_found++))
-      print_success "$tool: installed"
-    fi
-  done
-
-  if [[ $core_found -eq 0 ]]; then
-    print_error "No core AI tools found"
-    all_valid=false
-  else
-    print_status "Core tools: $core_found/${#core_tools[@]}"
+  # Native tools
+  print_status "Checking native tools..."
+  if command_exists ollama; then
+    local ollama_version=$(ollama --version 2>/dev/null || echo "unknown")
+    print_success "Ollama: $ollama_version"
+    ((tools_found++))
   fi
 
-  # Optional tools
-  local optional_tools=(ollama fabric plandex hector grok)
-  local optional_found=0
-  for tool in "${optional_tools[@]}"; do
-    command_exists "$tool" && ((optional_found++))
-  done
-  print_status "Optional tools: $optional_found/${#optional_tools[@]}"
+  if command_exists fabric; then
+    # Fabric --help doesn't always return clean version info
+    print_success "Fabric: installed"
+    ((tools_found++))
+  fi
+
+  # npm-based tools (mise or fallback)
+  print_status "Checking npm-based tools..."
+  if command_exists codex; then
+    local codex_version=$(codex --version 2>/dev/null || echo "installed")
+    print_success "codex: $codex_version"
+    ((tools_found++))
+  fi
+
+  if command_exists gemini; then
+    local gemini_version=$(gemini --version 2>/dev/null || echo "installed")
+    print_success "gemini: $gemini_version"
+    ((tools_found++))
+  fi
+
+  # Go-based tools (mise or fallback)
+  print_status "Checking Go-based tools..."
+  if command_exists plandex; then
+    local plandex_version=$(plandex version 2>/dev/null || echo "installed")
+    print_success "plandex: $plandex_version"
+    ((tools_found++))
+  fi
+
+  if command_exists hector; then
+    local hector_version=$(hector version 2>/dev/null || echo "installed")
+    print_success "hector: $hector_version"
+    ((tools_found++))
+  fi
+
+  # Python-based tools
+  if command_exists grok; then
+    print_success "grok: installed"
+    ((tools_found++))
+  fi
 
   # Platform CLIs
-  local platform_clis=()
-  command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot" && platform_clis+=("gh-copilot")
-  command_exists aws && platform_clis+=("aws-q")
-  [[ ${#platform_clis[@]} -gt 0 ]] && print_status "Platform CLIs: ${platform_clis[*]}"
+  print_status "Checking platform CLIs..."
+  local platform_found=0
+  if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
+    print_success "GitHub Copilot CLI: installed"
+    ((platform_found++))
+  fi
+  if command_exists aws; then
+    print_success "AWS Q Developer: available via 'aws q'"
+    ((platform_found++))
+  fi
+
+  # Check mise config if mise is available
+  if command_exists mise; then
+    local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
+    if [[ -f "$TOML_FILE" ]]; then
+      print_success "mise config: $TOML_FILE"
+    fi
+  fi
 
   # Check workspace
   local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
@@ -564,6 +657,14 @@ validate() {
     print_success "AI tools workspace: exists"
   else
     print_warning "AI tools workspace: not found"
+  fi
+
+  # Summary
+  print_status "Total tools found: $tools_found (including $platform_found platform CLIs)"
+
+  if [[ $tools_found -eq 0 ]]; then
+    print_error "No AI tools found"
+    all_valid=false
   fi
 
   if [[ "$all_valid" == "true" ]]; then
@@ -587,74 +688,152 @@ status() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
-  # Check installation status - at least one core tool should be present
-  local core_tools=(codex gemini)
-  local found_core=false
-  for tool in "${core_tools[@]}"; do
+  # Check installation status - at least one tool should be present
+  local any_tool_found=false
+  local all_tools=(codex gemini ollama fabric plandex hector grok)
+  for tool in "${all_tools[@]}"; do
     if command_exists "$tool"; then
-      found_core=true
+      any_tool_found=true
       break
     fi
   done
 
-  if ! $found_core; then
+  if ! $any_tool_found; then
     echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  echo "Status: ✓ INSTALLED"
+  echo "Status: ✓ INSTALLED (Hybrid: Native + mise)"
   echo ""
 
-  # Extension-specific tool listing with versions
-  print_status "Installed tools:"
-
-  # Core tools
-  echo ""
-  echo "  Core tools (npm):"
-  for tool in "${core_tools[@]}"; do
-    if command_exists "$tool"; then
-      local version=$($tool --version 2>/dev/null || echo "installed")
-      echo "    ✓ $tool: $version"
+  # Installation method
+  if command_exists mise; then
+    local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
+    if [[ -f "$TOML_FILE" ]]; then
+      print_status "Installation method: mise (preferred) + native"
     else
-      echo "    ✗ $tool: not installed"
+      print_status "Installation method: Native + fallback"
     fi
-  done
-
-  # Optional tools
+  else
+    print_status "Installation method: Native + fallback (mise not available)"
+  fi
   echo ""
-  echo "  Optional tools:"
-  local optional_tools=(ollama fabric plandex hector grok)
-  for tool in "${optional_tools[@]}"; do
-    if command_exists "$tool"; then
-      local version=""
-      case "$tool" in
-        ollama) version=$(ollama --version 2>/dev/null) ;;
-        fabric) version=$(fabric --version 2>/dev/null) ;;
-        plandex) version=$(plandex version 2>/dev/null) ;;
-        hector) version=$(hector version 2>/dev/null) ;;
-        grok) version=$(grok --version 2>/dev/null) ;;
-      esac
-      echo "    ✓ $tool: ${version:-installed}"
-    fi
-  done
+
+  # Native tools
+  echo "  Native installations:"
+  if command_exists ollama; then
+    local version=$(ollama --version 2>/dev/null || echo "installed")
+    echo "    ✓ Ollama: $version"
+  else
+    echo "    ✗ Ollama: not installed"
+  fi
+
+  if command_exists fabric; then
+    echo "    ✓ Fabric: installed (git clone + Go build)"
+  else
+    echo "    ✗ Fabric: not installed"
+  fi
+
+  # mise-managed or fallback tools
+  echo ""
+  if command_exists mise && [[ -f "$HOME/.config/mise/conf.d/ai-tools.toml" ]]; then
+    echo "  mise-managed tools:"
+  else
+    echo "  Fallback installations:"
+  fi
+
+  # npm-based tools
+  if command_exists npm || command_exists node; then
+    echo "    npm-based:"
+    for tool in codex gemini; do
+      if command_exists "$tool"; then
+        local version=$($tool --version 2>/dev/null || echo "installed")
+        echo "      ✓ $tool: $version"
+      else
+        echo "      ✗ $tool: not installed"
+      fi
+    done
+  else
+    echo "    npm-based: (Node.js not available)"
+  fi
+
+  # Go-based tools
+  if command_exists go; then
+    echo "    Go-based:"
+    for tool in plandex hector; do
+      if command_exists "$tool"; then
+        local version=$($tool version 2>/dev/null || echo "installed")
+        echo "      ✓ $tool: $version"
+      else
+        echo "      ✗ $tool: not installed"
+      fi
+    done
+  else
+    echo "    Go-based: (Go not available)"
+  fi
+
+  # Python-based tools
+  echo ""
+  echo "  Python-based tools:"
+  if command_exists grok; then
+    echo "    ✓ grok: installed"
+  else
+    echo "    ✗ grok: not installed (requires pip)"
+  fi
 
   # Platform CLIs
   echo ""
   echo "  Platform CLIs:"
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
     echo "    ✓ GitHub Copilot CLI (via gh extension)"
+  else
+    echo "    ✗ GitHub Copilot CLI (requires gh)"
   fi
   if command_exists aws; then
-    echo "    ✓ AWS Q Developer (via aws q)"
+    echo "    ✓ AWS Q Developer (via 'aws q' commands)"
+  else
+    echo "    ✗ AWS Q Developer (requires AWS CLI)"
   fi
+
+  # API key requirements
+  echo ""
+  print_status "API key requirements:"
+  echo "  • Ollama: None (local models)"
+  echo "  • Fabric: Optional (for AI features)"
+  echo "  • Codex: Requires API key"
+  echo "  • Gemini: Requires GOOGLE_GEMINI_API_KEY"
+  echo "  • GitHub Copilot: Requires GitHub subscription"
+  echo "  • AWS Q: Requires AWS credentials"
+  echo "  • Grok: Requires GROK_API_KEY"
 
   # Dependencies
   echo ""
-  print_status "Dependencies:"
-  command_exists go && echo "  ✓ Go (enables Plandex, Hector)"
-  command_exists pip && echo "  ✓ pip (enables Grok)"
-  command_exists gh && echo "  ✓ gh (enables GitHub Copilot)"
-  command_exists aws && echo "  ✓ aws (enables Amazon Q)"
+  print_status "Available dependencies:"
+  local deps=()
+  command_exists mise && deps+=("mise")
+  command_exists npm && deps+=("npm")
+  command_exists go && deps+=("go")
+  command_exists pip && deps+=("pip")
+  command_exists gh && deps+=("gh")
+  command_exists aws && deps+=("aws")
+
+  if [[ ${#deps[@]} -gt 0 ]]; then
+    echo "  ${deps[*]}"
+  else
+    echo "  (none)"
+  fi
+
+  # mise config location
+  if command_exists mise; then
+    echo ""
+    print_status "mise configuration:"
+    local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
+    if [[ -f "$TOML_FILE" ]]; then
+      echo "  $TOML_FILE"
+    else
+      echo "  (not configured)"
+    fi
+  fi
 
   # Workspace
   echo ""
@@ -708,7 +887,7 @@ check_dependent_extensions() {
 # ============================================================================
 
 remove() {
-  print_warning "Uninstalling AI CLI tools..."
+  print_warning "Uninstalling AI CLI tools (hybrid approach)..."
 
   local dependent_exts=()
   mapfile -t dependent_exts < <(check_dependent_extensions "codex" "gemini" "ollama" "fabric" "plandex")
@@ -725,14 +904,26 @@ remove() {
     return 1
   fi
 
-  # Remove npm-based tools
-  print_status "Removing npm-based tools..."
-  local npm_tools=(codex-cli @google/gemini-cli)
-  for tool in "${npm_tools[@]}"; do
-    if npm list -g "$tool" 2>/dev/null | grep -q "$tool"; then
-      npm uninstall -g "$tool" 2>/dev/null
+  # Remove mise config
+  if command_exists mise; then
+    local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
+    if [[ -f "$TOML_FILE" ]]; then
+      print_status "Removing mise configuration..."
+      rm -f "$TOML_FILE"
+      print_success "mise config removed"
     fi
-  done
+  fi
+
+  # Remove npm-based tools (if installed via fallback)
+  if command_exists npm; then
+    print_status "Removing npm-based tools..."
+    local npm_tools=(codex-cli @google/gemini-cli)
+    for tool in "${npm_tools[@]}"; do
+      if npm list -g "$tool" 2>/dev/null | grep -q "$tool"; then
+        npm uninstall -g "$tool" 2>/dev/null
+      fi
+    done
+  fi
 
   # Remove GitHub Copilot extension
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
@@ -740,7 +931,7 @@ remove() {
     print_success "GitHub Copilot CLI removed"
   fi
 
-  # Remove Ollama
+  # Remove Ollama (native installation)
   if command_exists ollama; then
     print_status "Removing Ollama..."
     sudo systemctl stop ollama 2>/dev/null || killall ollama 2>/dev/null
@@ -749,10 +940,15 @@ remove() {
     print_success "Ollama removed"
   fi
 
-  # Remove Fabric
-  [[ -f /usr/local/bin/fabric ]] && sudo rm -f /usr/local/bin/fabric
+  # Remove Fabric (git clone + build)
+  if [[ -d "$HOME/.local/share/fabric" ]]; then
+    print_status "Removing Fabric..."
+    rm -rf "$HOME/.local/share/fabric"
+    [[ -L "$HOME/.local/bin/fabric" ]] && rm -f "$HOME/.local/bin/fabric"
+    print_success "Fabric removed"
+  fi
 
-  # Remove Go-based tools
+  # Remove Go-based tools (if installed via fallback)
   if [[ -d "$HOME/go/bin" ]]; then
     for tool in plandex hector; do
       [[ -f "$HOME/go/bin/$tool" ]] && rm -f "$HOME/go/bin/$tool"
@@ -770,7 +966,10 @@ remove() {
   cleanup_bashrc "# AI tools aliases"
 
   # Remove Go tools PATH from bashrc
-  cleanup_bashrc "# ${EXT_NAME}"
+  cleanup_bashrc "# ${EXT_NAME} - Go tools"
+
+  # Remove local bin PATH from bashrc
+  cleanup_bashrc "# ${EXT_NAME} - Local bin"
 
   # Remove workspace
   local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
