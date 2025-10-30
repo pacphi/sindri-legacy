@@ -7,6 +7,7 @@ cd /workspace/scripts/lib
 echo "=== Testing Protected Extension Enforcement ==="
 
 # Test deactivation prevention
+# Protected extensions - must match PROTECTED_EXTENSIONS in docker/lib/extensions-common.sh
 echo ""
 echo "Testing deactivation prevention..."
 for ext in workspace-structure mise-config ssh-environment; do
@@ -36,6 +37,7 @@ echo ""
 echo "✅ All protected extensions properly blocked from deactivation"
 
 # Test uninstall prevention
+# Protected extensions - must match PROTECTED_EXTENSIONS in docker/lib/extensions-common.sh
 echo ""
 echo "Testing uninstall prevention..."
 for ext in workspace-structure mise-config ssh-environment; do

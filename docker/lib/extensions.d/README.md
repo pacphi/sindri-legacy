@@ -338,13 +338,13 @@ extension-manager reorder nodejs 5
 
 ### 1. Copy Template
 ```bash
-cp template.sh.example my-extension.sh.example
+cp template.extension my-extension.extension
 ```
 
 ### 2. Update Metadata
 ```bash
 #!/bin/bash
-# my-extension.sh.example - Brief description
+# my-extension.extension - Brief description
 # Extension API v1.0
 
 EXT_NAME="my-extension"
@@ -353,63 +353,137 @@ EXT_DESCRIPTION="What this extension provides"
 EXT_CATEGORY="utility"  # utility, language, infrastructure
 ```
 
-### 3. Source Common Utilities
+### 3. Source Shared Helper Functions
 ```bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="$(dirname "$SCRIPT_DIR")"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 
-if [[ -f "$LIB_DIR/common.sh" ]]; then
-  source "$LIB_DIR/common.sh"
-elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-  source "/workspace/scripts/lib/common.sh"
-else
-  # Minimal fallback
-  print_status() { echo "[INFO] $1"; }
-  print_success() { echo "[SUCCESS] $1"; }
-  print_error() { echo "[ERROR] $1" >&2; }
-  print_warning() { echo "[WARNING] $1"; }
-  print_debug() { [[ "${DEBUG:-}" == "true" ]] && echo "[DEBUG] $1"; }
-  command_exists() { command -v "$1" >/dev/null 2>&1; }
-fi
+# Initialize extension (loads common.sh and sets up environment)
+extension_init
 ```
 
+**Available Helper Functions:**
+
+The `extensions-common.sh` library provides these helper functions to eliminate code duplication:
+
+**Environment Helpers:**
+- `is_ci_mode()` - Check if running in CI
+- `activate_mise_environment()` - Activate mise in current shell
+
+**Prerequisite Checks:**
+- `check_mise_prerequisite()` - Verify mise is installed
+- `check_disk_space [mb]` - Check available disk space (default 600MB)
+
+**Status Helpers:**
+- `print_extension_header()` - Print standard extension header with metadata
+
+**Validation Helpers:**
+- `validate_commands <array>` - Validate multiple commands with version checks
+
+**mise Helpers:**
+- `install_mise_config "name"` - Install mise TOML configuration (handles CI vs dev selection)
+- `remove_mise_config "name"` - Remove mise configuration
+
+**Git Helpers:**
+- `setup_git_aliases "alias:command" ...` - Setup git aliases
+- `cleanup_git_aliases "alias1" "alias2" ...` - Remove git aliases
+
+**Cleanup Helpers:**
+- `cleanup_bashrc "marker"` - Remove extension entries from .bashrc
+- `prompt_confirmation "question"` - Standardized yes/no prompt
+- `show_dependent_extensions_warning "cmd1" "cmd2"` - Check and display dependent extensions
+
+**Main Execution Wrapper:**
+- `extension_main "$@"` - Standard main execution block (replaces manual case statement)
+
 ### 4. Implement Required Functions
+
 Implement all 6 API functions: `prerequisites()`, `install()`, `configure()`, `validate()`, `status()`, `remove()`
 
-### 5. Add Main Execution Block
-```bash
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  command="${1:-status}"
+**Use helper functions to reduce boilerplate:**
 
-  case "$command" in
-    prerequisites|install|configure|validate|status|remove)
-      if "$command"; then
-        exit 0
-      else
-        exit 1
-      fi
-      ;;
-    *)
-      echo "Usage: $0 {prerequisites|install|configure|validate|status|remove}"
-      exit 1
-      ;;
-  esac
-fi
+```bash
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+  check_mise_prerequisite || return 1
+  check_disk_space 500
+  print_success "All prerequisites met"
+  return 0
+}
+
+install() {
+  print_status "Installing ${EXT_NAME}..."
+  install_mise_config "${EXT_NAME}" || return 1
+  return 0
+}
+
+configure() {
+  print_status "Configuring ${EXT_NAME}..."
+  setup_git_aliases "my-test:!mytool test"
+  print_success "Configuration complete"
+  return 0
+}
+
+validate() {
+  print_status "Validating ${EXT_NAME}..."
+  activate_mise_environment
+  declare -A checks=([mytool]="--version")
+  validate_commands checks
+}
+
+status() {
+  print_extension_header
+  if command_exists mytool; then
+    print_success "Installed: $(mytool --version)"
+    return 0
+  else
+    print_warning "Not installed"
+    return 1
+  fi
+}
+
+remove() {
+  print_status "Removing ${EXT_NAME}..."
+  show_dependent_extensions_warning "mytool"
+  remove_mise_config "${EXT_NAME}"
+  cleanup_git_aliases "my-test"
+  cleanup_bashrc "# ${EXT_NAME} - added by extension"
+  print_success "Removed successfully"
+  return 0
+}
+```
+
+### 5. Add Main Execution Block
+
+```bash
+# Use helper instead of manual case statement
+extension_main "$@"
 ```
 
 ### 6. Test Extension
+
 ```bash
 # Test each function individually
-./my-extension.sh.example prerequisites
-./my-extension.sh.example install
-./my-extension.sh.example configure
-./my-extension.sh.example validate
-./my-extension.sh.example status
+./my-extension.extension prerequisites
+./my-extension.extension install
+./my-extension.extension configure
+./my-extension.extension validate
+./my-extension.extension status
 
 # Or use extension-manager (install auto-activates)
 extension-manager install my-extension
 extension-manager validate my-extension
 ```
+
+### Helper Function Reference
+
+See the updated `template.extension` for comprehensive examples of using all helper functions. Key benefits:
+
+1. **Less Code**: Helper functions eliminate 50-100 lines of boilerplate per extension
+2. **Consistency**: All extensions use the same patterns
+3. **Maintainability**: Bug fixes in helpers benefit all extensions
+4. **New Features**: Get new capabilities automatically (e.g., dependency checking)
+5. **Testing**: Shared functions have centralized tests
 
 ## Best Practices
 

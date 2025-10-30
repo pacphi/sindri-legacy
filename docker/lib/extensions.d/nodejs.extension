@@ -30,18 +30,10 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check for mise (required by this extension)
-  if ! command_exists mise; then
-    print_error "mise is required but not installed"
-    print_status "Install with: extension-manager install mise-config"
-    return 1
-  fi
+  check_mise_prerequisite || return 1
 
   # Check disk space (Node.js needs ~500MB)
-  local available_space
-  available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 600 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (600MB recommended for Node.js)"
-  fi
+  check_disk_space 600
 
   print_success "All prerequisites met"
   return 0
@@ -54,45 +46,13 @@ prerequisites() {
 install() {
   print_status "Installing Node.js via mise..."
 
-  # Verify mise is available
-  if ! command_exists mise; then
-    print_error "mise is required - install mise-config extension first"
-    return 1
-  fi
+  # Install via mise using shared helper
+  install_mise_config "nodejs" || return 1
 
-  # Determine paths
-  local ext_dir="$SCRIPT_DIR"
-  local toml_source
-  local toml_dest="$HOME/.config/mise/conf.d/nodejs.toml"
-
-  # Select config based on CI_MODE
-  if [[ "${CI_MODE:-false}" == "true" ]] && [[ -f "$ext_dir/nodejs-ci.toml" ]]; then
-    toml_source="$ext_dir/nodejs-ci.toml"
-    print_status "Using CI configuration (nodejs-ci.toml)"
-  else
-    toml_source="$ext_dir/nodejs.toml"
-    print_status "Using development configuration (nodejs.toml)"
-  fi
-
-  # Validate and copy TOML
-  if [[ ! -f "$toml_source" ]]; then
-    print_error "TOML configuration not found: $toml_source"
-    return 1
-  fi
-
-  mkdir -p "$HOME/.config/mise/conf.d"
-  cp "$toml_source" "$toml_dest"
-  print_success "Configuration copied to $toml_dest"
-
-  # Install all tools from configuration
-  print_status "Installing Node.js LTS..."
-  if mise install; then
-    print_success "Node.js installed: $(node -v 2>/dev/null || echo 'installed')"
-    print_success "npm installed: v$(npm -v 2>/dev/null || echo 'installed')"
-  else
-    print_error "mise install failed"
-    return 1
-  fi
+  # Verify installation
+  activate_mise_environment
+  print_success "Node.js installed: $(node -v 2>/dev/null || echo 'installed')"
+  print_success "npm installed: v$(npm -v 2>/dev/null || echo 'installed')"
 
   return 0
 }
@@ -198,11 +158,8 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION (mise-powered)"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_extension_header
+  echo "Version Manager: mise"
   echo ""
 
   # Check installation status
@@ -258,18 +215,8 @@ remove() {
     return 1
   fi
 
-  # Remove mise configuration
-  local toml_dest="$HOME/.config/mise/conf.d/nodejs.toml"
-  if [[ -f "$toml_dest" ]]; then
-    print_status "Removing mise configuration..."
-    rm -f "$toml_dest"
-    print_success "Configuration removed: $toml_dest"
-  else
-    print_warning "Configuration file not found: $toml_dest"
-  fi
-
-  # Note: We don't run 'mise prune' here as tools may be shared with other extensions
-  print_status "Node.js tools remain available until 'mise prune' is run"
+  # Remove mise configuration using shared helper
+  remove_mise_config "nodejs"
 
   # Clean up SSH wrappers
   if command_exists create_tool_wrapper 2>/dev/null; then

@@ -5,7 +5,9 @@ set -e
 
 extension_name="$1"
 shift
+# Support both space-separated and comma-separated dependencies
 depends_on="$*"
+depends_on="${depends_on//,/ }"  # Replace commas with spaces
 
 cd /workspace/scripts/lib
 manifest_file="extensions.d/active-extensions.conf"
@@ -15,7 +17,7 @@ if [ ! -f "$manifest_file" ]; then
   cp extensions.d/active-extensions.ci.conf "$manifest_file" 2>/dev/null || touch "$manifest_file"
 fi
 
-# Protected extensions already in CI conf - no need to add
+# Protected extensions - must match PROTECTED_EXTENSIONS in docker/lib/extensions-common.sh
 protected="workspace-structure mise-config ssh-environment"
 
 # Add dependencies first if specified
@@ -50,8 +52,8 @@ else
 fi
 
 echo ""
-echo "=== Active Extensions ==="
-cat "$manifest_file"
+echo "=== Active Extensions in Manifest ==="
+grep -v "^[[:space:]]*#" "$manifest_file" | grep -v "^[[:space:]]*$" || echo "(empty)"
 
 echo ""
 echo "Running: extension-manager install-all"

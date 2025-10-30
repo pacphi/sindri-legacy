@@ -9,6 +9,13 @@ fi
 EXTENSIONS_COMMON_SH_LOADED="true"
 
 # ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# Protected extensions that cannot be removed or reordered
+export PROTECTED_EXTENSIONS="workspace-structure mise-config ssh-environment"
+
+# ============================================================================
 # EXTENSION INITIALIZATION
 # ============================================================================
 
@@ -94,6 +101,182 @@ check_dependent_extensions() {
 }
 
 # ============================================================================
+# ENVIRONMENT HELPERS
+# ============================================================================
+
+# Check if running in CI mode
+# Usage: if is_ci_mode; then ... fi
+# Returns: 0 if CI_MODE=true, 1 otherwise
+is_ci_mode() {
+    [[ "${CI_MODE:-false}" == "true" ]]
+}
+
+# Activate mise environment in current shell
+# Usage: activate_mise_environment
+# This function evaluates mise activation and adds shims to PATH
+activate_mise_environment() {
+    if command_exists mise; then
+        eval "$(mise activate bash)" 2>/dev/null || true
+        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+            export PATH="$HOME/.local/share/mise/shims:$PATH"
+        fi
+    fi
+}
+
+# ============================================================================
+# PREREQUISITE CHECKS
+# ============================================================================
+
+# Check if mise is available
+# Usage: check_mise_prerequisite || return 1
+# Returns: 0 if mise exists, 1 with error message otherwise
+check_mise_prerequisite() {
+    if command_exists mise; then
+        return 0
+    fi
+
+    print_error "mise is required but not installed"
+    print_status "Install mise-config extension first: extension-manager install mise-config"
+    return 1
+}
+
+# Check available disk space
+# Usage: check_disk_space [required_mb]
+# Default: 600MB required
+# Returns: 0 if sufficient space, 1 with warning otherwise
+check_disk_space() {
+    local required_mb="${1:-600}"
+    local available_mb
+    available_mb=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
+
+    if [[ $available_mb -lt $required_mb ]]; then
+        print_warning "Low disk space: ${available_mb}MB available (${required_mb}MB recommended)"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# STATUS HELPERS
+# ============================================================================
+
+# Print standard extension header
+# Usage: print_extension_header
+# Requires: EXT_NAME, EXT_VERSION, EXT_DESCRIPTION, EXT_CATEGORY environment variables
+print_extension_header() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Extension: ${EXT_NAME} v${EXT_VERSION}"
+    echo "Description: ${EXT_DESCRIPTION}"
+    echo "Category: ${EXT_CATEGORY}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
+# ============================================================================
+# VALIDATION HELPERS
+# ============================================================================
+
+# Validate multiple commands with version checks
+# Usage:
+#   declare -A checks=(
+#       [command1]="--version"
+#       [command2]="-v"
+#   )
+#   validate_commands checks
+# Returns: 0 if all commands exist, 1 if any are missing
+validate_commands() {
+    local -n command_checks=$1
+    local all_valid=true
+
+    for cmd in "${!command_checks[@]}"; do
+        local version_flag="${command_checks[$cmd]}"
+        if ! command_exists "$cmd"; then
+            print_error "$cmd not found"
+            all_valid=false
+        else
+            local version
+            version=$($cmd $version_flag 2>&1 | head -n1)
+            print_success "$cmd: $version"
+        fi
+    done
+
+    [[ "$all_valid" == "true" ]]
+}
+
+# ============================================================================
+# MISE HELPERS
+# ============================================================================
+
+# Install mise configuration from TOML file
+# Usage: install_mise_config "extension-name" ["script_dir"]
+# Example: install_mise_config "nodejs"
+# This function:
+#   - Selects CI or dev TOML based on CI_MODE
+#   - Copies TOML to mise config directory
+#   - Runs mise install
+# Returns: 0 on success, 1 on failure
+install_mise_config() {
+    local ext_name="$1"
+    local script_dir="${2:-$SCRIPT_DIR}"
+
+    # Determine which TOML to use (CI vs dev)
+    local source_toml="${script_dir}/${ext_name}"
+    if is_ci_mode; then
+        source_toml+="-ci"
+        print_status "CI mode detected - using minimal configuration"
+    else
+        print_status "Using full configuration"
+    fi
+    source_toml+=".toml"
+
+    # Verify source file exists
+    if [[ ! -f "$source_toml" ]]; then
+        print_error "Configuration not found: $source_toml"
+        return 1
+    fi
+
+    # Ensure mise config directory exists
+    mkdir -p "$HOME/.config/mise/conf.d"
+
+    # Copy TOML to mise config
+    local dest_toml="$HOME/.config/mise/conf.d/${ext_name}.toml"
+    if cp "$source_toml" "$dest_toml"; then
+        print_success "Configuration copied to $dest_toml"
+    else
+        print_error "Failed to copy configuration"
+        return 1
+    fi
+
+    # Install via mise
+    print_status "Installing via mise..."
+    if mise install; then
+        print_success "Installed successfully"
+        return 0
+    else
+        print_error "mise install failed"
+        return 1
+    fi
+}
+
+# Remove mise configuration for an extension
+# Usage: remove_mise_config "extension-name"
+# Example: remove_mise_config "nodejs"
+remove_mise_config() {
+    local ext_name="$1"
+    local config_file="$HOME/.config/mise/conf.d/${ext_name}.toml"
+
+    if [[ -f "$config_file" ]]; then
+        print_status "Removing mise configuration..."
+        if rm -f "$config_file"; then
+            print_success "Removed $config_file"
+        fi
+    fi
+
+    print_status "Note: Tools are still installed by mise"
+    print_status "Run 'mise prune' to remove unused tools"
+}
+
+# ============================================================================
 # MAIN EXECUTION WRAPPER
 # ============================================================================
 
@@ -163,6 +346,24 @@ cleanup_bashrc() {
     fi
 }
 
+# Setup git aliases for an extension
+# Usage: setup_git_aliases "alias1:command1" "alias2:command2" ...
+# Example: setup_git_aliases "py-test:!pytest" "py-lint:!ruff check"
+setup_git_aliases() {
+    local alias_defs=("$@")
+
+    if ! command_exists git; then
+        return 0
+    fi
+
+    for alias_def in "${alias_defs[@]}"; do
+        local alias_name="${alias_def%%:*}"
+        local alias_cmd="${alias_def#*:}"
+        git config --global "alias.${alias_name}" "$alias_cmd" 2>/dev/null || true
+        print_debug "Configured git alias: $alias_name"
+    done
+}
+
 # Remove git aliases for an extension
 # Usage: cleanup_git_aliases "alias1" "alias2" ...
 cleanup_git_aliases() {
@@ -212,9 +413,32 @@ show_dependent_extensions_warning() {
 
 # Export all functions for use by extensions
 export -f extension_init
-export -f check_dependent_extensions
 export -f extension_main
+
+# Environment helpers
+export -f is_ci_mode
+export -f activate_mise_environment
+
+# Prerequisite checks
+export -f check_mise_prerequisite
+export -f check_disk_space
+
+# Status helpers
+export -f print_extension_header
+
+# Validation helpers
+export -f validate_commands
+
+# Mise helpers
+export -f install_mise_config
+export -f remove_mise_config
+
+# Dependency checking
+export -f check_dependent_extensions
+export -f show_dependent_extensions_warning
+
+# Cleanup helpers
 export -f cleanup_bashrc
+export -f setup_git_aliases
 export -f cleanup_git_aliases
 export -f prompt_confirmation
-export -f show_dependent_extensions_warning

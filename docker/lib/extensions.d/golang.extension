@@ -32,18 +32,10 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check for mise
-  if ! command_exists mise; then
-    print_error "mise is required but not installed"
-    print_status "Install mise-config extension first: extension-manager install mise-config"
-    return 1
-  fi
+  check_mise_prerequisite || return 1
 
   # Check disk space (Go needs ~500MB)
-  local available_space
-  available_space=$(df -BM "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ -n "$available_space" ]] && [[ $available_space -lt 600 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (600MB recommended for Go)"
-  fi
+  check_disk_space 600
 
   print_success "All prerequisites met"
   return 0
@@ -56,41 +48,11 @@ prerequisites() {
 install() {
   print_status "Installing Go toolchain via mise..."
 
-  # Ensure mise config directory exists
-  local mise_config_dir="$HOME/.config/mise/conf.d"
-  mkdir -p "$mise_config_dir"
-
-  # Determine which config to use (CI vs full)
-  local source_config="${SCRIPT_DIR}/golang.toml"
-  if [[ "$CI_MODE" == "true" ]]; then
-    print_status "CI mode detected - using minimal golang-ci.toml"
-    source_config="${SCRIPT_DIR}/golang-ci.toml"
-  fi
-
-  # Copy appropriate golang.toml to mise config directory
-  local target_config="${mise_config_dir}/golang.toml"
-  if [[ -f "$source_config" ]]; then
-    print_status "Copying $(basename "$source_config") to mise config..."
-    cp "$source_config" "$target_config"
-    print_success "Go configuration installed"
-  else
-    print_error "Source config not found: $source_config"
-    return 1
-  fi
+  # Install via mise using shared helper
+  install_mise_config "golang" || return 1
 
   # Activate mise for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
-
-  # Install Go and tools via mise
-  print_status "Installing Go 1.24 and tools via mise..."
-  if mise install 2>&1 | grep -v "^mise"; then
-    print_success "Go and tools installed via mise"
-  else
-    print_error "Failed to install Go via mise"
-    return 1
-  fi
+  activate_mise_environment
 
   # Verify Go is available
   if ! command_exists go; then
@@ -120,10 +82,7 @@ configure() {
   # No manual PATH configuration needed
 
   # Activate mise for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-    export PATH="$HOME/.local/share/mise/shims:$PATH"
-  fi
+  activate_mise_environment
 
   # Set GOPATH for current session (mise sets this via env in golang.toml)
   export GOPATH=$HOME/go
@@ -137,11 +96,9 @@ configure() {
   print_success "Project template created"
 
   # Add Git aliases
-  if command_exists git; then
-    git config --global alias.gotest '!go test ./...'
-    git config --global alias.gofmt '!go fmt ./... && goimports -w .'
-    print_debug "Git aliases configured"
-  fi
+  setup_git_aliases \
+    "gotest:!go test ./..." \
+    "gofmt:!go fmt ./... && goimports -w ."
 
   print_success "Go configured"
   return 0
@@ -157,20 +114,14 @@ validate() {
   local all_valid=true
 
   # Activate mise for current session - ensure Go binaries are accessible
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-    # Add mise shims to PATH
-    if [[ -d "$HOME/.local/share/mise/shims" ]]; then
-      export PATH="$HOME/.local/share/mise/shims:$PATH"
-    fi
-    # Also add go install directory to PATH as fallback
-    if [[ -d "$HOME/.local/share/mise/installs/go" ]]; then
-      for go_dir in "$HOME/.local/share/mise/installs/go"/*/bin; do
-        if [[ -d "$go_dir" ]]; then
-          export PATH="$go_dir:$PATH"
-        fi
-      done
-    fi
+  activate_mise_environment
+  # Also add go install directory to PATH as fallback
+  if [[ -d "$HOME/.local/share/mise/installs/go" ]]; then
+    for go_dir in "$HOME/.local/share/mise/installs/go"/*/bin; do
+      if [[ -d "$go_dir" ]]; then
+        export PATH="$go_dir:$PATH"
+      fi
+    done
   fi
 
   # Check mise has Go installed
@@ -199,7 +150,7 @@ validate() {
   fi
 
   # Check development tools (skip in CI mode)
-  if [[ "$CI_MODE" != "true" ]]; then
+  if ! is_ci_mode; then
     local tools=(gopls dlv goimports golangci-lint air goreleaser)
     local tools_found=0
     for tool in "${tools[@]}"; do
@@ -233,18 +184,12 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_extension_header
+  echo "Version Manager: mise"
   echo ""
 
   # Activate mise for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-    export PATH="$HOME/.local/share/mise/shims:$PATH"
-  fi
+  activate_mise_environment
 
   # Check installation status
   if ! command_exists go; then
@@ -274,7 +219,7 @@ status() {
   fi
 
   # Show development tools (skip in CI mode)
-  if [[ "$CI_MODE" != "true" ]]; then
+  if ! is_ci_mode; then
     echo ""
     print_status "Development tools (via mise go backend):"
     local tools=(gopls dlv goimports golangci-lint air goreleaser)
@@ -293,67 +238,22 @@ status() {
 }
 
 # ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-check_dependent_extensions() {
-  local provided_commands=("$@")
-  local dependent_extensions=()
-  local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && return 0
-
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
-    local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [[ "$ext_name" == "$EXT_NAME" ]] && continue
-    local ext_file="$SCRIPT_DIR/${ext_name}.sh"
-    if [[ ! -f "$ext_file" ]]; then
-      local matches=("$SCRIPT_DIR/"*"-${ext_name}.sh")
-      ext_file="${matches[0]}"
-    fi
-    [[ ! -f "$ext_file" ]] && continue
-    for cmd in "${provided_commands[@]}"; do
-      if grep -q "$cmd" "$ext_file" 2>/dev/null; then
-        dependent_extensions+=("$ext_name")
-        break
-      fi
-    done
-  done < "$manifest_file"
-
-  printf '%s\n' "${dependent_extensions[@]}"
-}
-
-# ============================================================================
 # REMOVE
 # ============================================================================
 
 remove() {
   print_warning "Uninstalling Go..."
 
-  local dependent_exts=()
-  mapfile -t dependent_exts < <(check_dependent_extensions "go" "gofmt" "gopls")
-  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
-    print_warning "The following extensions depend on Go and may stop working:"
-    for ext in "${dependent_exts[@]}"; do
-      echo "  - $ext"
-    done
-    echo ""
-  fi
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "go" "gofmt" "gopls"
 
   if ! prompt_confirmation "Continue with Go removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Remove mise golang config
-  local mise_config="${HOME}/.config/mise/conf.d/golang.toml"
-  if [[ -f "$mise_config" ]]; then
-    print_status "Removing mise Go configuration..."
-    rm -f "$mise_config"
-    print_success "mise Go config removed"
-  fi
+  # Remove mise golang config using shared helper
+  remove_mise_config "golang"
 
   # Uninstall Go and tools via mise
   if command_exists mise; then
@@ -361,7 +261,7 @@ remove() {
     mise uninstall go 2>/dev/null || true
 
     # Uninstall go tools if in non-CI mode
-    if [[ "$CI_MODE" != "true" ]]; then
+    if ! is_ci_mode; then
       local tools=(gopls dlv goimports golangci-lint air goreleaser)
       for tool in "${tools[@]}"; do
         mise uninstall "go:*${tool}*" 2>/dev/null || true
@@ -381,8 +281,7 @@ remove() {
 
   # Cleanup
   rm -f "/workspace/scripts/create-go-project.sh"
-  command_exists git && git config --global --unset-all alias.gotest 2>/dev/null
-  command_exists git && git config --global --unset-all alias.gofmt 2>/dev/null
+  cleanup_git_aliases "gotest" "gofmt"
 
   print_success "Go uninstalled"
   print_warning "Reload shell: source ~/.bashrc"

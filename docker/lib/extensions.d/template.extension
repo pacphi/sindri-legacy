@@ -1,11 +1,11 @@
 #!/bin/bash
-# template.sh.example - Extension Template and Reference Implementation
+# template.extension - Extension Template and Reference Implementation
 # Extension API v1.0
 #
 # This template demonstrates the standard extension structure with all required
 # functions. Use this as a reference when creating new extensions.
 #
-# IMPORTANT: Copy this template and rename to match your extension (e.g., rust.sh.example)
+# IMPORTANT: Copy this template and rename to match your extension (e.g., rust.extension)
 
 # ============================================================================
 # METADATA
@@ -21,25 +21,15 @@ EXT_CATEGORY="dev-tools"
 # ============================================================================
 # COMMON UTILITIES
 # ============================================================================
-# Source common functions from lib/common.sh
-# This provides: print_status, print_success, print_error, print_warning, print_debug, command_exists
+# Source shared helper functions from extensions-common.sh
+# This provides all standard utilities plus helper functions to reduce code duplication
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="$(dirname "$SCRIPT_DIR")"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 
-if [[ -f "$LIB_DIR/common.sh" ]]; then
-  source "$LIB_DIR/common.sh"
-elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-  source "/workspace/scripts/lib/common.sh"
-else
-  # Minimal fallback if common.sh not found
-  print_status() { echo "[INFO] $1"; }
-  print_success() { echo "[SUCCESS] $1"; }
-  print_error() { echo "[ERROR] $1" >&2; }
-  print_warning() { echo "[WARNING] $1"; }
-  print_debug() { [[ "${DEBUG:-}" == "true" ]] && echo "[DEBUG] $1"; }
-  command_exists() { command -v "$1" >/dev/null 2>&1; }
-fi
+# Initialize extension environment (replaces manual common.sh sourcing)
+# This loads: print_status, print_success, print_error, print_warning, print_debug, command_exists
+extension_init
 
 # ============================================================================
 # FUNCTION 1: PREREQUISITES
@@ -83,15 +73,14 @@ prerequisites() {
     all_met=false
   fi
 
-  # Example: Check disk space (optional)
-  local available_space
-  available_space=$(df -BG /workspace | awk 'NR==2 {print $4}' | sed 's/G//')
-  if [[ $available_space -lt 5 ]]; then
-    print_warning "Low disk space: ${available_space}GB available (5GB recommended)"
-  fi
+  # Example: Check disk space using helper function (default 600MB, can override)
+  check_disk_space 5000  # Require 5GB for this example
 
-  # Example: Respect CI_MODE for conditional checks
-  if [[ "${CI_MODE:-}" != "true" ]]; then
+  # Example: Check if mise is required (for mise-powered extensions)
+  # check_mise_prerequisite || return 1
+
+  # Example: Check CI mode using helper function
+  if ! is_ci_mode; then
     print_debug "Running in normal mode (not CI)"
   fi
 
@@ -171,13 +160,16 @@ install() {
 
   rm -f "$temp_file"
 
-  # Example: CI_MODE optimization - skip optional tools
-  if [[ "${CI_MODE:-}" != "true" ]]; then
+  # Example: CI_MODE optimization - skip optional tools using helper
+  if ! is_ci_mode; then
     print_status "Installing optional tools..."
     # Install additional tools here
   else
     print_debug "CI mode - skipping optional tools"
   fi
+
+  # Example: For mise-powered extensions, use helper function
+  # install_mise_config "${EXT_NAME}" || return 1
 
   print_success "${EXT_NAME} installed successfully"
   return 0
@@ -242,6 +234,9 @@ configure() {
     echo "alias example-run='example-tool run'" >> "$HOME/.bashrc"
   fi
 
+  # Example: Setup git aliases using helper function
+  # setup_git_aliases "ex-test:!example-tool test" "ex-run:!example-tool run"
+
   # Example: Create config file
   local config_dir="$HOME/.config/example-tool"
   local config_file="$config_dir/config.yaml"
@@ -289,7 +284,17 @@ validate() {
 
   local all_valid=true
 
-  # Example: Check command exists
+  # Example: Activate mise environment if needed
+  # activate_mise_environment
+
+  # Example: Validate multiple commands using helper function
+  # declare -A checks=(
+  #   [example-tool]="--version"
+  #   [example-cli]="-v"
+  # )
+  # validate_commands checks && all_valid=true || all_valid=false
+
+  # Example: Manual check (traditional approach)
   if ! command_exists example-tool; then
     print_error "example-tool command not found in PATH"
     all_valid=false
@@ -322,8 +327,8 @@ validate() {
     print_warning "Configuration file not found (optional)"
   fi
 
-  # Example: Test SSH wrapper (critical for CI)
-  if [[ "${CI_MODE:-}" != "true" ]]; then
+  # Example: Test SSH wrapper (critical for CI) using helper
+  if ! is_ci_mode; then
     print_status "Testing non-interactive SSH execution..."
     if ssh localhost "example-tool --version" >/dev/null 2>&1; then
       print_success "SSH wrapper works"
@@ -366,12 +371,8 @@ validate() {
 #   fi
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
+  # Use helper function to print standard header
+  print_extension_header
 
   # Check installation status
   if ! command_exists example-tool; then
@@ -443,6 +444,12 @@ status() {
 remove() {
   print_status "Removing ${EXT_NAME}..."
 
+  # Example: Check for dependent extensions using helper function
+  show_dependent_extensions_warning "example-tool" "example-cli"
+
+  # Example: For mise-powered extensions, remove mise config
+  # remove_mise_config "${EXT_NAME}"
+
   # Example: Remove system packages
   if command_exists example-package; then
     print_status "Removing system packages..."
@@ -464,14 +471,11 @@ remove() {
     fi
   fi
 
-  # Example: Clean up configuration (with warning)
+  # Example: Clean up configuration using helper for confirmation
   local config_dir="$HOME/.config/example-tool"
   if [[ -d "$config_dir" ]]; then
     print_warning "Configuration directory exists: $config_dir"
-    print_status "Remove config? This will delete user settings."
-    read -p "Delete $config_dir? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if prompt_confirmation "Delete $config_dir? This will delete user settings."; then
       rm -rf "$config_dir"
       print_success "Configuration removed"
     else
@@ -479,12 +483,11 @@ remove() {
     fi
   fi
 
-  # Example: Remove from PATH (bashrc)
-  if grep -q "# ${EXT_NAME} - added by extension" "$HOME/.bashrc" 2>/dev/null; then
-    print_status "Removing PATH modifications..."
-    cleanup_bashrc "# ${EXT_NAME} - added by extension"
-    print_success "PATH modifications removed"
-  fi
+  # Example: Remove from PATH using helper function
+  cleanup_bashrc "# ${EXT_NAME} - added by extension"
+
+  # Example: Remove git aliases using helper function
+  # cleanup_git_aliases "ex-test" "ex-run"
 
   # Example: Remove SSH wrappers
   if [[ -f "/usr/local/bin/example-tool" ]]; then
@@ -507,23 +510,7 @@ remove() {
 # MAIN EXECUTION (for testing)
 # ============================================================================
 # This allows testing the extension directly
-# Usage: ./template.sh.example [prerequisites|install|configure|validate|status|remove]
+# Usage: ./template.extension [prerequisites|install|configure|validate|status|remove]
+# Note: Use the extension_main helper instead of manual case statement
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  # Script is being executed directly
-  command="${1:-status}"
-
-  case "$command" in
-    prerequisites|install|configure|validate|status|remove)
-      if "$command"; then
-        exit 0
-      else
-        exit 1
-      fi
-      ;;
-    *)
-      echo "Usage: $0 {prerequisites|install|configure|validate|status|remove}"
-      exit 1
-      ;;
-  esac
-fi
+extension_main "$@"

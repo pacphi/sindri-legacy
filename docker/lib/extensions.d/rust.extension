@@ -32,18 +32,10 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check for mise
-  if ! command_exists mise; then
-    print_error "mise is required but not installed"
-    print_status "Install mise first: extension-manager install mise-config"
-    return 1
-  fi
+  check_mise_prerequisite || return 1
 
   # Check disk space (Rust needs ~1-2GB)
-  local available_space
-  available_space=$(df -BM "$HOME" | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 2000 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (2GB recommended for Rust)"
-  fi
+  check_disk_space 2000
 
   print_success "All prerequisites met"
   return 0
@@ -72,57 +64,30 @@ install() {
     fi
   fi
 
-  # Determine which TOML config to use based on CI_MODE
-  local toml_source
-  if [[ "$CI_MODE" == "true" ]]; then
-    toml_source="${SCRIPT_DIR}/rust-ci.toml"
-    print_status "CI mode detected - using minimal Rust configuration"
-  else
-    toml_source="${SCRIPT_DIR}/rust.toml"
-    print_status "Using full Rust configuration with cargo tools"
-  fi
-
-  # Ensure mise config directory exists
-  mkdir -p "$HOME/.config/mise/conf.d"
-
-  # Copy TOML config to mise conf.d
-  local toml_dest="$HOME/.config/mise/conf.d/rust.toml"
-  if [[ -f "$toml_source" ]]; then
-    cp "$toml_source" "$toml_dest"
-    print_success "Copied Rust configuration to $toml_dest"
-  else
-    print_error "TOML configuration not found: $toml_source"
-    return 1
-  fi
-
-  # Install Rust via mise
-  print_status "Installing Rust via mise (this may take 5-10 minutes)..."
-  if [[ "$CI_MODE" == "true" ]]; then
+  # Install Rust via mise using shared helper
+  if is_ci_mode; then
     print_status "Installing Rust stable only..."
   else
     print_status "Installing Rust stable + cargo tools (ripgrep, fd-find, exa, bat, tokei)..."
     print_warning "Cargo tools may take 10-15 minutes to compile from source"
   fi
 
-  if mise install; then
-    # Activate mise for current session
-    eval "$(mise activate bash)"
+  install_mise_config "rust" || return 1
 
-    # Verify installation
-    if command_exists rustc && command_exists cargo; then
-      print_success "Rust installed: $(rustc --version)"
-      print_success "Cargo installed: $(cargo --version)"
-    else
-      print_error "Rust installation failed - commands not found after mise install"
-      return 1
-    fi
+  # Activate mise for current session
+  activate_mise_environment
+
+  # Verify installation
+  if command_exists rustc && command_exists cargo; then
+    print_success "Rust installed: $(rustc --version)"
+    print_success "Cargo installed: $(cargo --version)"
   else
-    print_error "Failed to install Rust via mise"
+    print_error "Rust installation failed - commands not found after mise install"
     return 1
   fi
 
   # Show installed cargo tools in non-CI mode
-  if [[ "$CI_MODE" != "true" ]]; then
+  if ! is_ci_mode; then
     print_status "Checking cargo tools..."
     local tools=(rg fd exa bat tokei)
     local installed_count=0
@@ -156,10 +121,8 @@ configure() {
   # No need to modify .bashrc as mise is already activated
 
   # Activate mise for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)"
-    print_success "mise activated for current session"
-  fi
+  activate_mise_environment
+  print_success "mise activated for current session"
 
   # Verify Rust is available
   if command_exists rustc && command_exists cargo; then
@@ -175,12 +138,10 @@ configure() {
   print_success "Project template created"
 
   # Add Git aliases
-  if command_exists git; then
-    git config --global alias.cargotest '!cargo test'
-    git config --global alias.cargofmt '!cargo fmt'
-    git config --global alias.cargoclippy '!cargo clippy -- -D warnings'
-    print_debug "Git aliases configured"
-  fi
+  setup_git_aliases \
+    "cargotest:!cargo test" \
+    "cargofmt:!cargo fmt" \
+    "cargoclippy:!cargo clippy -- -D warnings"
 
   print_success "Rust configured"
   return 0
@@ -196,9 +157,7 @@ validate() {
   local all_valid=true
 
   # Activate mise for validation
-  if command_exists mise; then
-    eval "$(mise activate bash)"
-  fi
+  activate_mise_environment
 
   # Check if Rust is managed by mise
   if ! mise ls rust &>/dev/null; then
@@ -232,7 +191,7 @@ validate() {
   fi
 
   # Check cargo tools (only in non-CI mode)
-  if [[ "$CI_MODE" != "true" ]]; then
+  if ! is_ci_mode; then
     local tools=(rg fd exa bat tokei)
     local tools_found=0
     for tool in "${tools[@]}"; do
@@ -289,11 +248,8 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_extension_header
+  echo "Version Manager: mise"
   echo ""
 
   # Check installation status
@@ -309,15 +265,13 @@ status() {
   print_status "Installed tools:"
 
   # Activate mise to ensure we can query it
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
+  activate_mise_environment
 
-    # Show Rust version from mise
-    local rust_info
-    rust_info=$(mise ls rust 2>/dev/null | grep -v "^Tool" | head -n1)
-    if [[ -n "$rust_info" ]]; then
-      echo "  ✓ Rust (mise): $rust_info"
-    fi
+  # Show Rust version from mise
+  local rust_info
+  rust_info=$(mise ls rust 2>/dev/null | grep -v "^Tool" | head -n1)
+  if [[ -n "$rust_info" ]]; then
+    echo "  ✓ Rust (mise): $rust_info"
   fi
 
   # Show actual command versions
@@ -325,7 +279,7 @@ status() {
   command_exists cargo && echo "  ✓ cargo $(cargo --version | awk '{print $2}')"
 
   # Show cargo tools (if not CI mode)
-  if [[ "$CI_MODE" != "true" ]]; then
+  if ! is_ci_mode; then
     echo ""
     print_status "Cargo tools (mise-managed):"
 
@@ -374,67 +328,22 @@ status() {
 }
 
 # ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-check_dependent_extensions() {
-  local provided_commands=("$@")
-  local dependent_extensions=()
-  local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && return 0
-
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
-    local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [[ "$ext_name" == "$EXT_NAME" ]] && continue
-    local ext_file="$SCRIPT_DIR/${ext_name}.sh"
-    if [[ ! -f "$ext_file" ]]; then
-      local matches=("$SCRIPT_DIR/"*"-${ext_name}.sh")
-      ext_file="${matches[0]}"
-    fi
-    [[ ! -f "$ext_file" ]] && continue
-    for cmd in "${provided_commands[@]}"; do
-      if grep -q "$cmd" "$ext_file" 2>/dev/null; then
-        dependent_extensions+=("$ext_name")
-        break
-      fi
-    done
-  done < "$manifest_file"
-
-  printf '%s\n' "${dependent_extensions[@]}"
-}
-
-# ============================================================================
 # REMOVE
 # ============================================================================
 
 remove() {
   print_warning "Uninstalling Rust..."
 
-  local dependent_exts=()
-  mapfile -t dependent_exts < <(check_dependent_extensions "rustc" "cargo")
-  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
-    print_warning "The following extensions depend on Rust and may stop working:"
-    for ext in "${dependent_exts[@]}"; do
-      echo "  - $ext"
-    done
-    echo ""
-  fi
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "rustc" "cargo"
 
   if ! prompt_confirmation "Continue with Rust removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Remove mise configuration
-  local rust_toml="$HOME/.config/mise/conf.d/rust.toml"
-  if [[ -f "$rust_toml" ]]; then
-    print_status "Removing mise configuration..."
-    rm -f "$rust_toml"
-    print_success "Removed $rust_toml"
-  fi
+  # Remove mise configuration using shared helper
+  remove_mise_config "rust"
 
   # Uninstall Rust via mise
   if command_exists mise; then
@@ -446,7 +355,7 @@ remove() {
     fi
 
     # Uninstall cargo tools if present
-    if [[ "$CI_MODE" != "true" ]]; then
+    if ! is_ci_mode; then
       print_status "Uninstalling cargo tools..."
       local tools=(ripgrep fd-find exa bat tokei)
       for tool in "${tools[@]}"; do
@@ -458,9 +367,7 @@ remove() {
   # Cleanup
   rm -f "/workspace/scripts/create-rust-project.sh"
   cleanup_bashrc "# ${EXT_NAME}"
-  command_exists git && git config --global --unset-all alias.cargotest 2>/dev/null
-  command_exists git && git config --global --unset-all alias.cargofmt 2>/dev/null
-  command_exists git && git config --global --unset-all alias.cargoclippy 2>/dev/null
+  cleanup_git_aliases "cargotest" "cargofmt" "cargoclippy"
 
   print_success "Rust uninstalled"
   print_warning "Restart shell: source ~/.bashrc"

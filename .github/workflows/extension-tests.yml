@@ -540,54 +540,16 @@ jobs:
           depends_on="${{ matrix.extension.depends_on || '' }}"
 
           echo "Adding $extension_name to manifest..."
+
+          # Copy install-extension.sh script to VM
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/extension-tests/install-extension.sh /tmp/install-extension.sh
+            quit
+          SFTP_EOF
+
+          # Execute the script with extension name and dependencies
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest_file=\"extensions.d/active-extensions.conf\"
-
-            # Create manifest from CI template (already has protected extensions)
-            if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
-            fi
-
-            # Protected extensions already in CI conf - no need to add
-            protected=\"workspace-structure mise-config ssh-environment\"
-
-            # Add dependencies first if specified (supports comma-separated list)
-            if [ -n \"$depends_on\" ]; then
-              echo \"Adding dependencies to manifest: $depends_on\"
-              IFS=\",\" read -ra DEPS <<< \"$depends_on\"
-              for dep in \"\${DEPS[@]}\"; do
-                dep=\$(echo \"\$dep\" | xargs)  # Trim whitespace
-
-                # Skip if protected (already in CI conf)
-                if echo \"\$protected\" | grep -q \"\$dep\"; then
-                  echo \"⏭️  Skipping \$dep (protected, already in CI conf)\"
-                  continue
-                fi
-
-                if ! grep -q \"^\$dep\$\" \"\$manifest_file\" 2>/dev/null; then
-                  echo \"\$dep\" >> \"\$manifest_file\"
-                  echo \"✅ Dependency \$dep added to manifest\"
-                else
-                  echo \"✅ Dependency \$dep already in manifest\"
-                fi
-              done
-            fi
-
-            # Add the main extension to manifest (skip if protected)
-            if echo \"\$protected\" | grep -q \"$extension_name\"; then
-              echo \"⏭️  Skipping $extension_name (protected, already in CI conf)\"
-            elif ! grep -q \"^$extension_name\$\" \"\$manifest_file\" 2>/dev/null; then
-              echo \"$extension_name\" >> \"\$manifest_file\"
-              echo \"✅ Extension added to manifest\"
-            else
-              echo \"✅ Extension already in manifest\"
-            fi
-
-            # Show active extensions in manifest
-            echo \"\"
-            echo \"=== Active Extensions in Manifest ===\"
-            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+            bash /tmp/install-extension.sh $extension_name $depends_on
           '"
 
       - name: Install extension using install-all

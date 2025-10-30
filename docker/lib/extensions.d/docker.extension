@@ -53,11 +53,7 @@ prerequisites() {
   fi
 
   # Check disk space (Docker needs ~2GB)
-  local available_space
-  available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 2500 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (2.5GB recommended for Docker)"
-  fi
+  check_disk_space 2500
 
   print_success "All prerequisites met"
   return 0
@@ -270,12 +266,7 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
+  print_extension_header
 
   # Check installation status
   if ! command_exists docker; then
@@ -321,39 +312,6 @@ status() {
   fi
 
   return 0
-}
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-check_dependent_extensions() {
-  local provided_commands=("$@")
-  local dependent_extensions=()
-  local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && return 0
-
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
-    local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [[ "$ext_name" == "$EXT_NAME" ]] && continue
-    local ext_file="$SCRIPT_DIR/${ext_name}.sh"
-    if [[ ! -f "$ext_file" ]]; then
-      local matches=("$SCRIPT_DIR/"*"-${ext_name}.sh")
-      ext_file="${matches[0]}"
-    fi
-    [[ ! -f "$ext_file" ]] && continue
-    for cmd in "${provided_commands[@]}"; do
-      if grep -q "$cmd" "$ext_file" 2>/dev/null; then
-        dependent_extensions+=("$ext_name")
-        break
-      fi
-    done
-  done < "$manifest_file"
-
-  printf '%s\n' "${dependent_extensions[@]}"
 }
 
 # ============================================================================

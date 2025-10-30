@@ -60,44 +60,11 @@ prerequisites() {
 install() {
   print_status "Installing Node.js development tools via mise..."
 
-  # Ensure mise is activated for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
-
-  # Create mise config directory if it doesn't exist
-  local mise_conf_dir="$HOME/.config/mise/conf.d"
-  if [[ ! -d "$mise_conf_dir" ]]; then
-    mkdir -p "$mise_conf_dir"
-    print_success "Created mise config directory: $mise_conf_dir"
-  fi
-
-  # Copy nodejs-devtools.toml to mise config directory
-  local toml_source="${SCRIPT_DIR}/nodejs-devtools.toml"
-  local toml_dest="${mise_conf_dir}/nodejs-devtools.toml"
-
-  if [[ ! -f "$toml_source" ]]; then
-    print_error "nodejs-devtools.toml not found at: $toml_source"
-    return 1
-  fi
-
-  if cp "$toml_source" "$toml_dest"; then
-    print_success "Copied nodejs-devtools.toml to mise config"
-  else
-    print_error "Failed to copy nodejs-devtools.toml"
-    return 1
-  fi
-
-  # Install all tools defined in the TOML file
-  print_status "Installing npm development tools via mise..."
-  if mise install; then
-    print_success "All npm development tools installed successfully"
-  else
-    print_error "Failed to install npm development tools via mise"
-    return 1
-  fi
+  # Install via mise using shared helper
+  install_mise_config "nodejs-devtools" || return 1
 
   # Verify mise reshim to ensure binaries are available
+  activate_mise_environment
   if mise reshim; then
     print_debug "mise reshim completed"
   fi
@@ -159,9 +126,7 @@ validate() {
   print_status "Validating Node.js development tools..."
 
   # Ensure mise is activated for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
+  activate_mise_environment
 
   local all_valid=true
 
@@ -236,18 +201,12 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "Tool Manager: mise (npm backend)"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_extension_header
+  echo "Version Manager: mise (npm backend)"
   echo ""
 
   # Ensure mise is activated for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
+  activate_mise_environment
 
   # Check installation status
   if ! command_exists tsc; then
@@ -329,22 +288,10 @@ remove() {
   print_warning "Uninstalling Node.js development tools..."
 
   # Ensure mise is activated for current session
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
+  activate_mise_environment
 
-  # Remove mise configuration file
-  local toml_dest="$HOME/.config/mise/conf.d/nodejs-devtools.toml"
-  if [[ -f "$toml_dest" ]]; then
-    print_status "Removing mise configuration..."
-    if rm -f "$toml_dest"; then
-      print_success "Removed nodejs-devtools.toml from mise config"
-    else
-      print_warning "Failed to remove nodejs-devtools.toml"
-    fi
-  else
-    print_debug "nodejs-devtools.toml not found in mise config"
-  fi
+  # Remove mise configuration using shared helper
+  remove_mise_config "nodejs-devtools"
 
   # Uninstall npm packages via mise
   if command_exists mise; then

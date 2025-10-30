@@ -702,6 +702,213 @@ monitoring
 
 ## Extension Development Guidelines
 
+### Shared Helper Functions
+
+The `extensions-common.sh` library provides reusable functions to eliminate code duplication across extensions. Always use these helpers instead of reimplementing common patterns.
+
+#### Environment Helpers
+
+```bash
+# Check if running in CI mode
+if is_ci_mode; then
+  print_status "Using minimal CI configuration"
+fi
+
+# Activate mise environment in current shell
+activate_mise_environment
+```
+
+#### Prerequisite Checks
+
+```bash
+# Check if mise is installed (required for mise-powered extensions)
+check_mise_prerequisite || return 1
+
+# Check available disk space (default 600MB, can override)
+check_disk_space 1000  # Require 1GB
+```
+
+#### Status Helpers
+
+```bash
+# Print standard extension header (replaces manual echo statements)
+print_extension_header
+# Outputs:
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Extension: nodejs v3.0.0
+# Description: Node.js LTS via mise
+# Category: language
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+#### Validation Helpers
+
+```bash
+# Validate multiple commands with version checks
+declare -A checks=(
+  [node]="--version"
+  [npm]="-v"
+  [npx]="--version"
+)
+validate_commands checks
+# Outputs success/error for each command with version info
+```
+
+#### mise Helpers
+
+```bash
+# Install mise configuration (handles CI vs dev TOML selection)
+install_mise_config "nodejs" || return 1
+# - Selects nodejs-ci.toml if CI_MODE=true, otherwise nodejs.toml
+# - Copies to ~/.config/mise/conf.d/nodejs.toml
+# - Runs mise install
+
+# Remove mise configuration during uninstall
+remove_mise_config "nodejs"
+# - Removes ~/.config/mise/conf.d/nodejs.toml
+# - Shows reminder about mise prune
+```
+
+#### Git Helpers
+
+```bash
+# Setup git aliases for extension commands
+setup_git_aliases \
+  "py-test:!pytest" \
+  "py-lint:!ruff check" \
+  "py-format:!black ."
+
+# Remove git aliases during uninstall
+cleanup_git_aliases "py-test" "py-lint" "py-format"
+```
+
+#### Cleanup Helpers
+
+```bash
+# Remove extension entries from .bashrc
+cleanup_bashrc "# nodejs - added by extension"
+
+# Standardized confirmation prompt
+if prompt_confirmation "Remove configuration directory?"; then
+  rm -rf "$config_dir"
+fi
+
+# Check and display dependent extensions
+show_dependent_extensions_warning "node" "npm"
+# Outputs:
+# [WARNING] The following active extensions depend on this extension and may stop working:
+#   - nodejs-devtools
+#   - claude-config
+```
+
+#### Extension Initialization
+
+```bash
+# Replace manual common.sh sourcing with single call
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+
+# Initialize extension (loads all common utilities)
+extension_init
+```
+
+#### Main Execution Wrapper
+
+```bash
+# Replace manual case statement with helper
+extension_main "$@"
+
+# Equivalent to:
+# if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+#   command="${1:-status}"
+#   case "$command" in
+#     prerequisites|install|configure|validate|status|remove)
+#       if "$command"; then exit 0; else exit 1; fi
+#       ;;
+#     *)
+#       echo "Usage: $0 {prerequisites|install|configure|validate|status|remove}"
+#       exit 1
+#       ;;
+#   esac
+# fi
+```
+
+#### Benefits of Using Helper Functions
+
+1. **Consistency**: All extensions behave the same way
+2. **Maintainability**: Bug fixes in one place benefit all extensions
+3. **Readability**: Less boilerplate, clearer intent
+4. **Testing**: Shared functions have centralized tests
+5. **Features**: Get new capabilities automatically (e.g., dependency checking)
+
+#### Example: Minimal Extension Using Helpers
+
+```bash
+#!/bin/bash
+# myextension.extension - My custom extension
+# Extension API v1.0
+
+EXT_NAME="myextension"
+EXT_VERSION="1.0.0"
+EXT_DESCRIPTION="My custom development tool"
+EXT_CATEGORY="utility"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+extension_init
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+  check_mise_prerequisite || return 1
+  check_disk_space 500
+  print_success "All prerequisites met"
+  return 0
+}
+
+install() {
+  print_status "Installing ${EXT_NAME}..."
+  install_mise_config "${EXT_NAME}" || return 1
+  return 0
+}
+
+configure() {
+  print_status "Configuring ${EXT_NAME}..."
+  setup_git_aliases "my-cmd:!mytool command"
+  print_success "Configuration complete"
+  return 0
+}
+
+validate() {
+  print_status "Validating ${EXT_NAME}..."
+  activate_mise_environment
+  declare -A checks=([mytool]="--version")
+  validate_commands checks
+}
+
+status() {
+  print_extension_header
+  if command_exists mytool; then
+    print_success "Installed: $(mytool --version)"
+    return 0
+  else
+    print_warning "Not installed"
+    return 1
+  fi
+}
+
+remove() {
+  print_status "Removing ${EXT_NAME}..."
+  show_dependent_extensions_warning "mytool"
+  remove_mise_config "${EXT_NAME}"
+  cleanup_git_aliases "my-cmd"
+  cleanup_bashrc "# ${EXT_NAME} - added by extension"
+  print_success "Removed successfully"
+  return 0
+}
+
+extension_main "$@"
+```
+
 ### File Naming Conventions
 
 | File Type | Pattern | Example |

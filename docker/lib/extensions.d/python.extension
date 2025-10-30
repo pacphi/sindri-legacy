@@ -29,18 +29,10 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check for mise
-  if ! command_exists mise; then
-    print_error "mise is required but not installed"
-    print_status "Install mise-config extension first: extension-manager install mise-config"
-    return 1
-  fi
+  check_mise_prerequisite || return 1
 
   # Check disk space (Python + pipx tools need ~1GB)
-  local available_space
-  available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 1200 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (1200MB recommended)"
-  fi
+  check_disk_space 1200
 
   print_success "All prerequisites met"
   return 0
@@ -53,53 +45,11 @@ prerequisites() {
 install() {
   print_status "Installing Python development environment via mise..."
 
-  # Ensure mise config directory exists
-  local mise_config_dir="$HOME/.config/mise/conf.d"
-  if [[ ! -d "$mise_config_dir" ]]; then
-    mkdir -p "$mise_config_dir"
-    print_debug "Created mise config directory: $mise_config_dir"
-  fi
+  # Install via mise using shared helper
+  install_mise_config "python" || return 1
 
-  # Determine which TOML file to use based on CI_MODE
-  local source_toml
-  local ci_mode="${CI_MODE:-false}"
-
-  if [[ "$ci_mode" == "true" ]]; then
-    source_toml="$SCRIPT_DIR/python-ci.toml"
-    print_status "CI mode detected - using minimal Python configuration"
-  else
-    source_toml="$SCRIPT_DIR/python.toml"
-    print_status "Using full Python development configuration"
-  fi
-
-  # Verify source TOML exists
-  if [[ ! -f "$source_toml" ]]; then
-    print_error "Python configuration not found: $source_toml"
-    return 1
-  fi
-
-  # Copy TOML to mise config directory
-  local dest_toml="$mise_config_dir/python.toml"
-  if cp "$source_toml" "$dest_toml"; then
-    print_success "Copied Python configuration to $dest_toml"
-  else
-    print_error "Failed to copy Python configuration"
-    return 1
-  fi
-
-  # Activate mise for current session (needed for mise install to work)
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
-
-  # Install Python and pipx tools via mise
-  print_status "Installing Python 3.13 and pipx tools (this may take several minutes)..."
-  if mise install 2>&1 | grep -v "^\s*$"; then
-    print_success "Python and tools installed via mise"
-  else
-    print_error "Failed to install Python via mise"
-    return 1
-  fi
+  # Activate mise for current session
+  activate_mise_environment
 
   # Verify core tools are available
   if ! command_exists python3; then
@@ -139,12 +89,10 @@ configure() {
   print_success "Project template created"
 
   # Add git aliases
-  if command_exists git; then
-    git config --global alias.pytest '!python -m pytest' 2>/dev/null || true
-    git config --global alias.black '!black .' 2>/dev/null || true
-    git config --global alias.flake '!flake8 .' 2>/dev/null || true
-    print_debug "Git aliases configured"
-  fi
+  setup_git_aliases \
+    "pytest:!python -m pytest" \
+    "black:!black ." \
+    "flake:!flake8 ."
 
   # Create SSH wrappers
   if command_exists python3; then
@@ -170,9 +118,7 @@ validate() {
   local all_valid=true
 
   # Activate mise for validation
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
+  activate_mise_environment
 
   # Check mise shows Python
   if ! mise ls python 2>/dev/null | grep -q "python"; then
@@ -245,17 +191,12 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION (mise-powered)"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_extension_header
+  echo "Version Manager: mise"
   echo ""
 
   # Activate mise for status
-  if command_exists mise; then
-    eval "$(mise activate bash)" 2>/dev/null || true
-  fi
+  activate_mise_environment
 
   # Check installation status
   if ! command_exists python3; then
@@ -330,27 +271,14 @@ remove() {
     return 1
   fi
 
-  # Remove mise configuration
-  local mise_config="$HOME/.config/mise/conf.d/python.toml"
-  if [[ -f "$mise_config" ]]; then
-    print_status "Removing mise Python configuration..."
-    rm -f "$mise_config"
-    print_success "Removed $mise_config"
-  fi
-
-  # Note about mise prune
-  print_status "Note: Python and pipx tools are still installed by mise"
-  print_status "Run 'mise prune' to remove unused tools, or 'mise uninstall python@3.13' to remove Python"
+  # Remove mise configuration using shared helper
+  remove_mise_config "python"
 
   # Cleanup project template
   rm -f "/workspace/scripts/create-python-project.sh"
 
   # Remove git aliases
-  if command_exists git; then
-    git config --global --unset-all alias.pytest 2>/dev/null || true
-    git config --global --unset-all alias.black 2>/dev/null || true
-    git config --global --unset-all alias.flake 2>/dev/null || true
-  fi
+  cleanup_git_aliases "pytest" "black" "flake"
 
   print_success "Python extension configuration removed"
   print_warning "Restart shell: source ~/.bashrc"

@@ -57,11 +57,7 @@ prerequisites() {
   fi
 
   # Check disk space (cloud CLIs need ~2GB)
-  local available_space
-  available_space=$(df -BM / | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 2500 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (2.5GB recommended for cloud CLIs)"
-  fi
+  check_disk_space 2500
 
   print_success "All prerequisites met"
   return 0
@@ -116,7 +112,7 @@ install() {
   fi
 
   # Check if running in CI mode
-  if [[ "$CI_MODE" == "true" ]]; then
+  if is_ci_mode; then
     print_status "CI mode detected - skipping optional cloud CLIs (Oracle, Alibaba, DigitalOcean, IBM)"
     return 0
   fi
@@ -288,12 +284,7 @@ validate() {
 # ============================================================================
 
 status() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Extension: $EXT_NAME v$EXT_VERSION"
-  echo "Description: $EXT_DESCRIPTION"
-  echo "Category: $EXT_CATEGORY"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
+  print_extension_header
 
   # Check installation status
   local core_clis=(aws az gcloud)
@@ -364,34 +355,7 @@ status() {
 # HELPER FUNCTIONS
 # ============================================================================
 
-check_dependent_extensions() {
-  local provided_commands=("$@")
-  local dependent_extensions=()
-  local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-  [[ ! -f "$manifest_file" ]] && return 0
-
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${line// }" ]] && continue
-    local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [[ "$ext_name" == "$EXT_NAME" ]] && continue
-    local ext_file="$SCRIPT_DIR/${ext_name}.sh"
-    if [[ ! -f "$ext_file" ]]; then
-      local matches=("$SCRIPT_DIR/"*"-${ext_name}.sh")
-      ext_file="${matches[0]}"
-    fi
-    [[ ! -f "$ext_file" ]] && continue
-    for cmd in "${provided_commands[@]}"; do
-      if grep -q "$cmd" "$ext_file" 2>/dev/null; then
-        dependent_extensions+=("$ext_name")
-        break
-      fi
-    done
-  done < "$manifest_file"
-
-  printf '%s\n' "${dependent_extensions[@]}"
-}
+# check_dependent_extensions is now provided by extensions-common.sh
 
 # ============================================================================
 # REMOVE
@@ -400,15 +364,7 @@ check_dependent_extensions() {
 remove() {
   print_warning "Uninstalling cloud provider CLIs..."
 
-  local dependent_exts=()
-  mapfile -t dependent_exts < <(check_dependent_extensions "aws" "az" "gcloud" "oci" "doctl" "ibmcloud")
-  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
-    print_warning "The following extensions depend on cloud CLIs and may stop working:"
-    for ext in "${dependent_exts[@]}"; do
-      echo "  - $ext"
-    done
-    echo ""
-  fi
+  show_dependent_extensions_warning "aws" "az" "gcloud" "oci" "doctl" "ibmcloud"
 
   if ! prompt_confirmation "Continue with cloud CLIs removal?"; then
     print_status "Removal cancelled"
