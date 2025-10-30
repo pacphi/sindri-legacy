@@ -118,8 +118,8 @@ jobs:
         run: |
           echo "Running shellcheck on all shell scripts..."
 
-          # Find all shell scripts (.sh and .sh.example files)
-          scripts=$(find . -name "*.sh" -o -name "*.sh.example" -type f | grep -v node_modules | grep -v .git)
+          # Find all shell scripts (.sh and .extension files)
+          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v .git)
 
           failed_scripts=()
           for script in $scripts; do

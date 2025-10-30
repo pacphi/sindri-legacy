@@ -222,7 +222,7 @@ jobs:
 
             # Check for extension examples
             if [ -d "/workspace/scripts/lib/extensions.d" ]; then
-              ext_count=$(ls -1 /workspace/scripts/lib/extensions.d/*.sh.example 2>/dev/null | wc -l)
+              ext_count=$(ls -1 /workspace/scripts/lib/extensions.d/*.extension 2>/dev/null | wc -l)
               echo "✅ Extension directory found with $ext_count extension examples"
             else
               echo "❌ Extensions directory missing"

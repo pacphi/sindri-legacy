@@ -91,10 +91,10 @@ jobs:
           cd docker/lib
 
           # Test with new non-numbered filename format
-          test_file="extensions.d/rust.sh.example"
+          test_file="extensions.d/rust.extension"
           if [[ -f "$test_file" ]]; then
             # Extract name using the same logic as extension-manager
-            name=$(basename "$test_file" .sh.example | sed 's/^[0-9]*-//')
+            name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
             echo "Extracted name from $test_file: $name"
 
             if [[ "$name" != "rust" ]]; then
@@ -105,9 +105,9 @@ jobs:
           else
             echo "⚠️  New format file not found, checking legacy format..."
             # Fallback to test legacy format if it exists
-            test_file="extensions.d/10-rust.sh.example"
+            test_file="extensions.d/10-rust.extension"
             if [[ -f "$test_file" ]]; then
-              name=$(basename "$test_file" .sh.example | sed 's/^[0-9]*-//')
+              name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
               echo "Extracted name from legacy file: $name"
               if [[ "$name" != "rust" ]]; then
                 echo "ERROR: Expected 'rust', got '$name'"
@@ -191,7 +191,7 @@ jobs:
 
           failed_scripts=()
 
-          for script in docker/lib/extensions.d/*.sh.example docker/lib/extensions.d/*.sh; do
+          for script in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*.sh; do
             # Skip if file doesn't exist (in case no .sh files)
             [[ ! -f "$script" ]] && continue
 
@@ -215,7 +215,7 @@ jobs:
 
           missing_source=()
 
-          for script in docker/lib/extensions.d/*.sh.example; do
+          for script in docker/lib/extensions.d/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             # Check if script sources common.sh
@@ -238,7 +238,7 @@ jobs:
 
           missing_shebang=()
 
-          for script in docker/lib/extensions.d/*.sh.example docker/lib/extensions.d/*.sh; do
+          for script in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*.sh; do
             [[ ! -f "$script" ]] && continue
 
             # Check for shebang on first line
@@ -259,7 +259,7 @@ jobs:
         run: |
           echo "Checking for basic error handling patterns..."
 
-          for script in docker/lib/extensions.d/*.sh.example; do
+          for script in docker/lib/extensions.d/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             script_name=$(basename "$script")
@@ -280,9 +280,9 @@ jobs:
           required_functions=("prerequisites" "install" "configure" "validate" "status" "remove")
 
           # Skip template and post-cleanup as they may have different requirements
-          skip_patterns="template.sh.example|post-cleanup.sh.example"
+          skip_patterns="template.extension|post-cleanup.extension"
 
-          for script in docker/lib/extensions.d/*.sh.example; do
+          for script in docker/lib/extensions.d/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             script_name=$(basename "$script")
