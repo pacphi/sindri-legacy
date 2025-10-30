@@ -38,9 +38,15 @@ prerequisites() {
   fi
 
   # Check for Node.js/npm (for claude-usage-cli)
+  if ! command_exists node; then
+    print_error "Node.js is required but not installed"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
   if ! command_exists npm; then
     print_error "npm is required but not installed"
-    print_status "Install the nodejs extension first: extension-manager install nodejs"
+    print_status "Install with: extension-manager install nodejs"
     return 1
   fi
 

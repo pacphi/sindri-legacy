@@ -243,10 +243,14 @@ Extensions are organized by category in the activation manifest.
 Extensions are controlled via `/workspace/scripts/extensions.d/active-extensions.conf`:
 
 ```bash
-# Core extensions (always first)
+# Protected extensions (required, cannot be removed):
 workspace-structure
-nodejs
+mise-config
 ssh-environment
+
+# Foundational languages (recommended):
+nodejs
+python
 
 # Claude AI
 claude-config

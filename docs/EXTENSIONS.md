@@ -75,32 +75,42 @@ extension-manager install <name> --verbose
 
 ## Available Extensions
 
-### Core Environment
+### Core Environment (Protected)
+
+These extensions are **protected** and cannot be removed. They are automatically installed first.
 
 | Extension | Description | Tool Manager | Version |
 |-----------|-------------|--------------|---------|
 | `workspace-structure` | Base directory structure | N/A | 1.0.0 |
-| `nodejs` | Node.js LTS and npm | mise | 3.0.0 |
+| `mise-config` | Unified tool version manager | N/A | 1.0.0 |
 | `ssh-environment` | SSH wrappers for non-interactive sessions | N/A | 1.0.0 |
+
+### Foundational Languages
+
+While not protected, these are highly recommended as many tools depend on them.
+
+| Extension | Description | Tool Manager | Version | Dependencies |
+|-----------|-------------|--------------|---------|--------------|
+| `nodejs` | Node.js LTS and npm | mise | 3.0.0 | mise-config |
+| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 2.0.0 | mise-config |
 
 ### Claude AI Tools
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
 | `claude-config` | Claude Code CLI with developer configuration | npm | 1.0.0 | nodejs |
-| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0 | nodejs |
+| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0 | nodejs, mise-config |
 
-### Language Runtimes
+### Additional Language Runtimes
 
-| Extension | Description | Tool Manager | Version | mise-Powered |
+| Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
-| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 2.0.0 | ✅ |
-| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 2.0.0 | ✅ |
-| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 2.0.0 | ✅ |
-| `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 1.0.0 | ❌ |
-| `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 1.0.0 | ❌ |
-| `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 1.0.0 | ❌ |
-| `dotnet` | .NET SDK 9.0/8.0 with ASP.NET Core | apt (Microsoft) | 1.0.0 | ❌ |
+| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 2.0.0 | mise-config |
+| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 2.0.0 | mise-config |
+| `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 1.0.0 | N/A |
+| `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 1.0.0 | N/A |
+| `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 1.0.0 | N/A |
+| `dotnet` | .NET SDK 9.0/8.0 with ASP.NET Core | apt (Microsoft) | 1.0.0 | N/A |
 
 ### Infrastructure & DevOps
 
@@ -607,12 +617,16 @@ monitoring
    - `nodejs` must come before `nodejs-devtools`
    - `nodejs` must come before `claude-config`
 
-2. **Core first**: Install foundational extensions early
+2. **Core first**: Protected extensions are automatically installed first
    ```
+   # Protected extensions (required, cannot be removed):
    workspace-structure  # Creates directory structure
    mise-config         # Enables mise for other extensions
-   nodejs              # Core language runtime
-   ssh-environment     # Essential for remote access
+   ssh-environment     # Essential for CI/CD and remote access
+
+   # Foundational languages (recommended):
+   nodejs              # Required by many tools
+   python              # Required by monitoring tools
    ```
 
 3. **Group by category**: Organize related extensions together
@@ -669,7 +683,7 @@ Use standard categories for consistency:
 | `devtools` | Development utilities | nodejs-devtools, monitoring |
 | `infrastructure` | Infrastructure tools | docker, infra-tools, cloud-tools |
 | `ai` | AI coding assistants | claude-config, ai-tools, agent-manager |
-| `core` | Core system components | workspace-structure, ssh-environment |
+| `core` | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
 | `utility` | General utilities | tmux-workspace, playwright |
 
 ### Error Handling

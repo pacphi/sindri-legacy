@@ -28,6 +28,13 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
+  # Hard requirement: Node.js
+  if ! command_exists node; then
+    print_error "Node.js is required but not installed"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
   # Hard requirement: npm
   if ! command_exists npm; then
     print_error "npm is required but not found"

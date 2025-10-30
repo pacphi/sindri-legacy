@@ -31,14 +31,14 @@ prerequisites() {
 
   # Hard requirement: nodejs extension must be installed (provides Node.js/npm)
   if ! command_exists node; then
-    print_error "Node.js is required but not found"
-    print_status "Install the nodejs extension first"
+    print_error "Node.js is required but not installed"
+    print_status "Install with: extension-manager install nodejs"
     return 1
   fi
 
   if ! command_exists npm; then
     print_error "npm is required but not found"
-    print_status "Install the nodejs extension first"
+    print_status "Install with: extension-manager install nodejs"
     return 1
   fi
 

@@ -108,10 +108,14 @@ extension-manager reorder <name> <position>
 
 ### Available Extensions
 
-**Core Environment:**
-- `workspace-structure` - Base directory structure
-- `nodejs` - Node.js LTS via mise (replaces NVM) with npm (mise-powered)
-- `ssh-environment` - SSH wrappers for non-interactive sessions
+**Core Extensions (Protected - Cannot be Removed):**
+- `workspace-structure` - Base directory structure (must be first)
+- `mise-config` - Unified tool version manager for all mise-powered extensions
+- `ssh-environment` - SSH configuration for non-interactive sessions and CI/CD
+
+**Foundational Languages:**
+- `nodejs` - Node.js LTS via mise with npm (requires mise-config, recommended - many tools depend on it)
+- `python` - Python 3.13 via mise with pip, venv, uv, pipx (requires mise-config)
 
 **Claude AI:**
 - `claude-config` - Claude Code CLI with developer configuration (requires nodejs)
@@ -119,13 +123,13 @@ extension-manager reorder <name> <position>
 
 **Development Tools:**
 - `github-cli` - GitHub CLI authentication and workflow configuration
-- `python` - Python 3.13 with pip, venv, uv, pipx tools (mise-powered)
-- `rust` - Rust toolchain with cargo, clippy, rustfmt (mise-powered)
-- `golang` - Go 1.24 with gopls, delve, golangci-lint (mise-powered)
+- `rust` - Rust toolchain with cargo, clippy, rustfmt (requires mise-config)
+- `golang` - Go 1.24 with gopls, delve, golangci-lint (requires mise-config)
 - `ruby` - Ruby 3.4/3.3 with rbenv, Rails, Bundler
 - `php` - PHP 8.3 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - `dotnet` - .NET SDK 9.0/8.0 with ASP.NET Core
+- `tmux-workspace` - Tmux session management with helper scripts
 
 **Infrastructure:**
 - `docker` - Docker Engine with compose, dive, ctop
@@ -146,19 +150,25 @@ Extensions are executed in the order listed in `/workspace/scripts/extensions.d/
 
 Example manifest:
 ```
-# Core extensions (always first)
+# Protected extensions (required for system functionality):
 workspace-structure
-nodejs
+mise-config
 ssh-environment
 
-# Language runtimes
+# Foundational languages
+nodejs
 python
+
+# Additional language runtimes
 golang
 rust
 
 # Infrastructure tools
 docker
 infra-tools
+
+# Cleanup extensions (run last):
+post-cleanup
 ```
 
 ### Extension API
@@ -224,9 +234,11 @@ extension-manager --interactive
 
 Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes. mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, and their associated tools, replacing multiple version managers (NVM, pyenv, rustup, etc.) with one tool.
 
+**Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed. It must be installed before any mise-powered extensions.
+
 ### mise-Managed Extensions
 
-The following extensions use mise for tool installation and version management:
+The following extensions use mise for tool installation and version management (all require `mise-config`):
 
 - **nodejs**: Node.js LTS via mise (replaces NVM)
   - Manages Node.js versions

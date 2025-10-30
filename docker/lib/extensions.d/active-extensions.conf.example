@@ -18,23 +18,33 @@
 # ============================================================================
 
 # ============================================================================
-# CORE INFRASTRUCTURE (recommended - always install first)
+# CORE INFRASTRUCTURE (protected - cannot be removed)
 # ============================================================================
+# These extensions are automatically ensured by extension-manager and
+# installed first. They provide foundational system functionality.
 
-# Creates /workspace directory structure (src, tests, docs, scripts, etc.)
+# Creates /workspace directory structure (PROTECTED)
 workspace-structure
 
-# Configures SSH daemon for non-interactive sessions (required for CI/CD)
+# Unified tool version manager - enables mise-powered extensions (PROTECTED)
+# Required by: nodejs, python, rust, golang, nodejs-devtools
+mise-config
+
+# Configures SSH daemon for non-interactive sessions (PROTECTED)
+# Required for CI/CD and remote command execution
 ssh-environment
 
 # ============================================================================
 # FOUNDATIONAL LANGUAGES (install at least one)
 # ============================================================================
+# While not protected, nodejs is highly recommended as many tools depend on it
 
-# Node.js LTS via NVM and npm (required by many tools)
+# Node.js LTS via mise and npm (required by claude-config, nodejs-devtools, playwright, monitoring)
+# Depends on: mise-config
 nodejs
 
-# Python 3 and pip (required by monitoring and many tools)
+# Python 3 via mise and pip (required by monitoring and many tools)
+# Depends on: mise-config
 python
 
 # ============================================================================
@@ -74,10 +84,10 @@ context-loader
 # ADDITIONAL LANGUAGES (uncomment as needed)
 # ============================================================================
 
-# Rust toolchain with cargo
+# Rust toolchain with cargo via mise (depends on mise-config)
 # rust
 
-# Go programming language
+# Go programming language via mise (depends on mise-config)
 # golang
 
 # Docker and Docker Compose
@@ -120,6 +130,9 @@ post-cleanup
 # NOTES
 # ============================================================================
 # - Order matters: extensions execute top to bottom
+# - Protected extensions (workspace-structure, mise-config, ssh-environment)
+#   are automatically added to manifest and cannot be removed
+# - Cleanup extensions (post-cleanup) automatically move to the end
 # - Dependencies are checked in prerequisites()
 # - Use extension-manager commands for management:
 #     extension-manager list              # Show all extensions

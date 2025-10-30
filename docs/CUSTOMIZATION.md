@@ -50,12 +50,20 @@ The Extension API v1.0 provides:
 
 Extensions are organized by category:
 
-#### Core Infrastructure
+#### Core Infrastructure (Protected)
+
+These extensions are **protected** and cannot be removed:
 
 - **workspace-structure** - Creates /workspace directory structure (src, tests, docs, scripts, etc.)
+- **mise-config** - Unified tool version manager for mise-powered extensions
 - **ssh-environment** - Configures SSH daemon for non-interactive sessions (required for CI/CD)
-- **nodejs** - Node.js LTS via NVM and npm (required by many tools)
-- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools)
+
+#### Foundational Languages
+
+While not protected, these are highly recommended:
+
+- **nodejs** - Node.js LTS via mise and npm (required by many tools, depends on mise-config)
+- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, depends on mise-config)
 
 #### Claude AI
 
@@ -165,7 +173,7 @@ extension-manager reorder python 5
 > After activating extensions, run `extension-manager install-all` to install them. Extensions execute in the order listed in `active-extensions.conf`.
 
 > [!NOTE]
-> The `workspace-structure` extension is typically installed first as it creates the base directory structure. The `post-cleanup` extension should be installed last for optimal cleanup.
+> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and cannot be removed. The `post-cleanup` extension should be installed last for optimal cleanup.
 
 ### Activation Manifest
 
@@ -174,9 +182,9 @@ Extensions are executed in the order listed in `/workspace/scripts/extensions.d/
 **Example manifest:**
 
 ```conf
-# Core extensions (always first)
+# Protected extensions (required, cannot be removed):
 workspace-structure
-nodejs
+mise-config
 ssh-environment
 
 # Claude AI tools
