@@ -123,6 +123,7 @@ configure() {
     local profile_d_mise="/etc/profile.d/01-mise-activation.sh"
     if [[ ! -f "$profile_d_mise" ]]; then
         print_status "Adding mise activation to profile.d for SSH sessions..."
+        # shellcheck disable=SC2002  # cat needed here: source readable by user, target needs sudo
         cat "$(dirname "${BASH_SOURCE[0]}")/mise-config.profile-d.template" | sudo tee "$profile_d_mise" > /dev/null
         sudo chmod +x "$profile_d_mise"
         print_success "mise activation added to $profile_d_mise"
