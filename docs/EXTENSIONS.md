@@ -139,22 +139,22 @@ While not protected, these are highly recommended as many tools depend on them.
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
-| `nodejs` | Node.js LTS and npm | mise | 3.0.0 | mise-config |
-| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 2.0.0 | mise-config |
+| `nodejs` | Node.js LTS and npm | mise | 1.0.0 | mise-config |
+| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 1.0.0 | mise-config |
 
 ### Claude AI Tools
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
 | `claude-config` | Claude Code CLI with developer configuration | npm | 1.0.0 | nodejs |
-| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0 | nodejs, mise-config |
+| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 1.0.0 | nodejs, mise-config |
 
 ### Additional Language Runtimes
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
-| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 2.0.0 | mise-config |
-| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 2.0.0 | mise-config |
+| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 1.0.0 | mise-config |
+| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 1.0.0 | mise-config |
 | `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 1.0.0 | N/A |
 | `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 1.0.0 | N/A |
 | `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 1.0.0 | N/A |
@@ -226,7 +226,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="myextension"
-EXT_VERSION="2.0.0"
+EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="My tool via mise"
 EXT_CATEGORY="language"
 
