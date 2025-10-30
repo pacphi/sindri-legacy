@@ -675,30 +675,31 @@ jobs:
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          echo "Adding core extensions to manifest..."
+          echo "Setting up manifest with protected core extensions..."
           flyctl ssh console --app $app_name --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest if it doesn'\''t exist
+            # Create manifest from CI template (already has protected extensions)
             if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.conf.example \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Add protected core extensions to manifest
+            echo \"\"
+            echo \"=== Protected Extensions in Manifest (from CI config) ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+
+            # Verify protected extensions are present
+            echo \"\"
+            echo \"Verifying protected extensions...\"
             for ext in workspace-structure mise-config ssh-environment; do
-              echo \"Adding \$ext to manifest...\"
-              if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
-                echo \"\$ext\" >> \"\$manifest_file\"
-                echo \"✅ \$ext added to manifest\"
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present in manifest\"
               else
-                echo \"✅ \$ext already in manifest\"
+                echo \"❌ \$ext missing from CI config - this should not happen\"
+                exit 1
               fi
             done
-
-            echo \"\"
-            echo \"=== Extensions in Manifest ===\"
-            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
           '"
 
       - name: Install all extensions from manifest
@@ -889,14 +890,26 @@ jobs:
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest if it doesn'\''t exist
+            # Create manifest from CI template (already has protected extensions)
             if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.conf.example \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Add mise-stack extensions to manifest
-            for ext in workspace-structure mise-config nodejs python rust golang ssh-environment; do
-              echo \"Adding \$ext to manifest...\"
+            # Verify protected extensions are present
+            echo \"Verifying protected extensions from CI config...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present\"
+              else
+                echo \"❌ \$ext missing from CI config\"
+                exit 1
+              fi
+            done
+
+            # Add additional mise-stack extensions (skip protected ones already in CI conf)
+            echo \"\"
+            echo \"Adding additional mise-stack extensions...\"
+            for ext in nodejs python rust golang; do
               if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
                 echo \"\$ext\" >> \"\$manifest_file\"
                 echo \"✅ \$ext added to manifest\"

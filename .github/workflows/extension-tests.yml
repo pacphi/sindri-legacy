@@ -527,10 +527,13 @@ jobs:
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest if it doesn'\''t exist
+            # Create manifest from CI template (already has protected extensions)
             if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.conf.example \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
+
+            # Protected extensions already in CI conf - no need to add
+            protected=\"workspace-structure mise-config ssh-environment\"
 
             # Add dependencies first if specified (supports comma-separated list)
             if [ -n \"$depends_on\" ]; then
@@ -538,6 +541,13 @@ jobs:
               IFS=\",\" read -ra DEPS <<< \"$depends_on\"
               for dep in \"\${DEPS[@]}\"; do
                 dep=\$(echo \"\$dep\" | xargs)  # Trim whitespace
+
+                # Skip if protected (already in CI conf)
+                if echo \"\$protected\" | grep -q \"\$dep\"; then
+                  echo \"⏭️  Skipping \$dep (protected, already in CI conf)\"
+                  continue
+                fi
+
                 if ! grep -q \"^\$dep\$\" \"\$manifest_file\" 2>/dev/null; then
                   echo \"\$dep\" >> \"\$manifest_file\"
                   echo \"✅ Dependency \$dep added to manifest\"
@@ -547,8 +557,10 @@ jobs:
               done
             fi
 
-            # Add the main extension to manifest
-            if ! grep -q \"^$extension_name\$\" \"\$manifest_file\" 2>/dev/null; then
+            # Add the main extension to manifest (skip if protected)
+            if echo \"\$protected\" | grep -q \"$extension_name\"; then
+              echo \"⏭️  Skipping $extension_name (protected, already in CI conf)\"
+            elif ! grep -q \"^$extension_name\$\" \"\$manifest_file\" 2>/dev/null; then
               echo \"$extension_name\" >> \"\$manifest_file\"
               echo \"✅ Extension added to manifest\"
             else
@@ -2332,17 +2344,39 @@ jobs:
             manifest_file=\"extensions.d/active-extensions.conf\"
             failed_extensions=()
 
-            # Create manifest if it doesn'\''t exist
+            # Create manifest from CI template (already has protected extensions)
             if [ ! -f \"\$manifest_file\" ]; then
-              cp extensions.d/active-extensions.conf.example \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Split extensions inside SSH session where the array will be used
+            # Protected extensions already in CI conf - no need to add
+            protected=\"workspace-structure mise-config ssh-environment\"
+
+            # Verify protected extensions are present
+            echo \"Verifying protected extensions from CI config...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present\"
+              else
+                echo \"❌ \$ext missing from CI config\"
+                exit 1
+              fi
+            done
+
+            # Split extensions and add non-protected ones
+            echo \"\"
+            echo \"Adding combination extensions (skipping protected)...\"
             IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
 
             for ext in \"\${EXT_ARRAY[@]}\"; do
               ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
-              echo \"Adding to manifest: \$ext\"
+
+              # Skip if protected (already in CI conf)
+              if echo \"\$protected\" | grep -q \"\$ext\"; then
+                echo \"⏭️  Skipping \$ext (protected, already in CI conf)\"
+                continue
+              fi
+
               if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
                 echo \"\$ext\" >> \"\$manifest_file\"
                 echo \"✅ \$ext added to manifest\"
