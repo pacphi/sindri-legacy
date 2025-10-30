@@ -523,7 +523,7 @@ jobs:
 
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --command '
+          flyctl ssh console --app $app_name --user developer --command '
             cd /workspace/scripts/lib
             manifest_file="extensions.d/active-extensions.conf"
 
@@ -566,7 +566,7 @@ jobs:
           depends_on="${{ matrix.extension.depends_on || '' }}"
 
           echo "Adding $extension_name to manifest..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -632,7 +632,7 @@ jobs:
           while [ $config_attempt -le $max_config_attempts ]; do
             echo "Configuration attempt $config_attempt/$max_config_attempts..."
 
-            if flyctl ssh console --app $app_name --command "/bin/bash -c '
+            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
               export CI_MODE=true
               echo \"=== Starting extension installation ===\"
               echo \"Extension: ${{ matrix.extension.name }}\"
@@ -740,7 +740,7 @@ jobs:
           while [ $retry_count -lt $max_retries ]; do
             echo "Verification attempt $((retry_count + 1))/$max_retries..."
 
-            if flyctl ssh console --app $app_name --command "/bin/bash -lc '
+            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
               # Source environment to ensure all paths are loaded
               if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
                 source /etc/profile.d/00-ssh-environment.sh
@@ -820,7 +820,7 @@ jobs:
 
           echo "Verifying mise-managed tools for $extension_name..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             # Source mise activation
             eval \"\$(mise activate bash)\"
 
@@ -889,7 +889,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "🔍 Environment diagnostics (max 3 minutes)..."
-          timeout 150 flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          timeout 150 flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             echo \"===========================================\"
             echo \"   ENVIRONMENT DIAGNOSTICS\"
             echo \"===========================================\"
@@ -1023,7 +1023,7 @@ jobs:
 
           echo "Testing key functionality for $key_tool..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             # Source SSH environment for non-interactive sessions
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
@@ -1174,7 +1174,7 @@ jobs:
 
           echo "Testing enhanced status() output for $extension_name..."
 
-          status_output=$(flyctl ssh console --app $app_name --command "/bin/bash -c '
+          status_output=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             bash extension-manager.sh status $extension_name
           '")
@@ -1206,7 +1206,7 @@ jobs:
 
           echo "Testing idempotency (running extension-manager install-all again)..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             echo \"Running configuration a second time...\"
             if bash -c \"cd /workspace/scripts/lib && bash extension-manager.sh install-all\" 2>&1 | tee /tmp/configure2.log; then
               # Check for error indicators in output
@@ -1328,7 +1328,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
           extension="${{ matrix.extension }}"
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -1355,7 +1355,7 @@ jobs:
 
           echo "Testing validate() function for $extension..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running: extension-manager validate $extension\"
@@ -1374,7 +1374,7 @@ jobs:
 
           echo "Testing status() function for $extension..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running: extension-manager status $extension\"
@@ -1404,7 +1404,7 @@ jobs:
 
           echo "Testing uninstall() function for $extension..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running: extension-manager uninstall $extension\"
@@ -1430,7 +1430,7 @@ jobs:
 
           echo "Testing deactivate() function for $extension..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -1552,7 +1552,7 @@ jobs:
         run: |
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -1570,7 +1570,7 @@ jobs:
 
           echo "Testing that protected extensions cannot be deactivated..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             for ext in workspace-structure mise-config ssh-environment; do
@@ -1601,7 +1601,7 @@ jobs:
 
           echo "Testing that protected extensions cannot be uninstalled..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             for ext in workspace-structure mise-config ssh-environment; do
@@ -1632,7 +1632,7 @@ jobs:
 
           echo "Testing auto-repair when protected extensions removed from manifest..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -1687,7 +1687,7 @@ jobs:
 
           echo "Testing that protected extensions show [PROTECTED] marker..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running: extension-manager list\"
@@ -1819,7 +1819,7 @@ jobs:
 
           echo "Testing that cleanup extensions automatically move to end of manifest..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -1972,7 +1972,7 @@ jobs:
 
           echo "Testing extension reorder functionality..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -2018,7 +2018,7 @@ jobs:
 
           echo "Testing that comments are preserved in manifest operations..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -2167,7 +2167,7 @@ jobs:
 
           echo "Testing transitive dependencies: nodejs-devtools -> nodejs -> mise-config..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -2211,7 +2211,7 @@ jobs:
 
           echo "Testing error handling when dependency is missing..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -2389,7 +2389,7 @@ jobs:
 
           echo "Adding extensions to manifest: $extensions"
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
             failed_extensions=()
@@ -2446,7 +2446,7 @@ jobs:
 
           echo "Running extension-manager install-all with extension combination..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             if timeout 60m bash -c \"cd /workspace/scripts/lib && bash extension-manager.sh install-all\" 2>&1 | tee /tmp/configure-combo.log; then
               echo \"✅ Configuration completed\"
             else
@@ -2462,7 +2462,7 @@ jobs:
 
           echo "Checking for conflicts or errors..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             if [ -f /tmp/configure-combo.log ]; then
               # Check for common conflict indicators
               if grep -qi \"conflict\|collision\|duplicate\" /tmp/configure-combo.log; then
@@ -2481,7 +2481,7 @@ jobs:
 
           echo "Testing cross-extension functionality for $combo..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             # Source SSH environment for non-interactive sessions
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh

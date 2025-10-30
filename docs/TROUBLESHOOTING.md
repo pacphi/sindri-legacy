@@ -17,6 +17,85 @@ This comprehensive guide helps resolve common issues with your Sindri developmen
 
 ## SSH Connection Issues
 
+### Understanding SSH Connection Methods
+
+Sindri provides **two ways** to connect to your VM. Understanding when to use each is important for the best experience.
+
+#### Method 1: Regular SSH (Recommended for Daily Use)
+
+```bash
+ssh developer@<app-name>.fly.dev -p 10022
+```
+
+**When to use:**
+- ✅ Normal development work
+- ✅ Running extension-manager commands
+- ✅ IDE remote development (VSCode, IntelliJ)
+- ✅ Daily workflow operations
+
+**Benefits:**
+- Automatically connects as `developer` user
+- Full shell environment with .bashrc loaded
+- Best performance and user experience
+- Works with IDE remote development
+- No additional flags needed
+
+**How it works:**
+- Uses custom SSH daemon on port 10022
+- Configured via `ssh-environment` protected extension
+- Persistent SSH keys in `/workspace/developer/.ssh/`
+
+#### Method 2: flyctl ssh console (Troubleshooting/Emergency)
+
+```bash
+# Default (connects as root)
+flyctl ssh console -a <app-name>
+
+# Connect as developer user (for extension work)
+flyctl ssh console -a <app-name> --user developer
+```
+
+**When to use:**
+- ⚠️  Port 10022 SSH is broken
+- ⚠️  Emergency access needed
+- ⚠️  Debugging system-level issues
+- ⚠️  SSH daemon troubleshooting
+
+**Important Notes:**
+- **Defaults to root user** - good for system troubleshooting
+- Use `--user developer` flag when running extension commands
+- Uses Fly.io's built-in hallpass service (always available)
+- Fallback when custom SSH daemon fails
+
+**User Context Matters:**
+
+```bash
+# ❌ BAD: Extensions install to /root/.local/ (won't be in developer's PATH)
+flyctl ssh console -a my-app -C "extension-manager install nodejs"
+
+# ✅ GOOD: Extensions install to /workspace/developer/.local/
+flyctl ssh console -a my-app --user developer -C "extension-manager install nodejs"
+
+# ✅ BEST: Use regular SSH instead
+ssh developer@my-app.fly.dev -p 10022
+# Then run: extension-manager install nodejs
+```
+
+#### Quick Decision Guide
+
+| Scenario | Use This Method |
+|----------|----------------|
+| Daily development | `ssh developer@<app>.fly.dev -p 10022` |
+| Running extension-manager | `ssh developer@<app>.fly.dev -p 10022` |
+| IDE remote development | `ssh developer@<app>.fly.dev -p 10022` |
+| Port 10022 not working | `flyctl ssh console -a <app> --user developer` |
+| System debugging (as root) | `flyctl ssh console -a <app>` |
+| Check sshd status | `flyctl ssh console -a <app> -C "systemctl status sshd"` |
+
+**Key Takeaway:** For regular development, always use standard SSH (port 10022). Only use `flyctl ssh console` as a fallback, and remember to add `--user developer` if running extension or development commands.
+
+---
+
 ### Host Key Verification Failed
 
 **Problem:** After tearing down and recreating a VM with the same name, you get:

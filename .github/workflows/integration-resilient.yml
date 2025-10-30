@@ -122,7 +122,7 @@ jobs:
             while [ $attempt -le $max_attempts ]; do
               echo "▶️  SSH attempt $attempt of $max_attempts..."
 
-              if timeout 45s flyctl ssh console -a "$app_name" -C "$command"; then
+              if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
                 echo "✅ SSH command succeeded"
                 return 0
               else
@@ -162,7 +162,7 @@ jobs:
                 sleep 15
 
                 # Additional check: can we execute a simple command?
-                if timeout 15s flyctl ssh console -a "$app_name" -C "echo ready" &>/dev/null; then
+                if timeout 15s flyctl ssh console -a "$app_name" --user developer -C "echo ready" &>/dev/null; then
                   echo "✅ Machine is responsive"
                   return 0
                 else
@@ -372,7 +372,7 @@ jobs:
           echo "Expected content: $TEST_DATA"
 
           # Use comprehensive verification (same as integration.yml)
-          verification_result=$(flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" -C "/bin/bash -c '
+          verification_result=$(flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer -C "/bin/bash -c '
             echo \"=== Post-Restart File Verification ===\"
             if [ -f \"$TEST_FILE\" ]; then
               echo \"✅ File exists\"
@@ -431,7 +431,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Setting up manifest with protected core extensions..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -453,7 +453,7 @@ jobs:
 
           echo "Installing protected extensions (workspace-structure, mise-config, ssh-environment)..."
           if retry_with_backoff 3 10 60 \
-            flyctl ssh console -a "$app_name" \
+            flyctl ssh console -a "$app_name" --user developer \
               -C "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install-all'"; then
             echo "✅ Protected extensions installed"
           else
@@ -467,7 +467,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Verifying protected extensions are installed..."
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             echo \"Checking mise availability...\"
             if command -v mise >/dev/null 2>&1; then
               echo \"✅ mise available\"
@@ -507,7 +507,7 @@ jobs:
           # Test extension installation (mise-config already installed from protected extensions)
           echo "🔍 Testing extension installation with auto-activation (nodejs)..."
           if retry_with_backoff 3 10 60 \
-            flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" \
+            flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer \
               -C "/bin/bash -c '
                 cd /workspace/scripts/lib
 

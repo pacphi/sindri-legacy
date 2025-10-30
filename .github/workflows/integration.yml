@@ -205,12 +205,12 @@ jobs:
 
             # Test SSH connection with timeout using flyctl console
             # Use explicit bash invocation to ensure command execution
-            if timeout 45s flyctl ssh console --app $app_name -C "echo 'SSH_TEST_SUCCESS' && whoami && pwd" 2>&1 | grep -q "SSH_TEST_SUCCESS"; then
+            if timeout 45s flyctl ssh console --app $app_name --user developer -C "echo 'SSH_TEST_SUCCESS' && whoami && pwd" 2>&1 | grep -q "SSH_TEST_SUCCESS"; then
               echo "✅ SSH connection successful"
 
               # Verify environment is ready
               echo "Verifying SSH environment..."
-              flyctl ssh console --app $app_name -C "echo \"User: \$(whoami)\" && echo \"Home: \$HOME\" && echo \"Path: \$PATH\" && ls -la /workspace/ | head -5"
+              flyctl ssh console --app $app_name --user developer -C "echo \"User: \$(whoami)\" && echo \"Home: \$HOME\" && echo \"Path: \$PATH\" && ls -la /workspace/ | head -5"
 
               echo "✅ SSH connectivity verified"
               break
@@ -262,7 +262,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           # Test that configuration script and extension system exists
-          flyctl ssh console --app $app_name --command '
+          flyctl ssh console --app $app_name --user developer --command '
             echo "Testing VM environment..."
 
             # Check extension manager
@@ -299,7 +299,7 @@ jobs:
 
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --command '
+          flyctl ssh console --app $app_name --user developer --command '
             echo "=== Extension Manifest Verification ==="
 
             # Check manifest exists
@@ -345,7 +345,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           # Check volume mount and permissions
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             echo \"=== Volume Mount Verification ===\"
             echo \"Checking /workspace mount:\"
             df -h /workspace || echo \"WARNING: df command failed\"
@@ -374,7 +374,7 @@ jobs:
 
           # Create test file with explicit sync operations
           echo "Creating test file with content: $test_content"
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             echo \"Creating and syncing test file...\"
             echo \"$test_content\" > $test_file
             sync
@@ -392,7 +392,7 @@ jobs:
 
           # Force filesystem sync before restart
           echo "Forcing filesystem sync before restart..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             echo \"Syncing filesystem before restart...\"
             sync
             echo \"Sync completed\"
@@ -447,7 +447,7 @@ jobs:
             # Enhanced file verification with metadata
             echo "Performing comprehensive file verification..."
 
-            verification_result=$(flyctl ssh console --app $app_name --command "/bin/bash -c '
+            verification_result=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
               echo \"=== Post-Restart File Verification ===\"
               if [ -f \"$test_file\" ]; then
                 echo \"✅ File exists\"
@@ -503,7 +503,7 @@ jobs:
               if [ $attempt -eq $max_attempts ]; then
                 echo "❌ Test file disappeared after restart"
                 echo "Debugging - workspace contents:"
-                flyctl ssh console --app $app_name --command "/bin/bash -c 'ls -la /workspace/ | head -20'"
+                flyctl ssh console --app $app_name --user developer --command "/bin/bash -c 'ls -la /workspace/ | head -20'"
                 exit 1
               fi
             fi
@@ -594,7 +594,7 @@ jobs:
 
           app_name="${{ steps.app-name.outputs.app_name }}"
 
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
 
             echo \"=== Testing Extension Manager Workflow ===\"
@@ -774,7 +774,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Setting up manifest with protected core extensions..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -805,7 +805,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Installing all activated extensions..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
 
             echo \"Running install-all...\"
@@ -822,7 +822,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Verifying extension installations..."
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             # Source SSH environment
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
@@ -863,7 +863,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Testing extension status command..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
 
             for ext in workspace-structure nodejs ssh-environment; do
@@ -984,7 +984,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Adding mise-stack extensions to manifest..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -1026,7 +1026,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Installing all mise-stack extensions..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             cd /workspace/scripts/lib
 
             echo \"Running install-all for mise-stack...\"
@@ -1044,7 +1044,7 @@ jobs:
 
           echo "Testing mise-stack cross-extension functionality..."
 
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             # Source SSH environment for non-interactive sessions
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
