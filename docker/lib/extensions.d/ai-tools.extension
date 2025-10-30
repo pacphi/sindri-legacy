@@ -20,7 +20,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 EXT_NAME="ai-tools"
 EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="AI CLI tools and coding assistants (Codex, Gemini, Ollama, Fabric, etc.)"
-EXT_CATEGORY="infrastructure"
+EXT_CATEGORY="ai-tools"
 
 # Initialize extension environment
 extension_init
@@ -580,20 +580,49 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking AI CLI tools status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # Check installation status - at least one core tool should be present
+  local core_tools=(codex gemini)
+  local found_core=false
+  for tool in "${core_tools[@]}"; do
+    if command_exists "$tool"; then
+      found_core=true
+      break
+    fi
+  done
+
+  if ! $found_core; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
 
   # Core tools
-  print_status "Core tools (npm):"
-  local core_tools=(codex gemini)
+  echo ""
+  echo "  Core tools (npm):"
   for tool in "${core_tools[@]}"; do
     if command_exists "$tool"; then
       local version=$($tool --version 2>/dev/null || echo "installed")
-      echo "  ✓ $tool: $version"
+      echo "    ✓ $tool: $version"
+    else
+      echo "    ✗ $tool: not installed"
     fi
   done
 
   # Optional tools
-  print_status "Optional tools:"
+  echo ""
+  echo "  Optional tools:"
   local optional_tools=(ollama fabric plandex hector grok)
   for tool in "${optional_tools[@]}"; do
     if command_exists "$tool"; then
@@ -605,20 +634,22 @@ status() {
         hector) version=$(hector version 2>/dev/null) ;;
         grok) version=$(grok --version 2>/dev/null) ;;
       esac
-      echo "  ✓ $tool: ${version:-installed}"
+      echo "    ✓ $tool: ${version:-installed}"
     fi
   done
 
   # Platform CLIs
-  print_status "Platform CLIs:"
+  echo ""
+  echo "  Platform CLIs:"
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
-    echo "  ✓ GitHub Copilot CLI (via gh extension)"
+    echo "    ✓ GitHub Copilot CLI (via gh extension)"
   fi
   if command_exists aws; then
-    echo "  ✓ AWS Q Developer (via aws q)"
+    echo "    ✓ AWS Q Developer (via aws q)"
   fi
 
   # Dependencies
+  echo ""
   print_status "Dependencies:"
   command_exists go && echo "  ✓ Go (enables Plandex, Hector)"
   command_exists pip && echo "  ✓ pip (enables Grok)"
@@ -626,6 +657,7 @@ status() {
   command_exists aws && echo "  ✓ aws (enables Amazon Q)"
 
   # Workspace
+  echo ""
   local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     print_status "AI tools workspace:"

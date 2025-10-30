@@ -291,42 +291,54 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Docker status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists docker; then
-    print_warning "Docker not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success "Docker: $(docker --version)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Docker-specific tool listing with versions
+  print_status "Installed tools:"
+  echo "  ✓ docker: $(docker --version)"
 
   # Check Docker Compose with timeout
   if timeout 10 docker-compose --version 2>/dev/null; then
-    print_success "Docker Compose: $(timeout 10 docker-compose --version 2>/dev/null)"
+    echo "  ✓ docker-compose: $(timeout 10 docker-compose --version 2>/dev/null)"
   elif timeout 10 docker compose version 2>/dev/null; then
-    print_success "Docker Compose: $(timeout 10 docker compose version 2>/dev/null)"
+    echo "  ✓ docker compose: $(timeout 10 docker compose version 2>/dev/null)"
   else
-    print_warning "Docker Compose: not available or timed out"
+    echo "  ✗ docker-compose: not available or timed out"
   fi
 
   # Show daemon status
   if docker info >/dev/null 2>&1; then
-    print_success "Docker daemon: running"
+    echo "  ✓ docker daemon: running"
   else
-    print_warning "Docker daemon: not running or no permissions"
+    echo "  ✗ docker daemon: not running or no permissions"
   fi
 
   # Show utilities
-  print_status "Installed utilities:"
   for util in dive ctop; do
-    command_exists "$util" && echo "  ✓ $util"
+    if command_exists "$util"; then
+      echo "  ✓ $util"
+    fi
   done
 
   # Show group membership
   if groups | grep -q docker; then
-    print_success "User in docker group: yes"
+    echo "  ✓ user in docker group: yes"
   else
-    print_warning "User not in docker group"
+    echo "  ✗ user not in docker group"
   fi
 
   return 0

@@ -363,29 +363,39 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking cleanup status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status (this extension is always "installed" if the script exists)
+  # But we check if it has been run (configure step)
+  if [[ ! -f "/workspace/.installed-tools.txt" ]]; then
+    echo "Status: ✗ NOT CONFIGURED (run configure to execute cleanup)"
+    return 1
+  fi
+
+  echo "Status: ✓ CONFIGURED"
+  echo ""
+
+  # Extension-specific details
+  print_status "Tools summary:"
+  local tool_count=$(grep -c "^-" "/workspace/.installed-tools.txt" 2>/dev/null || echo 0)
+  echo "  Documented tools: $tool_count"
+  echo "  Summary location: /workspace/.installed-tools.txt"
+  echo ""
+
+  print_status "System resources:"
   # Show system statistics
   if command_exists df; then
-    print_status "Disk usage:"
     df -h /workspace 2>/dev/null | awk 'NR==2 {print "  Workspace: " $3 " used / " $2 " total (" $5 " full)"}'
     df -h / 2>/dev/null | awk 'NR==2 {print "  System: " $3 " used / " $2 " total (" $5 " full)"}'
   fi
 
   if command_exists free; then
-    echo
-    print_status "Memory usage:"
-    free -h | awk 'NR==2 {print "  Total: " $2 ", Used: " $3 ", Free: " $4 ", Available: " $7}'
-  fi
-
-  # Count installed tools
-  echo
-  if [[ -f "/workspace/.installed-tools.txt" ]]; then
-    local tool_count=$(grep -c "^-" "/workspace/.installed-tools.txt" 2>/dev/null || echo 0)
-    print_success "Tools summary: $tool_count tools documented"
-    print_status "Summary location: /workspace/.installed-tools.txt"
-  else
-    print_warning "Tools summary not found (run configure to create)"
+    free -h | awk 'NR==2 {print "  Memory: " $3 " used / " $2 " total (" $7 " available)"}'
   fi
 
   return 0

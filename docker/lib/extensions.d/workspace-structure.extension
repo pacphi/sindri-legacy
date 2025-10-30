@@ -225,24 +225,51 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking workspace structure status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if [[ -z "${WORKSPACE_DIR:-}" ]]; then
-    print_warning "WORKSPACE_DIR not set"
+    echo "Status: ✗ NOT INSTALLED (WORKSPACE_DIR not set)"
     return 1
   fi
 
-  print_success "Workspace: $WORKSPACE_DIR"
-
-  # Count directories
+  # Count directories to determine installation status
   local dir_count=0
-  for dir in src tests docs scripts examples config agents context bin backups; do
+  local required_dirs=(src tests docs scripts examples config agents context bin backups)
+  for dir in "${required_dirs[@]}"; do
     if [[ -d "$WORKSPACE_DIR/$dir" ]]; then
       ((dir_count++))
     fi
   done
 
-  print_success "Main directories: $dir_count/10 present"
+  if [[ $dir_count -eq 0 ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific details
+  print_status "Workspace location:"
+  echo "  $WORKSPACE_DIR"
+  echo ""
+
+  print_status "Directory structure:"
+  echo "  Main directories: $dir_count/${#required_dirs[@]} present"
+  for dir in "${required_dirs[@]}"; do
+    if [[ -d "$WORKSPACE_DIR/$dir" ]]; then
+      echo "    ✓ $dir"
+    else
+      echo "    ✗ $dir (missing)"
+    fi
+  done
+  echo ""
 
   # Show disk usage
   if command -v du >/dev/null 2>&1; then

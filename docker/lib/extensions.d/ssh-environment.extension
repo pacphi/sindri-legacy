@@ -170,39 +170,50 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking SSH environment configuration..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
-  # Show configuration file
+  # Check installation status
   local env_config_file="/etc/ssh/sshd_config.d/99-bash-env.conf"
-  if [[ -f "$env_config_file" ]]; then
-    print_success "Configuration: $env_config_file"
-
-    # Show BASH_ENV setting
-    local bash_env
-    bash_env=$(grep "BASH_ENV" "$env_config_file" 2>/dev/null | head -n1)
-    if [[ -n "$bash_env" ]]; then
-      print_status "  $bash_env"
-    fi
-  else
-    print_warning "SSH environment config not found"
+  if [[ ! -f "$env_config_file" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
   fi
 
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific details
+  print_status "Configuration:"
+  echo "  Config file: $env_config_file"
+
+  # Show BASH_ENV setting
+  local bash_env
+  bash_env=$(grep "BASH_ENV" "$env_config_file" 2>/dev/null | head -n1)
+  if [[ -n "$bash_env" ]]; then
+    echo "  $bash_env"
+  fi
+  echo ""
+
+  print_status "SSH daemon status:"
   # Show SSH daemon status
   if systemctl is-active --quiet ssh 2>/dev/null; then
-    print_success "SSH daemon (ssh): running"
+    echo "  Service (ssh): ✓ running"
   elif systemctl is-active --quiet sshd 2>/dev/null; then
-    print_success "SSH daemon (sshd): running"
+    echo "  Service (sshd): ✓ running"
   else
-    print_warning "SSH daemon: not running"
+    echo "  Service: ✗ not running"
   fi
 
   # Show enabled status
-  if systemctl is-enabled --quiet ssh 2>/dev/null; then
-    print_status "SSH daemon enabled at boot: yes"
-  elif systemctl is-enabled --quiet sshd 2>/dev/null; then
-    print_status "SSH daemon enabled at boot: yes"
+  if systemctl is-enabled --quiet ssh 2>/dev/null || systemctl is-enabled --quiet sshd 2>/dev/null; then
+    echo "  Boot enabled: ✓ yes"
   else
-    print_status "SSH daemon enabled at boot: no"
+    echo "  Boot enabled: ✗ no"
   fi
 
   return 0

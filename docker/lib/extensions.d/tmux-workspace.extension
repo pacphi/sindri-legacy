@@ -16,7 +16,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 EXT_NAME="tmux-workspace"
 EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="Tmux workspace management with helper scripts"
-EXT_CATEGORY="development"
+EXT_CATEGORY="dev-tools"
 
 # Initialize extension environment
 extension_init
@@ -235,48 +235,61 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking tmux status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists tmux; then
-    print_warning "tmux is not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  # Show version
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
   local tmux_version
   tmux_version=$(tmux -V 2>/dev/null || echo "unknown")
-  print_success "tmux: $tmux_version"
+  echo "  ✓ tmux: $tmux_version"
 
-  # Show configuration
-  if [[ -f "$HOME/.tmux.conf" ]]; then
-    print_success "Configuration: $HOME/.tmux.conf"
-    local config_source
-    config_source=$(readlink -f "$HOME/.tmux.conf" 2>/dev/null || echo "$HOME/.tmux.conf")
-    if [[ "$config_source" != "$HOME/.tmux.conf" ]]; then
-      print_status "  → $config_source"
-    fi
-  else
-    print_warning "No tmux configuration found"
+  if command_exists htop; then
+    echo "  ✓ htop: installed"
   fi
 
+  # Show configuration
+  echo ""
+  print_status "Configuration:"
+  if [[ -f "$HOME/.tmux.conf" ]]; then
+    local config_source
+    config_source=$(readlink -f "$HOME/.tmux.conf" 2>/dev/null || echo "$HOME/.tmux.conf")
+    echo "  ✓ $HOME/.tmux.conf"
+    if [[ "$config_source" != "$HOME/.tmux.conf" ]]; then
+      echo "    → $config_source"
+    fi
+  else
+    echo "  ✗ No tmux configuration found"
+  fi
+
+  # Show workspace scripts
+  echo ""
+  print_status "Workspace scripts:"
+  [[ -f "/workspace/scripts/tmux-workspace.sh" ]] && echo "  ✓ tmux-workspace.sh" || echo "  ✗ tmux-workspace.sh"
+  [[ -f "/workspace/scripts/lib/tmux-helpers.sh" ]] && echo "  ✓ tmux-helpers.sh" || echo "  ✗ tmux-helpers.sh"
+  [[ -f "/workspace/scripts/tmux-auto-start.sh" ]] && echo "  ✓ tmux-auto-start.sh" || echo "  ✗ tmux-auto-start.sh"
+
   # Show running sessions
+  echo ""
   print_status "Running sessions:"
   if tmux list-sessions 2>/dev/null; then
     # Sessions listed above
     :
   else
     echo "  (no active sessions)"
-  fi
-
-  # Show workspace scripts
-  print_status "Workspace scripts:"
-  [[ -f "/workspace/scripts/tmux-workspace.sh" ]] && echo "  ✓ tmux-workspace.sh"
-  [[ -f "/workspace/scripts/lib/tmux-helpers.sh" ]] && echo "  ✓ tmux-helpers.sh"
-  [[ -f "/workspace/scripts/tmux-auto-start.sh" ]] && echo "  ✓ tmux-auto-start.sh"
-
-  # Show htop status
-  if command_exists htop; then
-    print_success "htop: installed"
   fi
 
   return 0

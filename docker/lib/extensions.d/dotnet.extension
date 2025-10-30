@@ -529,27 +529,37 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking .NET status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists dotnet; then
-    print_warning ".NET not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success ".NET: $(dotnet --version)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
 
-  # Show SDKs
-  if command_exists dotnet; then
-    print_status "Installed SDKs:"
-    dotnet --list-sdks 2>/dev/null | sed 's/^/  /'
-  fi
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ .NET SDK $(dotnet --version)"
+  command_exists nuget && echo "  ✓ NuGet CLI"
 
-  # Show runtimes
+  echo ""
+  print_status "Installed SDKs:"
+  dotnet --list-sdks 2>/dev/null | sed 's/^/  ✓ /'
+
+  echo ""
   print_status "Installed runtimes:"
-  dotnet --list-runtimes 2>/dev/null | sed 's/^/  /'
+  dotnet --list-runtimes 2>/dev/null | sed 's/^/  ✓ /'
 
-  # Show global tools
   if [[ -d "$HOME/.dotnet/tools" ]]; then
+    echo ""
     print_status "Global tools:"
     local tools=(dotnet-ef dotnet-format dotnet-script dotnet-serve dotnet-counters dotnet-trace)
     for tool in "${tools[@]}"; do
@@ -557,13 +567,10 @@ status() {
     done
   fi
 
-  # Show NuGet CLI
-  command_exists nuget && print_success "NuGet CLI: installed"
-
-  # Show template files
+  echo ""
   print_status "Template files:"
   for template in .global.json.template .editorconfig.template .Directory.Build.props.template .NuGet.config.template; do
-    [[ -f "$HOME/$template" ]] && echo "  ✓ $template"
+    [[ -f "$HOME/$template" ]] && echo "  ✓ ${template#.}"
   done
 
   return 0

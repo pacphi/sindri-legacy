@@ -16,7 +16,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 EXT_NAME="claude-config"
 EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="Claude Code CLI with developer preferences and hooks"
-EXT_CATEGORY="utility"
+EXT_CATEGORY="dev-tools"
 
 # Initialize extension environment
 extension_init
@@ -227,22 +227,32 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Claude Code status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
   # Load NVM if available
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-  # Show Claude Code version
-  if command_exists claude; then
-    local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
-    print_success "Claude Code: $claude_version"
-  else
-    print_warning "Claude Code is not installed"
+  # Check installation status
+  if ! command_exists claude; then
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  # Show authentication status (try to check without requiring interaction)
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
+  echo "  ✓ claude: $claude_version"
+  echo ""
+
   print_status "Authentication: Check with 'claude' command"
 
   # List configured hooks
@@ -255,10 +265,12 @@ status() {
     else
       hooks_count="unknown"
     fi
+    echo ""
     print_status "Configured hooks: $hooks_count"
   fi
 
   # Show config files
+  echo ""
   print_status "Configuration files:"
   [[ -f "$HOME/.claude/CLAUDE.md" ]] && echo "  ✓ ~/.claude/CLAUDE.md (global preferences)"
   [[ -f "$HOME/.claude/settings.json" ]] && echo "  ✓ ~/.claude/settings.json (hooks)"

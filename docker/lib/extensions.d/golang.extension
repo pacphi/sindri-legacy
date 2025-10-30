@@ -342,28 +342,40 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Go status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists go; then
-    print_warning "Go not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success "Go: $(go version)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ Go $(go version | awk '{print $3}' | sed 's/go//')"
+
   if [[ -n "$GOPATH" ]]; then
-    print_success "GOPATH: $GOPATH"
+    echo "  ✓ GOPATH: $GOPATH"
   else
-    print_warning "GOPATH not set"
+    echo "  ⚠ GOPATH not set"
   fi
 
-  # Show installed tools
+  echo ""
   print_status "Installed development tools:"
   local tools=(gopls dlv goimports golangci-lint air goreleaser)
   for tool in "${tools[@]}"; do
     command_exists "$tool" && echo "  ✓ $tool"
   done
 
-  [[ -f "/workspace/scripts/create-go-project.sh" ]] && print_success "Project template: installed"
+  [[ -f "/workspace/scripts/create-go-project.sh" ]] && echo "" && print_status "Project template: installed"
 
   return 0
 }

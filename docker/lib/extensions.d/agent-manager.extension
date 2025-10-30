@@ -16,7 +16,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 EXT_NAME="agent-manager"
 EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="Claude Code agent manager for managing AI agents"
-EXT_CATEGORY="development"
+EXT_CATEGORY="dev-tools"
 
 # Initialize extension environment
 extension_init
@@ -349,53 +349,66 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking agent-manager status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
-  # Check installation
+  # Check installation status
   if [[ ! -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
-    print_warning "agent-manager is not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  # Show version
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
   if "${INSTALL_PATH}/${BINARY_NAME}" version >/dev/null 2>&1; then
     local version
     version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
-    print_success "agent-manager: $version"
+    echo "  ✓ agent-manager: $version"
   else
-    print_warning "agent-manager installed but not working"
+    echo "  ✓ agent-manager: installed (version check failed)"
   fi
 
-  # Show installation path
+  echo ""
   print_status "Binary location: ${INSTALL_PATH}/${BINARY_NAME}"
 
   # Check if in PATH
   if command_exists agent-manager; then
-    print_success "Command available in PATH"
+    print_status "Command available in PATH: ✓"
   else
-    print_warning "Command not in PATH (restart shell or run: export PATH=\"$INSTALL_PATH:\$PATH\")"
+    print_status "Command available in PATH: ✗ (restart shell)"
   fi
 
   # Show configuration
+  echo ""
+  print_status "Configuration:"
   local config_file="/workspace/config/agents-config.yaml"
   if [[ -f "$config_file" ]]; then
-    print_success "Configuration: $config_file"
+    echo "  ✓ $config_file"
 
     # Show agent count if possible
     if command_exists yq 2>/dev/null; then
       local agent_count
       agent_count=$(yq eval '.agents | length' "$config_file" 2>/dev/null || echo "unknown")
-      print_status "Configured agents: $agent_count"
+      echo "    Configured agents: $agent_count"
     fi
   else
-    print_warning "No configuration file found"
+    echo "  ✗ No configuration file found"
   fi
 
   # Show agent discovery status
+  echo ""
+  print_status "Agent discovery utilities:"
   if [[ -f "/workspace/scripts/lib/agent-discovery.sh" ]]; then
-    print_success "Agent discovery utilities: installed"
+    echo "  ✓ installed"
   else
-    print_warning "Agent discovery utilities: not found"
+    echo "  ✗ not found"
   fi
 
   return 0

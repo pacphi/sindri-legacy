@@ -18,7 +18,7 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 EXT_NAME="monitoring"
 EXT_VERSION="1.0.0"
 EXT_DESCRIPTION="Claude monitoring and usage tracking tools"
-EXT_CATEGORY="development"
+EXT_CATEGORY="infrastructure"
 
 # Initialize extension environment
 extension_init
@@ -272,57 +272,75 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking monitoring tools status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # Check installation status
+  if ! command_exists claude-monitor; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Monitoring-specific tool listing with versions
+  print_status "Installed tools:"
 
   # Show claude-monitor status
   if command_exists claude-monitor; then
     local monitor_version
     if monitor_version=$(claude-monitor --version 2>&1 | head -n1); then
-      print_success "claude-monitor: $monitor_version"
+      echo "  ✓ claude-monitor: $monitor_version"
     else
-      print_success "claude-monitor: installed"
+      echo "  ✓ claude-monitor: installed"
     fi
 
     # Show installation method
     local monitor_path=$(which claude-monitor)
     if [[ "$monitor_path" == *".local/bin"* ]]; then
-      print_status "Installation method: UV"
+      echo "    (via UV)"
     else
-      print_status "Installation method: pip3"
+      echo "    (via pip3)"
     fi
-  else
-    print_warning "claude-monitor is not installed"
   fi
 
   # Show claude-usage status
   if command_exists claude-usage; then
     local usage_version
     if usage_version=$(claude-usage --version 2>&1 | head -n1); then
-      print_success "claude-usage: $usage_version"
+      echo "  ✓ claude-usage: $usage_version"
     else
-      print_success "claude-usage: installed"
+      echo "  ✓ claude-usage: installed"
     fi
   else
-    print_warning "claude-usage is not installed"
+    echo "  ✗ claude-usage: not installed"
   fi
 
   # Show UV status
   if command_exists uv; then
     local uv_version
     if uv_version=$(uv --version 2>&1); then
-      print_success "UV package manager: $uv_version"
+      echo "  ✓ uv: $uv_version"
     fi
 
     # List UV tools
-    print_status "UV tools installed:"
-    uv tool list 2>/dev/null || echo "  (none or unable to list)"
+    local uv_tools=$(uv tool list 2>/dev/null)
+    if [[ -n "$uv_tools" ]]; then
+      echo "    UV tools:"
+      echo "$uv_tools" | sed 's/^/      /'
+    fi
   else
-    print_status "UV package manager: not installed (using pip3)"
+    echo "  ✗ uv: not installed (using pip3)"
   fi
 
   # Show aliases
   if grep -q "claude-stats" "$HOME/.bash_aliases" 2>/dev/null; then
-    print_success "Aliases configured: claude-stats, claude-cost"
+    echo "  ✓ aliases configured: claude-stats, claude-cost"
   fi
 
   return 0

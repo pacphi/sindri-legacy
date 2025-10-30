@@ -457,32 +457,45 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking PHP status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists php; then
-    print_warning "PHP not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success "PHP: $(php -v | head -n1)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ PHP $(php -v | head -n1 | awk '{print $2}')"
+
   if command_exists composer; then
     local composer_ver
-    composer_ver=$(timeout 3 composer --version 2>&1 | head -n1 || echo "version check timed out")
-    print_success "Composer: $composer_ver"
-  fi
-  if command_exists symfony; then
-    local symfony_ver
-    symfony_ver=$(timeout 3 symfony version 2>&1 | head -n1 || echo "version check timed out")
-    print_success "Symfony CLI: $symfony_ver"
+    composer_ver=$(timeout 3 composer --version 2>&1 | head -n1 | awk '{print $3}' || echo "version check timed out")
+    echo "  ✓ Composer $composer_ver"
   fi
 
-  # Show extensions
+  if command_exists symfony; then
+    local symfony_ver
+    symfony_ver=$(timeout 3 symfony version 2>&1 | head -n1 | awk '{print $3}' || echo "version check timed out")
+    echo "  ✓ Symfony CLI $symfony_ver"
+  fi
+
+  echo ""
   print_status "Installed extensions:"
   for ext in curl mbstring mysql pgsql xml zip opcache xdebug redis mongodb; do
     php -m 2>/dev/null | grep -qi "$ext" && echo "  ✓ $ext"
   done
 
-  # Show dev tools
+  echo ""
   print_status "Installed development tools:"
   for tool in php-cs-fixer phpstan psalm phpunit phpcs phpcbf psysh; do
     command_exists "$tool" && echo "  ✓ $tool"

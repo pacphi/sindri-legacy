@@ -364,29 +364,42 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Python status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists python3; then
-    print_warning "Python not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success "Python: $(python3 --version 2>&1)"
-  command_exists pip3 && print_success "pip: $(pip3 --version 2>&1 | awk '{print $2}')"
-  command_exists pipx && print_success "pipx: installed"
-  command_exists uv && print_success "uv: $(uv --version 2>&1)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
 
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ Python $(python3 --version 2>&1 | awk '{print $2}')"
+  command_exists pip3 && echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
+  command_exists pipx && echo "  ✓ pipx"
+  command_exists uv && echo "  ✓ uv $(uv --version 2>&1 | awk '{print $2}')"
+
+  echo ""
   print_status "System packages:"
   for pkg in requests numpy pandas pytest black; do
     python3 -c "import $pkg" 2>/dev/null && echo "  ✓ $pkg"
   done
 
   if command_exists pipx; then
+    echo ""
     print_status "pipx tools:"
-    pipx list 2>/dev/null | grep "package" | awk '{print "  - " $2}' || echo "  (none)"
+    pipx list 2>/dev/null | grep "package" | awk '{print "  ✓ " $2}' || echo "  (none)"
   fi
 
-  [[ -f "/workspace/scripts/create-python-project.sh" ]] && print_success "Project template: installed"
+  [[ -f "/workspace/scripts/create-python-project.sh" ]] && echo "" && print_status "Project template: installed"
 
   return 0
 }

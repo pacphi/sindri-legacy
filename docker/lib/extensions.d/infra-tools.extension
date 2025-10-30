@@ -481,11 +481,36 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking infrastructure tools status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # Check installation status
+  local core_tools=(ansible terraform kubectl helm)
+  local any_installed=false
+  for tool in "${core_tools[@]}"; do
+    if command_exists "$tool"; then
+      any_installed=true
+      break
+    fi
+  done
+
+  if [[ "$any_installed" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Infrastructure-specific tool listing with versions
+  print_status "Installed tools:"
 
   # Core tools
-  print_status "Core tools:"
-  local core_tools=(ansible terraform kubectl helm)
+  echo "  Core tools:"
   for tool in "${core_tools[@]}"; do
     if command_exists "$tool"; then
       local version=""
@@ -495,27 +520,32 @@ status() {
         kubectl) version=$(kubectl version --client --short 2>/dev/null | head -1) ;;
         helm) version=$(helm version --short) ;;
       esac
-      echo "  ✓ $tool: $version"
+      echo "    ✓ $tool: $version"
     fi
   done
 
   # Optional tools
-  print_status "Optional tools:"
+  echo "  Optional tools:"
   local optional_tools=(pulumi crossplane k9s kubectx kubens)
   for tool in "${optional_tools[@]}"; do
-    command_exists "$tool" && echo "  ✓ $tool"
+    if command_exists "$tool"; then
+      echo "    ✓ $tool"
+    fi
   done
 
   # Carvel tools
-  print_status "Carvel tools:"
+  echo "  Carvel tools:"
   local carvel_tools=(kapp ytt kbld vendir imgpkg)
   for tool in "${carvel_tools[@]}"; do
-    command_exists "$tool" && echo "  ✓ $tool"
+    if command_exists "$tool"; then
+      echo "    ✓ $tool"
+    fi
   done
 
   # Workspace
   local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
   if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
+    echo ""
     print_status "Infrastructure workspace:"
     echo "  $WORKSPACE_DIR/infrastructure/"
     for dir in terraform kubernetes helm-charts crossplane pulumi; do

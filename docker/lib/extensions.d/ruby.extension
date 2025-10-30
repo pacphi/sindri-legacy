@@ -463,28 +463,37 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Ruby status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
-  if [[ ! -d "$HOME/.rbenv" ]]; then
-    print_warning "rbenv not installed"
+  # Check installation status
+  if [[ ! -d "$HOME/.rbenv" ]] || ! command_exists ruby; then
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
   export PATH="$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init - bash)"
-  print_success "rbenv: installed"
 
-  # Show Ruby versions
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ rbenv"
+
   if command_exists ruby; then
-    print_success "Ruby: $(ruby -v)"
-  else
-    print_warning "Ruby not found"
+    echo "  ✓ Ruby $(ruby -v | awk '{print $2}')"
   fi
 
-  command_exists bundle && print_success "Bundler: $(bundler -v 2>&1 | head -n1)"
-  command_exists rails && print_success "Rails: $(rails -v 2>&1 | head -n1)"
+  command_exists bundle && echo "  ✓ Bundler $(bundler -v 2>&1 | head -n1 | awk '{print $3}')"
+  command_exists rails && echo "  ✓ Rails $(rails -v 2>&1 | head -n1 | awk '{print $2}')"
 
-  # Show installed gems
+  echo ""
   print_status "Installed development gems:"
   for gem in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
     command_exists "$gem" && echo "  ✓ $gem"

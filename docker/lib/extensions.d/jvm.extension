@@ -331,34 +331,48 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking JVM status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
-  if [[ ! -d "$HOME/.sdkman" ]]; then
-    print_warning "SDKMAN not installed"
+  # Check installation status
+  if [[ ! -d "$HOME/.sdkman" ]] || ! command_exists java; then
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
-  print_success "SDKMAN: installed"
+  echo "Status: ✓ INSTALLED"
+  echo ""
 
-  # Show Java versions
+  source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
+
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ SDKMAN"
+
   if command_exists java; then
-    print_success "Java: $(java -version 2>&1 | head -n1)"
-  else
-    print_warning "Java not found"
+    echo "  ✓ Java $(java -version 2>&1 | head -n1 | awk '{print $3}' | tr -d '"')"
   fi
 
-  # Show installed tools
+  echo ""
   print_status "Installed build tools:"
   for tool in mvn gradle sbt; do
-    command_exists "$tool" && echo "  ✓ $tool ($(sdk current $tool 2>/dev/null | awk '{print $NF}'))"
+    if command_exists "$tool"; then
+      local tool_version=$(sdk current $tool 2>/dev/null | awk '{print $NF}')
+      echo "  ✓ $tool $tool_version"
+    fi
   done
 
+  echo ""
   print_status "Installed languages:"
   for lang in kotlin scala clojure; do
     command_exists "$lang" && echo "  ✓ $lang"
   done
 
+  echo ""
   print_status "Installed CLIs:"
   for cli in jbang spring mn lein; do
     command_exists "$cli" && echo "  ✓ $cli"

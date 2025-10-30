@@ -181,43 +181,54 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking GitHub CLI status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
-  # Check installation
+  # Check installation status
   if ! command_exists gh; then
-    print_error "Not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  # Show version
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
   local version
   version=$(gh version 2>/dev/null | head -n1 || echo "unknown")
-  echo "Version: $version"
+  echo "  gh (GitHub CLI): $version"
+  echo ""
 
+  print_status "Configuration:"
   # Show authentication status
   if gh auth status >/dev/null 2>&1; then
-    echo "Authentication: OK"
+    echo "  Authentication: ✓ configured"
     local auth_output
     auth_output=$(gh auth status 2>&1)
     local username
     username=$(echo "$auth_output" | grep -o "Logged in to github.com account [^ ]*" | awk '{print $NF}')
     if [[ -n "$username" ]]; then
-      echo "User: $username"
+      echo "  GitHub user: $username"
     fi
   else
-    echo "Authentication: Not configured"
+    echo "  Authentication: ✗ not configured (run: gh auth login)"
   fi
 
   # Show alias count
   local alias_count
   alias_count=$(gh alias list 2>/dev/null | wc -l)
-  echo "Aliases: $alias_count configured"
+  echo "  Aliases: $alias_count configured"
 
   # Show workflow helpers
   if [[ -f "$HOME/.gh-workflow-helper.sh" ]]; then
-    echo "Workflow helpers: Installed"
+    echo "  Workflow helpers: ✓ installed"
   else
-    echo "Workflow helpers: Not installed"
+    echo "  Workflow helpers: ✗ not installed"
   fi
 
   return 0

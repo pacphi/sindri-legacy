@@ -467,11 +467,36 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking cloud provider CLIs status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # Check installation status
+  local core_clis=(aws az gcloud)
+  local any_installed=false
+  for cli in "${core_clis[@]}"; do
+    if command_exists "$cli"; then
+      any_installed=true
+      break
+    fi
+  done
+
+  if [[ "$any_installed" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Cloud-tools-specific tool listing with versions
+  print_status "Installed tools:"
 
   # Core CLIs
-  print_status "Core CLIs:"
-  local core_clis=(aws az gcloud)
+  echo "  Core CLIs:"
   for cli in "${core_clis[@]}"; do
     if command_exists "$cli"; then
       local version=""
@@ -480,12 +505,12 @@ status() {
         az) version=$(az version --output tsv --query '"azure-cli"' 2>/dev/null) ;;
         gcloud) version=$(gcloud version --format='value(version)' 2>/dev/null) ;;
       esac
-      echo "  ✓ $cli: $version"
+      echo "    ✓ $cli: $version"
     fi
   done
 
   # Optional CLIs
-  print_status "Optional CLIs:"
+  echo "  Optional CLIs:"
   local optional_clis=(oci aliyun doctl ibmcloud)
   for cli in "${optional_clis[@]}"; do
     if command_exists "$cli"; then
@@ -496,13 +521,14 @@ status() {
         doctl) version=$(doctl version 2>&1) ;;
         ibmcloud) version=$(ibmcloud version 2>&1) ;;
       esac
-      echo "  ✓ $cli: $version"
+      echo "    ✓ $cli: $version"
     fi
   done
 
   # Workspace
   local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
   if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
+    echo ""
     print_status "Cloud workspace:"
     echo "  $WORKSPACE_DIR/cloud/"
     for provider in aws azure gcp oracle alibaba digitalocean ibm; do

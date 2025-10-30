@@ -377,18 +377,29 @@ validate() {
 # ============================================================================
 
 status() {
-  print_status "Checking Rust status..."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Extension: $EXT_NAME v$EXT_VERSION"
+  echo "Description: $EXT_DESCRIPTION"
+  echo "Category: $EXT_CATEGORY"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
+  # Check installation status
   if ! command_exists rustc; then
-    print_warning "Rust not installed"
+    echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
 
-  print_success "rustc: $(rustc --version)"
-  command_exists cargo && print_success "cargo: $(cargo --version)"
-  command_exists rustup && print_success "rustup: $(rustup --version)"
+  echo "Status: ✓ INSTALLED"
+  echo ""
 
-  # Show installed cargo tools
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ rustc $(rustc --version | awk '{print $2}')"
+  command_exists cargo && echo "  ✓ cargo $(cargo --version | awk '{print $2}')"
+  command_exists rustup && echo "  ✓ rustup $(rustup --version | awk '{print $2}')"
+
+  echo ""
   print_status "Installed cargo tools:"
   local tools=(cargo-watch cargo-edit cargo-audit ripgrep fd-find exa bat tokei)
   for tool in "${tools[@]}"; do
@@ -397,10 +408,11 @@ status() {
 
   # Show background install log if exists
   if [[ -f "/workspace/rust-install.log" ]]; then
+    echo ""
     print_status "Background install log available: /workspace/rust-install.log"
   fi
 
-  [[ -f "/workspace/scripts/create-rust-project.sh" ]] && print_success "Project template: installed"
+  [[ -f "/workspace/scripts/create-rust-project.sh" ]] && echo "" && print_status "Project template: installed"
 
   return 0
 }
