@@ -25,6 +25,7 @@ apt-get install -y \
     unzip \
     build-essential \
     pkg-config \
+    pipx \
     sqlite3 \
     postgresql-client \
     redis-tools \

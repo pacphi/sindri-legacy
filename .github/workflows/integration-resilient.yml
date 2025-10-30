@@ -431,7 +431,7 @@ jobs:
           app_name="${{ steps.app-name.outputs.app_name }}"
 
           echo "Setting up manifest with protected core extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -454,7 +454,7 @@ jobs:
           echo "Installing protected extensions (workspace-structure, mise-config, ssh-environment)..."
           if retry_with_backoff 3 10 60 \
             flyctl ssh console -a "$app_name" --user developer \
-              -C "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install-all'"; then
+              -C "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh install-all'"; then
             echo "✅ Protected extensions installed"
           else
             echo "❌ Protected extensions installation failed"
@@ -497,7 +497,7 @@ jobs:
 
           # Test extension-manager availability
           if ssh_command_retry "${{ steps.app-name.outputs.app_name }}" \
-            "/bin/bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh list'"; then
+            "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh list'"; then
             echo "✅ Extension manager available"
           else
             echo "❌ Extension manager not found"
@@ -508,7 +508,7 @@ jobs:
           echo "🔍 Testing extension installation with auto-activation (nodejs)..."
           if retry_with_backoff 3 10 60 \
             flyctl ssh console -a "${{ steps.app-name.outputs.app_name }}" --user developer \
-              -C "/bin/bash -c '
+              -C "/bin/bash -lc '
                 cd /workspace/scripts/lib
 
                 # Install with retry for mise-powered extensions

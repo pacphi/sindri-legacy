@@ -566,7 +566,7 @@ jobs:
           depends_on="${{ matrix.extension.depends_on || '' }}"
 
           echo "Adding $extension_name to manifest..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -1577,8 +1577,13 @@ jobs:
               echo \"\"
               echo \"Testing deactivation prevention for \$ext...\"
 
-              if bash extension-manager.sh deactivate \$ext 2>&1 | tee /tmp/deactivate_\${ext}.log; then
+              # Capture exit code before piping to tee
+              bash extension-manager.sh deactivate \$ext 2>&1 | tee /tmp/deactivate_\${ext}.log
+              deactivate_exit=\${PIPESTATUS[0]}
+
+              if [ \$deactivate_exit -eq 0 ]; then
                 echo \"❌ FAIL: \$ext was deactivated (should be protected)\"
+                cat /tmp/deactivate_\${ext}.log
                 exit 1
               else
                 # Check that error message mentions protection
@@ -1608,7 +1613,11 @@ jobs:
               echo \"\"
               echo \"Testing uninstall prevention for \$ext...\"
 
-              if bash extension-manager.sh uninstall \$ext 2>&1 | tee /tmp/uninstall_\${ext}.log; then
+              # Capture exit code before piping to tee
+              bash extension-manager.sh uninstall \$ext 2>&1 | tee /tmp/uninstall_\${ext}.log
+              uninstall_exit=\${PIPESTATUS[0]}
+
+              if [ \$uninstall_exit -eq 0 ]; then
                 echo \"❌ FAIL: \$ext was uninstalled (should be protected)\"
                 exit 1
               else
@@ -2227,21 +2236,27 @@ jobs:
 
             echo \"\"
             echo \"Running: extension-manager install nodejs (should fail - mise missing)\"
-            if bash extension-manager.sh install nodejs 2>&1 | tee /tmp/prereq_fail.log; then
+            # Capture exit code before piping to tee
+            bash extension-manager.sh install nodejs 2>&1 | tee /tmp/prereq_fail.log
+            install_exit=\${PIPESTATUS[0]}
+
+            if [ \$install_exit -eq 0 ]; then
               echo \"❌ Installation succeeded when mise dependency missing\"
               sudo mv \${mise_path}.disabled \$mise_path 2>/dev/null || mv \${mise_path}.disabled \$mise_path
+              cat /tmp/prereq_fail.log
               exit 1
             else
               echo \"\"
-              echo \"✅ Installation correctly failed\"
+              echo \"✅ Installation correctly failed due to missing mise dependency\"
 
               if grep -qi \"prerequisite\|mise.*required\|mise.*not found\" /tmp/prereq_fail.log; then
-                echo \"✅ Appropriate error message shown\"
+                echo \"✅ Appropriate error message shown (dependency check working)\"
               else
                 echo \"⚠️  Error message could be clearer\"
                 cat /tmp/prereq_fail.log
               fi
 
+              # Restore mise for subsequent tests
               sudo mv \${mise_path}.disabled \$mise_path 2>/dev/null || mv \${mise_path}.disabled \$mise_path
             fi
           '"
