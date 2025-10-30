@@ -829,6 +829,334 @@ reorder_extension() {
     return 0
 }
 
+# Function to show status of all active extensions
+status_all_extensions() {
+    local format="${1:-text}"
+
+    # Read active extensions from manifest
+    local active_extensions=()
+    mapfile -t active_extensions < <(read_manifest)
+
+    if [[ ${#active_extensions[@]} -eq 0 ]]; then
+        if [[ "$format" == "json" ]]; then
+            echo '{"error": "No extensions in activation manifest", "extensions": []}'
+        else
+            print_warning "No extensions in activation manifest"
+            print_status "Edit the manifest: $MANIFEST_FILE"
+        fi
+        return 0
+    fi
+
+    if [[ "$format" == "json" ]]; then
+        # JSON output for programmatic use
+        echo '{'
+        echo "  \"generated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+        echo "  \"hostname\": \"$(hostname)\","
+        echo "  \"manifest\": \"$MANIFEST_FILE\","
+        echo '  "extensions": ['
+
+        local first=true
+        for ext_name in "${active_extensions[@]}"; do
+            [[ "$first" == "false" ]] && echo ','
+            first=false
+
+            # Get extension file
+            local activated_file
+            activated_file=$(get_activated_file "$ext_name")
+
+            echo -n "    {"
+            echo -n "\"name\": \"$ext_name\", "
+
+            if [[ -n "$activated_file" ]] && [[ -f "$activated_file" ]]; then
+                echo -n "\"file\": \"$activated_file\", "
+                echo -n "\"activated\": true, "
+
+                # Check if in manifest
+                if is_in_manifest "$ext_name"; then
+                    local position
+                    position=$(get_manifest_position "$ext_name")
+                    echo -n "\"position\": $position, "
+                    echo -n "\"in_manifest\": true"
+                else
+                    echo -n "\"in_manifest\": false"
+                fi
+            else
+                echo -n "\"activated\": false, "
+                echo -n "\"error\": \"Extension file not found\""
+            fi
+
+            echo -n "}"
+        done
+
+        echo ""
+        echo '  ]'
+        echo '}'
+    else
+        # Human-readable text output
+        echo "=== Extension Status Report ==="
+        echo "Generated: $(date)"
+        echo "Hostname: $(hostname)"
+        echo "Manifest: $MANIFEST_FILE"
+        echo ""
+
+        # Iterate through all active extensions
+        for ext_name in "${active_extensions[@]}"; do
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            status_extension "$ext_name"
+            echo ""
+        done
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_success "Status report completed for ${#active_extensions[@]} extension(s)"
+    fi
+
+    return 0
+}
+
+# Function to perform health check on extension system
+doctor_extensions() {
+    print_status "Running extension system health check..."
+    echo ""
+
+    local issues_found=0
+
+    # Check 1: Manifest file exists and is readable
+    print_status "Checking manifest file..."
+    if [[ ! -f "$MANIFEST_FILE" ]]; then
+        print_error "Manifest file not found: $MANIFEST_FILE"
+        ((issues_found++))
+    elif [[ ! -r "$MANIFEST_FILE" ]]; then
+        print_error "Manifest file not readable: $MANIFEST_FILE"
+        ((issues_found++))
+    else
+        print_success "Manifest file OK"
+    fi
+    echo ""
+
+    # Check 2: Extensions directory exists and is accessible
+    print_status "Checking extensions directory..."
+    if [[ ! -d "$EXTENSIONS_BASE" ]]; then
+        print_error "Extensions directory not found: $EXTENSIONS_BASE"
+        ((issues_found++))
+    elif [[ ! -r "$EXTENSIONS_BASE" ]]; then
+        print_error "Extensions directory not readable: $EXTENSIONS_BASE"
+        ((issues_found++))
+    else
+        print_success "Extensions directory OK"
+    fi
+    echo ""
+
+    # Check 3: Disk space
+    print_status "Checking disk space..."
+    local workspace_avail
+    if workspace_avail=$(df -h /workspace 2>/dev/null | awk 'NR==2 {print $4}'); then
+        print_success "Available space in /workspace: $workspace_avail"
+    else
+        print_warning "Could not check disk space"
+    fi
+    echo ""
+
+    # Check 4: Permissions
+    print_status "Checking permissions..."
+    if [[ -w "$EXTENSIONS_BASE" ]]; then
+        print_success "Extensions directory is writable"
+    else
+        print_error "Extensions directory is not writable: $EXTENSIONS_BASE"
+        ((issues_found++))
+    fi
+    echo ""
+
+    # Check 5: Network connectivity (basic check)
+    print_status "Checking network connectivity..."
+    if ping -c 1 8.8.8.8 >/dev/null 2>&1 || ping -c 1 1.1.1.1 >/dev/null 2>&1; then
+        print_success "Network connectivity OK"
+    else
+        print_warning "Network connectivity may be limited"
+        print_status "Some extensions may fail to install packages"
+    fi
+    echo ""
+
+    # Check 6: Run mise doctor if available
+    print_status "Checking mise installation..."
+    if command -v mise >/dev/null 2>&1; then
+        print_success "mise is installed"
+        echo ""
+        print_status "Running 'mise doctor'..."
+        echo ""
+        mise doctor || print_warning "mise doctor reported issues"
+    else
+        print_status "mise not installed (optional)"
+    fi
+    echo ""
+
+    # Check 7: Validate all active extensions
+    print_status "Validating active extensions..."
+    echo ""
+
+    local active_extensions=()
+    mapfile -t active_extensions < <(read_manifest)
+
+    if [[ ${#active_extensions[@]} -eq 0 ]]; then
+        print_warning "No extensions in activation manifest"
+    else
+        local validation_failed=0
+        for ext_name in "${active_extensions[@]}"; do
+            print_status "Validating: $ext_name"
+            if validate_extension "$ext_name" 2>/dev/null; then
+                print_success "  ✓ $ext_name validation passed"
+            else
+                print_error "  ✗ $ext_name validation failed"
+                ((validation_failed++))
+                ((issues_found++))
+            fi
+        done
+
+        echo ""
+        if [[ $validation_failed -eq 0 ]]; then
+            print_success "All extensions validated successfully"
+        else
+            print_error "$validation_failed extension(s) failed validation"
+        fi
+    fi
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [[ $issues_found -eq 0 ]]; then
+        print_success "Health check completed: No issues found"
+        return 0
+    else
+        print_warning "Health check completed: $issues_found issue(s) found"
+        return 1
+    fi
+}
+
+# Function to upgrade all tools managed by mise
+upgrade_all_tools() {
+    print_status "Upgrading all mise-managed tools..."
+    echo ""
+
+    # Check if mise is available
+    if ! command -v mise >/dev/null 2>&1; then
+        print_warning "mise is not installed"
+        print_status "This command requires mise for tool management"
+        print_status "Install mise with: extension-manager install mise"
+        return 1
+    fi
+
+    # Run mise upgrade
+    print_status "Running 'mise upgrade'..."
+    echo ""
+
+    if mise upgrade; then
+        print_success "mise upgrade completed successfully"
+    else
+        print_error "mise upgrade failed"
+        return 1
+    fi
+
+    echo ""
+    print_status "Checking for extension updates..."
+    print_status "Extension files are managed via git repository updates"
+    print_status "To update extensions, pull the latest changes from the repository"
+
+    echo ""
+    print_success "Upgrade process completed"
+    return 0
+}
+
+# Function to compare status snapshots
+status_diff_extensions() {
+    local snapshot_file="${1:-}"
+    local temp_current=$(mktemp)
+
+    # Generate current status snapshot in JSON
+    print_status "Generating current status snapshot..."
+    status_all_extensions "json" > "$temp_current"
+
+    if [[ -z "$snapshot_file" ]]; then
+        # No previous snapshot provided, just save current one
+        local snapshot_path="/tmp/extension-status-$(date +%Y%m%d-%H%M%S).json"
+        cp "$temp_current" "$snapshot_path"
+        print_success "Status snapshot saved to: $snapshot_path"
+        print_status "Run 'extension-manager status-diff $snapshot_path' later to compare"
+        rm -f "$temp_current"
+        return 0
+    fi
+
+    if [[ ! -f "$snapshot_file" ]]; then
+        print_error "Snapshot file not found: $snapshot_file"
+        rm -f "$temp_current"
+        return 1
+    fi
+
+    print_status "Comparing with snapshot: $snapshot_file"
+    echo ""
+
+    # Extract extension names from both snapshots
+    local prev_extensions=$(grep -o '"name": "[^"]*"' "$snapshot_file" 2>/dev/null | cut -d'"' -f4 | sort)
+    local curr_extensions=$(grep -o '"name": "[^"]*"' "$temp_current" 2>/dev/null | cut -d'"' -f4 | sort)
+
+    # Find differences
+    local added=()
+    local removed=()
+    local common=()
+
+    # Find added extensions
+    while IFS= read -r ext; do
+        if ! echo "$prev_extensions" | grep -q "^${ext}$"; then
+            added+=("$ext")
+        else
+            common+=("$ext")
+        fi
+    done <<< "$curr_extensions"
+
+    # Find removed extensions
+    while IFS= read -r ext; do
+        if ! echo "$curr_extensions" | grep -q "^${ext}$"; then
+            removed+=("$ext")
+        fi
+    done <<< "$prev_extensions"
+
+    # Display results
+    echo "=== Status Comparison Report ==="
+    echo "Previous snapshot: $snapshot_file"
+    echo "Current time: $(date)"
+    echo ""
+
+    if [[ ${#added[@]} -gt 0 ]]; then
+        print_success "Added extensions (${#added[@]}):"
+        for ext in "${added[@]}"; do
+            echo "  + $ext"
+        done
+        echo ""
+    fi
+
+    if [[ ${#removed[@]} -gt 0 ]]; then
+        print_warning "Removed extensions (${#removed[@]}):"
+        for ext in "${removed[@]}"; do
+            echo "  - $ext"
+        done
+        echo ""
+    fi
+
+    if [[ ${#common[@]} -gt 0 ]]; then
+        print_status "Unchanged extensions (${#common[@]}):"
+        for ext in "${common[@]}"; do
+            echo "  = $ext"
+        done
+        echo ""
+    fi
+
+    if [[ ${#added[@]} -eq 0 ]] && [[ ${#removed[@]} -eq 0 ]]; then
+        print_success "No changes detected"
+    fi
+
+    # Cleanup
+    rm -f "$temp_current"
+
+    return 0
+}
+
 # Function to show help
 show_help() {
     cat << EOF
@@ -848,6 +1176,11 @@ Commands:
   validate <name>          Run extension validation tests
   validate-all             Validate all active extensions
   status <name>            Check extension installation status
+  status-all [--json]      Show status of all active extensions
+
+  doctor                   Run health check on extension system
+  upgrade-all              Upgrade all mise-managed tools
+  status-diff [snapshot]   Compare status with previous snapshot
 
   deactivate <name>        Remove extension from manifest
   reorder <name> <pos>     Change extension execution order in manifest
@@ -855,6 +1188,7 @@ Commands:
 
 Options:
   --yes                    Skip confirmation prompts (for install/uninstall)
+  --json                   Output in JSON format (for status-all)
 
 Examples:
   # List all extensions and show activation status
@@ -873,6 +1207,20 @@ Examples:
   $(basename "$0") status rust
   $(basename "$0") validate rust
   $(basename "$0") validate-all
+
+  # Show status of all active extensions
+  $(basename "$0") status-all
+  $(basename "$0") status-all --json | jq .
+
+  # Run health check
+  $(basename "$0") doctor
+
+  # Upgrade all tools
+  $(basename "$0") upgrade-all
+
+  # Create and compare status snapshots
+  $(basename "$0") status-diff                    # Create snapshot
+  $(basename "$0") status-diff /tmp/snapshot.json # Compare with snapshot
 
   # Uninstall and deactivate
   $(basename "$0") uninstall rust
@@ -946,6 +1294,23 @@ main() {
                 exit 1
             fi
             status_extension "$1"
+            ;;
+        status-all)
+            # Check for --json flag
+            local format="text"
+            if [[ "$1" == "--json" ]]; then
+                format="json"
+            fi
+            status_all_extensions "$format"
+            ;;
+        doctor)
+            doctor_extensions
+            ;;
+        upgrade-all)
+            upgrade_all_tools
+            ;;
+        status-diff)
+            status_diff_extensions "$1"
             ;;
         install-all)
             install_all_extensions
