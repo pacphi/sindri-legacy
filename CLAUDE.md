@@ -110,18 +110,18 @@ extension-manager reorder <name> <position>
 
 **Core Environment:**
 - `workspace-structure` - Base directory structure
-- `nodejs` - Node.js LTS via NVM (Node Version Manager) with npm
+- `nodejs` - Node.js LTS via mise (replaces NVM) with npm (mise-powered)
 - `ssh-environment` - SSH wrappers for non-interactive sessions
 
 **Claude AI:**
 - `claude-config` - Claude Code CLI with developer configuration (requires nodejs)
-- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
+- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
 **Development Tools:**
 - `github-cli` - GitHub CLI authentication and workflow configuration
-- `python` - Python 3.13 with pip, venv, uv
-- `rust` - Rust toolchain with cargo, clippy, rustfmt
-- `golang` - Go 1.24 with gopls, delve, golangci-lint
+- `python` - Python 3.13 with pip, venv, uv, pipx tools (mise-powered)
+- `rust` - Rust toolchain with cargo, clippy, rustfmt (mise-powered)
+- `golang` - Go 1.24 with gopls, delve, golangci-lint (mise-powered)
 - `ruby` - Ruby 3.4/3.3 with rbenv, Rails, Bundler
 - `php` - PHP 8.3 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
@@ -175,17 +175,18 @@ Each extension implements 6 standard functions:
 
 Sindri provides multiple extensions for Node.js development:
 
-**nodejs** (Core - NVM approach):
+**nodejs** (Core - mise-powered):
 ```bash
 extension-manager install nodejs
 ```
 Provides:
-- Node.js LTS via NVM (v0.40.3)
+- Node.js LTS via mise (replaces NVM)
 - Multiple Node version support
 - npm with user-space global packages
 - No sudo required for global installs
+- Per-project version management via mise.toml
 
-**nodejs-devtools** (Optional):
+**nodejs-devtools** (Optional - mise-powered):
 ```bash
 extension-manager install nodejs-devtools
 ```
@@ -195,6 +196,7 @@ Provides:
 - Prettier code formatter
 - nodemon for auto-reload
 - goalie AI research assistant
+- Tools managed via mise npm plugin
 
 **claude-config** (Recommended):
 ```bash
@@ -217,6 +219,118 @@ extension-manager install-all
 # Or use interactive mode
 extension-manager --interactive
 ```
+
+## mise Tool Manager
+
+Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes. mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, and their associated tools, replacing multiple version managers (NVM, pyenv, rustup, etc.) with one tool.
+
+### mise-Managed Extensions
+
+The following extensions use mise for tool installation and version management:
+
+- **nodejs**: Node.js LTS via mise (replaces NVM)
+  - Manages Node.js versions
+  - npm package manager
+  - Per-project version configuration
+
+- **python**: Python 3.13 + pipx tools via mise
+  - Python runtime versions
+  - pipx-installed tools (uv, black, ruff, etc.)
+  - Virtual environment support
+
+- **rust**: Rust stable + cargo tools via mise
+  - Rust toolchain versions
+  - Cargo package manager
+  - Development tools (clippy, rustfmt)
+
+- **golang**: Go 1.24 + go tools via mise
+  - Go language versions
+  - Go toolchain utilities
+  - Development tools (gopls, delve, golangci-lint)
+
+- **nodejs-devtools**: npm global tools via mise
+  - TypeScript, ESLint, Prettier
+  - nodemon, goalie
+  - Managed via mise npm plugin
+
+### Common mise Commands
+
+```bash
+# List all installed tools and versions
+mise ls
+
+# List versions of a specific tool
+mise ls node
+mise ls python
+mise ls rust
+mise ls go
+
+# Install or switch tool versions
+mise use node@20          # Switch to Node.js 20
+mise use python@3.11      # Switch to Python 3.11
+mise use rust@stable      # Switch to stable Rust
+mise use go@1.24          # Switch to Go 1.24
+
+# Update all tools to latest versions
+mise upgrade
+
+# Check for configuration issues
+mise doctor
+
+# View current environment
+mise env
+
+# Install tools from mise.toml
+mise install
+
+# Uninstall a tool version
+mise uninstall node@18
+```
+
+### Per-Project Tool Versions
+
+Create a `mise.toml` file in your project root to specify tool versions:
+
+```toml
+[tools]
+node = "20"
+python = "3.11"
+rust = "1.75"
+go = "1.24"
+
+[env]
+NODE_ENV = "development"
+```
+
+mise automatically switches to the specified versions when you enter the directory:
+
+```bash
+# Create project with specific versions
+cd /workspace/projects/active/my-project
+cat > mise.toml << 'EOF'
+[tools]
+node = "20"
+python = "3.11"
+
+[env]
+NODE_ENV = "production"
+EOF
+
+# mise automatically detects and switches versions
+node --version    # v20.x.x
+python --version  # Python 3.11.x
+```
+
+### Benefits of mise
+
+- **Unified Interface**: One tool for all language runtimes
+- **Automatic Switching**: Changes versions based on directory
+- **Fast**: Written in Rust, faster than shell-based managers
+- **Cross-Platform**: Works on Linux, macOS, Windows
+- **Per-Project Config**: Each project defines its own versions
+- **Global Fallback**: Global versions used when no project config exists
+- **Plugin Ecosystem**: Supports 100+ tools via plugins
+- **Backwards Compatible**: Works with .nvmrc, .python-version, etc.
 
 ## Testing and Validation
 
