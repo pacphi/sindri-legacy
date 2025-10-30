@@ -27,6 +27,151 @@ The test suite is designed to:
 - **Feature Coverage**: 97%
 - **Test Fixtures**: 4 manifest test files
 
+## CI Environment Setup
+
+### Extension Auto-Installation Architecture
+
+The CI testing environment uses a two-phase approach to set up extensions:
+
+#### Phase 1: Manifest Template Deployment (Build Time)
+
+**File**: `docker/lib/extensions.d/active-extensions.ci.conf`
+
+This pre-configured template is built into the Docker image and contains:
+- All protected extensions (workspace-structure, mise-config, ssh-environment)
+- Comprehensive documentation and comments
+- Proper execution order (protected extensions first)
+
+**Purpose**: Provides a blueprint of what extensions should be installed in CI mode.
+
+#### Phase 2: Runtime Installation (Container Startup)
+
+**File**: `docker/scripts/entrypoint.sh` (lines 52-97, 176-190)
+
+When the container starts, entrypoint.sh executes in sequence:
+
+1. **Copy Library to Persistent Volume** (lines 52-55)
+   ```bash
+   if [ ! -d "/workspace/scripts/lib" ]; then
+       cp -r /docker/lib /workspace/scripts/
+   ```
+   - Only runs on first boot (volume empty)
+   - Copies extension library and manager from Docker image
+
+2. **Select Appropriate Manifest** (lines 57-89)
+   ```bash
+   if [ "$CI_MODE" = "true" ]; then
+       cp /docker/lib/extensions.d/active-extensions.ci.conf \
+          /workspace/scripts/extensions.d/active-extensions.conf
+   ```
+   - CI mode: Uses CI template (pre-configured with protected extensions)
+   - Production mode: Uses CI template as default or existing manifest
+
+3. **Auto-Install Protected Extensions** (lines 176-190)
+   ```bash
+   if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
+       sudo -u developer HOME=/workspace/developer bash -c \
+           'cd /workspace/scripts/lib && extension-manager install-all'
+   ```
+   - Detects if extensions already installed (checks for `mise` command)
+   - If not installed: Runs `extension-manager install-all`
+   - Reads manifest created in Phase 2
+   - Executes installation for all listed extensions
+   - Runs as developer user with proper HOME environment
+
+#### Why Two Phases?
+
+**The Problem Solved:**
+- Initial attempt only copied manifest → Extensions listed but never installed
+- Tests failed with "mise not found" because mise-config never executed
+
+**The Solution:**
+1. **Template (Phase 1)**: Defines WHAT to install (declarative)
+2. **Installation (Phase 2)**: Actually installs it (imperative)
+
+**Benefits:**
+- ✅ Idempotent: Only installs on first boot (checks `mise` presence)
+- ✅ Transparent: Installation logs visible in container startup output
+- ✅ Flexible: Works for both CI and production deployments
+- ✅ Persistent: Volume storage means installs survive restarts
+
+#### Manifest Flow Diagram
+
+```
+Docker Build
+    │
+    ├─→ active-extensions.ci.conf (template)
+    │
+    ▼
+Container Startup (entrypoint.sh)
+    │
+    ├─→ Check: First boot? (/workspace/scripts/lib missing?)
+    │   │
+    │   ├─→ YES: Copy lib/ to /workspace/scripts/
+    │   │         Copy active-extensions.ci.conf → active-extensions.conf
+    │   │
+    │   └─→ NO: Skip (volume already has lib/)
+    │
+    ├─→ Check: mise installed? (mise-config extension ran?)
+    │   │
+    │   ├─→ NO: Run extension-manager install-all
+    │   │        └─→ Reads active-extensions.conf
+    │   │            └─→ Installs: workspace-structure, mise-config, ssh-environment
+    │   │
+    │   └─→ YES: Skip (already installed on previous boot)
+    │
+    ▼
+Container Ready
+    │
+    ├─→ Protected extensions: ✓ Installed and functional
+    ├─→ mise: ✓ Available in PATH
+    └─→ Workspace: ✓ Directory structure created
+```
+
+#### Testing Implications
+
+**Workflow Verification Steps** (integration.yml, extension-tests.yml):
+
+After deployment, workflows verify:
+```bash
+# 1. Manifest exists and has protected extensions
+grep -q "^workspace-structure$" /workspace/scripts/extensions.d/active-extensions.conf
+grep -q "^mise-config$" /workspace/scripts/extensions.d/active-extensions.conf
+grep -q "^ssh-environment$" /workspace/scripts/extensions.d/active-extensions.conf
+
+# 2. Extensions were actually installed (not just listed)
+mise --version           # Proves mise-config ran
+ls /workspace/projects   # Proves workspace-structure ran
+```
+
+**Key Difference from Production:**
+- **CI**: Fresh volume every test → Always runs installation on first boot
+- **Production**: Persistent volume → Installation runs once, then skipped
+
+#### Debugging Extension Installation
+
+**Check if auto-installation ran:**
+```bash
+# View container startup logs
+flyctl logs --app <app-name> | grep "Installing protected extensions"
+
+# Expected output:
+# 🔧 Installing protected extensions...
+# [INFO] Installing extension: workspace-structure
+# [SUCCESS] Extension 'workspace-structure' installed successfully
+# [INFO] Installing extension: mise-config
+# [SUCCESS] Extension 'mise-config' installed successfully
+# [INFO] Installing extension: ssh-environment
+# [SUCCESS] Extension 'ssh-environment' installed successfully
+# ✅ Protected extensions installed
+```
+
+**If mise not found:**
+1. Check entrypoint logs for installation errors
+2. Verify CI_MODE secret is set: `flyctl secrets list --app <name>`
+3. Verify manifest was created: `flyctl ssh console -C "cat /workspace/scripts/extensions.d/active-extensions.conf"`
+4. Manually trigger: `flyctl ssh console -C "extension-manager install-all"`
+
 ## Test Coverage
 
 The extension testing workflow includes **10 comprehensive test jobs** covering all aspects of the Extension API:

@@ -87,6 +87,7 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     # Ensure correct permissions
     chown developer:developer /workspace/scripts/extensions.d/active-extensions.conf
     chmod 644 /workspace/scripts/extensions.d/active-extensions.conf
+
 fi
 
 # Create /workspace/bin directory and symlink extension-manager
@@ -170,6 +171,22 @@ fi
 if [ -f "/docker/scripts/setup-motd.sh" ]; then
     echo "📋 Setting up MOTD banner..."
     bash /docker/scripts/setup-motd.sh
+fi
+
+# Install protected extensions if manifest exists and extensions aren't installed yet
+if [ -f "/workspace/scripts/extensions.d/active-extensions.conf" ] && [ -f "/workspace/scripts/lib/extension-manager.sh" ]; then
+    # Check if mise is already installed (indicates protected extensions were installed)
+    if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
+        echo "🔧 Installing protected extensions..."
+        # Run as developer user with proper HOME environment
+        if sudo -u developer HOME=/workspace/developer bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install-all' 2>&1; then
+            echo "✅ Protected extensions installed"
+        else
+            echo "⚠️  Some protected extensions may have failed to install (non-critical)"
+        fi
+    else
+        echo "✅ Protected extensions already installed"
+    fi
 fi
 
 # Start SSH daemon (check for CI mode)

@@ -614,13 +614,13 @@ jobs:
               exit 1
             fi
 
-            # Verify extension was activated (check for .sh file without .example)
+            # Verify extension is in manifest (already installed by entrypoint)
             echo \"\"
-            echo \"Checking extension activation...\"
-            if [ -f extensions.d/workspace-structure.sh ]; then
-              echo \"✅ Extension file activated (copied from .example)\"
+            echo \"Checking extension in manifest...\"
+            if grep -q \"^workspace-structure\$\" extensions.d/active-extensions.conf; then
+              echo \"✅ Extension in manifest (already installed by entrypoint)\"
             else
-              echo \"❌ Extension file not activated\"
+              echo \"❌ Extension not found in manifest\"
               exit 1
             fi
 

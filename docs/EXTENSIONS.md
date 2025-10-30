@@ -85,6 +85,54 @@ These extensions are **protected** and cannot be removed. They are automatically
 | `mise-config` | Unified tool version manager | N/A | 1.0.0 |
 | `ssh-environment` | SSH wrappers for non-interactive sessions | N/A | 1.0.0 |
 
+#### Protected Extension Auto-Installation
+
+Protected extensions are **automatically installed** on first container startup to ensure the development environment is functional. This process is transparent and happens in the background.
+
+**How it works:**
+
+1. **Container Starts** (`entrypoint.sh`)
+   - Detects if this is the first boot by checking `/workspace/scripts/lib`
+   - Copies extension library from Docker image to persistent volume
+
+2. **Manifest Setup**
+   - In **CI mode** (`CI_MODE=true`): Uses `active-extensions.ci.conf` template
+   - In **production mode**: Uses same template or existing manifest
+   - Template pre-includes: `workspace-structure`, `mise-config`, `ssh-environment`
+
+3. **Auto-Installation Triggered**
+   - Checks if `mise` command is available (indicator of installation status)
+   - If not found: Runs `extension-manager install-all` as developer user
+   - Installs all protected extensions listed in manifest
+   - Output visible in container startup logs
+
+4. **Idempotency**
+   - On subsequent restarts: Skips installation (mise already exists)
+   - Volume persistence means protected extensions install only once
+   - Manual reinstall available: `extension-manager uninstall <name>` then restart
+
+**Why this approach?**
+
+- ✅ Guarantees foundational tools (mise, workspace dirs, SSH config) are always available
+- ✅ Works in both CI/CD and production environments
+- ✅ Respects persistent volumes (doesn't reinstall unnecessarily)
+- ✅ Provides clear feedback in logs for debugging
+
+**Verification:**
+
+```bash
+# Check if protected extensions are installed
+extension-manager list
+
+# Should show:
+#   1. ✓ workspace-structure [PROTECTED]
+#   2. ✓ mise-config [PROTECTED]
+#   3. ✓ ssh-environment [PROTECTED]
+
+# Verify mise is available (from mise-config extension)
+mise --version
+```
+
 ### Foundational Languages
 
 While not protected, these are highly recommended as many tools depend on them.
