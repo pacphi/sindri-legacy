@@ -50,7 +50,7 @@ fi
 # Function to extract extension name from filename
 get_extension_name() {
     local filename="$1"
-    local base=$(basename "$filename" .sh.example)
+    local base=$(basename "$filename" .extension)
     # Remove leading numbers and dash (e.g., "10-rust" -> "rust")
     # This handles legacy naming and new naming without prefixes
     echo "$base" | sed 's/^[0-9]*-//'
@@ -66,7 +66,7 @@ is_activated() {
 # Function to check if an extension is protected (00 prefix for core initialization)
 is_protected_extension() {
     local filename="$1"
-    local base=$(basename "$filename" .sh.example)
+    local base=$(basename "$filename" .extension)
     base=$(basename "$base" .sh)
 
     # Check if filename starts with 00 (core initialization script)
@@ -259,14 +259,14 @@ get_manifest_position() {
 find_extension_file() {
     local ext_name="$1"
 
-    # Try exact match first (new naming: rust.sh.example)
-    if [[ -f "$EXTENSIONS_BASE/${ext_name}.sh.example" ]]; then
-        echo "$EXTENSIONS_BASE/${ext_name}.sh.example"
+    # Try exact match first (new naming: rust.extension)
+    if [[ -f "$EXTENSIONS_BASE/${ext_name}.extension" ]]; then
+        echo "$EXTENSIONS_BASE/${ext_name}.extension"
         return 0
     fi
 
-    # Try with numeric prefixes (legacy naming: 10-rust.sh.example)
-    for example_file in "$EXTENSIONS_BASE"/*-"${ext_name}".sh.example; do
+    # Try with numeric prefixes (legacy naming: 10-rust.extension)
+    for example_file in "$EXTENSIONS_BASE"/*-"${ext_name}".extension; do
         if [[ -f "$example_file" ]]; then
             echo "$example_file"
             return 0
@@ -274,7 +274,7 @@ find_extension_file() {
     done
 
     # Try pattern match
-    for example_file in "$EXTENSIONS_BASE"/*.sh.example; do
+    for example_file in "$EXTENSIONS_BASE"/*.extension; do
         [[ ! -f "$example_file" ]] && continue
         local name=$(get_extension_name "$(basename "$example_file")")
         if [[ "$name" == "$ext_name" ]]; then
@@ -286,17 +286,18 @@ find_extension_file() {
     return 1
 }
 
-# Get activated extension file (without .example)
+# Get activated extension file (the .extension file itself, already active)
 get_activated_file() {
     local ext_name="$1"
-    local example_file
+    local extension_file
 
-    example_file=$(find_extension_file "$ext_name")
-    if [[ -z "$example_file" ]]; then
+    extension_file=$(find_extension_file "$ext_name")
+    if [[ -z "$extension_file" ]]; then
         return 1
     fi
 
-    echo "${example_file%.example}"
+    # With the .extension naming, the file itself is the activated file
+    echo "$extension_file"
     return 0
 }
 
@@ -374,12 +375,12 @@ list_extensions() {
     # Show available but inactive extensions
     print_status "Available Extensions (not activated):"
     local inactive_found=false
-    for example_file in "$EXTENSIONS_BASE"/*.sh.example; do
-        [[ ! -f "$example_file" ]] && continue
+    for extension_file in "$EXTENSIONS_BASE"/*.extension; do
+        [[ ! -f "$extension_file" ]] && continue
         found_any=true
 
-        local name=$(get_extension_name "$(basename "$example_file")")
-        local filename=$(basename "$example_file")
+        local name=$(get_extension_name "$(basename "$extension_file")")
+        local filename=$(basename "$extension_file")
 
         # Skip if in manifest
         if is_in_manifest "$name"; then
@@ -461,24 +462,17 @@ auto_activate_extension() {
     if [[ -z "$example_file" ]]; then
         print_error "Extension '$ext_name' not found"
         echo "Available extensions:"
-        for ef in "$EXTENSIONS_BASE"/*.sh.example; do
+        for ef in "$EXTENSIONS_BASE"/*.extension; do
             [[ -f "$ef" ]] && echo "  - $(get_extension_name "$(basename "$ef")")"
         done
         return 1
     fi
 
-    # Copy and activate
-    activated_file="${example_file%.example}"
-    print_status "Auto-activating extension '$ext_name'..."
-
-    if cp "$example_file" "$activated_file"; then
-        chmod +x "$activated_file"
-        print_success "Extension '$ext_name' activated"
-        return 0
-    else
-        print_error "Failed to activate extension '$ext_name'"
-        return 1
-    fi
+    # With .extension naming, file is already activated, just ensure executable
+    print_status "Ensuring extension '$ext_name' is executable..."
+    chmod +x "$example_file"
+    print_success "Extension '$ext_name' ready"
+    return 0
 }
 
 # Function to install an extension (prerequisites + install + configure)

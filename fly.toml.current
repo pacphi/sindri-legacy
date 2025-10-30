@@ -1,0 +1,153 @@
+# fly.toml configuration for Sindri
+# AI-powered cloud development forge with cost-effective remote development,
+# scale-to-zero capabilities, and persistent storage
+
+app = "sindri-dev-env"
+# Change to your preferred region
+# Consult https://fly.io/docs/reference/regions/ for available regions
+primary_region = "sjc"
+
+# Build configuration
+[build]
+  dockerfile = "Dockerfile"
+
+# Environment variables
+[env]
+  # User configuration
+  DEV_USER = "developer"
+  # SSH port (internal) - use 2222 to avoid conflicts with Fly.io's hallpass service on port 22
+  SSH_PORT = "2222"
+  # Timezone
+  TZ = "UTC"
+
+# Volume mounts for persistent storage
+[mounts]
+  # Mount persistent volume for all development work
+  source = "sindri_data"
+  destination = "/workspace"
+  # Initial size matches the volume size specified during creation
+  initial_size = "30GB"
+  # Keep snapshots for a week
+  snapshot_retention = 7
+  # Auto-extend when 80% full
+  auto_extend_size_threshold = 80
+  # Grow by 5GB increments
+  auto_extend_size_increment = "5GB"
+  # Maximum size limit
+  auto_extend_size_limit = "250GB"
+
+# SSH service configuration (primary access method)
+[[services]]
+  protocol = "tcp"
+  internal_port = 2222  # Use port 2222 to avoid conflicts with Fly.io's hallpass service on port 22
+
+  # Cost optimization settings
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Port mapping for SSH access
+  [[services.ports]]
+    port = 10022  # External port for SSH - configurable for testing
+
+  # Health check for SSH service
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    restart_limit = 0
+
+# Machine configuration
+[machine]
+  # Auto-restart on failure
+  auto_restart = true
+
+  # Restart policy
+  restart_policy = "always"
+
+# VM resource allocation
+# Start small and scale up if needed
+[vm]
+  # CPU and memory settings (adjust based on needs)
+  cpu_kind = "performance"    # Options: "shared", "performance"
+  cpus = 4         # Number of CPUs
+  memory = "16384mb"
+  # Swap space for memory pressure relief (2GB)
+  swap_size_mb = 2048
+
+# Deployment settings
+[deploy]
+  # Deployment strategy for zero-downtime updates
+  strategy = "rolling"
+
+  # Release command (runs once per deployment)
+  release_command = "echo 'Deployment complete'"
+
+# Monitoring and health checks
+[checks]
+  # SSH service health check
+  [checks.ssh]
+    type = "tcp"
+    port = 2222  # Updated to match SSH daemon port
+    interval = "15s"
+    timeout = "2s"
+
+# Optional: Metrics and observability
+[metrics]
+  port = 9090
+  path = "/metrics"
+
+# Optional: Process groups for complex applications
+# Uncomment if you need separate processes
+# [processes]
+#   app = "ssh-server"
+#   worker = "background-tasks"
+
+# Volume configuration reference
+# Create volume with: flyctl volumes create sindri_data --region sjc --size 30
+# Volume naming pattern: <app-name>_data
+# Pricing: ~$0.15/GB/month
+
+# Cost optimization notes:
+# 1. auto_stop_machines = "suspend" - Fastest restart, lowest cost when idle
+# 2. min_machines_running = 0 - Allows complete scale-to-zero
+# 3. Shared CPU - Most cost-effective for development workloads
+# 4. 8GB RAM - Good performance for AI-powered development with Sindri
+
+# Security notes:
+# 1. SSH access only via key authentication (configured in Dockerfile)
+# 2. Non-standard SSH port (10022) reduces automated attacks
+# 3. Auto-restart on failure provides resilience
+# 4. No root access via SSH (configured in Dockerfile)
+# 5. Secrets management via Fly.io secrets:
+#    - ANTHROPIC_API_KEY: Claude API authentication
+#    - GITHUB_TOKEN: GitHub authentication for git operations
+#    - GIT_USER_NAME: Git config user.name
+#    - GIT_USER_EMAIL: Git config user.email
+#    - GITHUB_USER: GitHub username for gh CLI
+#    - OPENROUTER_API_KEY: OpenRouter API for cost-optimized models (agent-flow)
+#    - GOOGLE_GEMINI_API_KEY: Google Gemini API for free-tier access (agent-flow)
+#    - PERPLEXITY_API_KEY: Perplexity API for Goalie research assistant
+
+# Scaling notes:
+# 1. Machines will automatically start on incoming connections
+# 2. Adjust concurrency limits based on expected load
+# 3. Consider performance CPU for intensive tasks
+# 4. Increase memory if running memory-intensive operations
+
+# Development workflow:
+# 1. Deploy: flyctl deploy
+# 2. Set secrets (optional):
+#    flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
+#    flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>
+#    flyctl secrets set GIT_USER_NAME="Your Name" -a <app-name>
+#    flyctl secrets set GIT_USER_EMAIL="you@example.com" -a <app-name>
+#    flyctl secrets set OPENROUTER_API_KEY=sk-or-... -a <app-name>
+#    flyctl secrets set GOOGLE_GEMINI_API_KEY=... -a <app-name>
+#    flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a <app-name>
+# 3. Connect: ssh developer@<app-name>.fly.dev -p 10022
+#    (External port 10022 maps to internal SSH daemon on port 2222)
+#    Alternative: flyctl ssh console -a <app-name> (uses Fly.io's hallpass service)
+# 4. Work: All files in /workspace are persistent
+# 5. Idle: VM automatically suspends after inactivity
+# 6. Resume: VM starts automatically on next connection
