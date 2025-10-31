@@ -17,9 +17,9 @@ on:
       - 'docker/lib/extensions-common.sh'
       # Workflow itself
       - '.github/workflows/integration.yml'
-      - '.github/workflows/callables/integration-test.yml'
-      - '.github/workflows/callables/developer-workflow.yml'
-      - '.github/workflows/callables/mise-stack-integration.yml'
+      - '.github/workflows/integration-test.yml'
+      - '.github/workflows/developer-workflow.yml'
+      - '.github/workflows/mise-stack-integration.yml'
       # Scripts
       - '.github/scripts/integration/**'
       - '.github/scripts/common/**'
@@ -40,9 +40,9 @@ on:
       - 'docker/lib/extensions-common.sh'
       # Workflow itself
       - '.github/workflows/integration.yml'
-      - '.github/workflows/callables/integration-test.yml'
-      - '.github/workflows/callables/developer-workflow.yml'
-      - '.github/workflows/callables/mise-stack-integration.yml'
+      - '.github/workflows/integration-test.yml'
+      - '.github/workflows/developer-workflow.yml'
+      - '.github/workflows/mise-stack-integration.yml'
       # Scripts
       - '.github/scripts/integration/**'
       - '.github/scripts/common/**'
@@ -67,7 +67,7 @@ jobs:
 
   integration-test:
     name: Integration Test
-    uses: ./.github/workflows/callables/integration-test.yml
+    uses: ./.github/workflows/integration-test.yml
     with:
       test_app_prefix: 'sindri-ci-test'
       region: ${{ github.event.inputs.test_region }}
@@ -82,7 +82,7 @@ jobs:
   developer-workflow:
     name: Developer Workflow
     needs: integration-test
-    uses: ./.github/workflows/callables/developer-workflow.yml
+    uses: ./.github/workflows/developer-workflow.yml
     with:
       test_app_prefix: 'sindri-ci-test'
       region: ${{ github.event.inputs.test_region }}
@@ -97,7 +97,7 @@ jobs:
   mise-stack-integration:
     name: Mise Stack Integration
     needs: integration-test
-    uses: ./.github/workflows/callables/mise-stack-integration.yml
+    uses: ./.github/workflows/mise-stack-integration.yml
     with:
       test_app_prefix: 'sindri-ci-test'
       region: ${{ github.event.inputs.test_region }}

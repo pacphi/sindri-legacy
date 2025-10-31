@@ -19,7 +19,7 @@ on:
       - 'docker/lib/upgrade-notifier.sh'
       # Workflow itself
       - '.github/workflows/extension-tests.yml'
-      - '.github/workflows/callables/*.yml'
+      - '.github/workflows/*.yml'
       # Actions
       - '.github/actions/**'
       # Test scripts
@@ -44,7 +44,6 @@ on:
       - 'docker/lib/upgrade-notifier.sh'
       # Workflow itself
       - '.github/workflows/extension-tests.yml'
-      - '.github/workflows/callables/*.yml'
       # Actions
       - '.github/actions/**'
       # Test scripts
@@ -85,11 +84,11 @@ jobs:
 
   extension-manager-validation:
     name: Extension Manager Validation
-    uses: ./.github/workflows/callables/manager-validation.yml
+    uses: ./.github/workflows/manager-validation.yml
 
   extension-syntax-validation:
     name: Extension Syntax Validation
-    uses: ./.github/workflows/callables/syntax-validation.yml
+    uses: ./.github/workflows/syntax-validation.yml
 
   # ============================================================================
   # Per-Extension Tests (Matrix)
@@ -98,7 +97,7 @@ jobs:
   per-extension-tests:
     name: Per-Extension Tests
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/per-extension.yml
+    uses: ./.github/workflows/per-extension.yml
     with:
       extension_name: ${{ github.event.inputs.extension_name || '' }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
@@ -115,7 +114,7 @@ jobs:
   extension-api-tests:
     name: Extension API Compliance
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/api-compliance.yml
+    uses: ./.github/workflows/api-compliance.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -130,7 +129,7 @@ jobs:
   protected-extensions-tests:
     name: Protected Extensions
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/protected-extensions-tests.yml
+    uses: ./.github/workflows/protected-extensions-tests.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -145,7 +144,7 @@ jobs:
   cleanup-extensions-tests:
     name: Cleanup Extensions
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/cleanup-extensions-tests.yml
+    uses: ./.github/workflows/cleanup-extensions-tests.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -160,7 +159,7 @@ jobs:
   manifest-operations-tests:
     name: Manifest Operations
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/manifest-operations-tests.yml
+    uses: ./.github/workflows/manifest-operations-tests.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -175,7 +174,7 @@ jobs:
   dependency-chain-tests:
     name: Dependency Chains
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/dependency-chain-tests.yml
+    uses: ./.github/workflows/dependency-chain-tests.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -190,7 +189,7 @@ jobs:
   extension-combinations:
     name: Extension Combinations
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/extension-combinations.yml
+    uses: ./.github/workflows/extension-combinations.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -205,7 +204,7 @@ jobs:
   test-upgrade-helpers:
     name: Upgrade Helpers
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/test-upgrade-helpers.yml
+    uses: ./.github/workflows/test-upgrade-helpers.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -216,7 +215,7 @@ jobs:
   test-extensions-metadata:
     name: Extensions Metadata
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/test-extensions-metadata.yml
+    uses: ./.github/workflows/test-extensions-metadata.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -227,7 +226,7 @@ jobs:
   test-extensions-upgrade-vm:
     name: Extensions Upgrade VM
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/test-extensions-upgrade-vm.yml
+    uses: ./.github/workflows/test-extensions-upgrade-vm.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -242,7 +241,7 @@ jobs:
   test-documentation:
     name: Documentation
     needs: [extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/callables/test-documentation.yml
+    uses: ./.github/workflows/test-documentation.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
@@ -271,7 +270,7 @@ jobs:
       - test-extensions-metadata
       - test-extensions-upgrade-vm
       - test-documentation
-    uses: ./.github/workflows/callables/report-results.yml
+    uses: ./.github/workflows/report-results.yml
     with:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
