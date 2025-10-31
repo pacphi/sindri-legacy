@@ -275,5 +275,7 @@ jobs:
       test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
       region: ${{ github.event.inputs.region }}
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      manager_validation_result: ${{ needs.extension-manager-validation.result }}
+      syntax_validation_result: ${{ needs.extension-syntax-validation.result }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
