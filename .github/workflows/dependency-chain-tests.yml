@@ -31,70 +31,42 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: 'deps'
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: '4096'
+          vm-cpu-kind: 'shared'
+          vm-cpu-count: '2'
+          volume-size: '15'
 
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Generate test app name
-        id: app-name
-        run: |
-          timestamp=$(date +%s)
-          app_name="${TEST_APP_PREFIX}-deps-${timestamp}"
-          echo "app_name=$app_name" >> $GITHUB_OUTPUT
-
-      - name: Create test SSH key
-        run: |
-          ssh-keygen -t ed25519 -f test_key -N "" -C "deps-test"
-          chmod 600 test_key
-          chmod 644 test_key.pub
-
-      - name: Prepare fly.toml
-        env:
-          APP_NAME: ${{ steps.app-name.outputs.app_name }}
-          VOLUME_NAME: "test_data"
-          VOLUME_SIZE: "15"
-          VM_MEMORY: "4096"
-          CPU_KIND: "shared"
-          CPU_COUNT: "2"
-          CI_MODE: "true"
-        run: ./scripts/prepare-fly-config.sh --ci-mode
-
+      # Using composite action for deployment
       - name: Deploy test environment
-        run: |
-          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || true
-          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} \
-            --strategy immediate \
-            --wait-timeout 600 \
-            --ha=false
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: '600'
 
+      # Using composite action for waiting
       - name: Wait for deployment
-        timeout-minutes: 8
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          max_wait=420
-          interval=15
-          elapsed=0
-
-          while [ $elapsed -lt $max_wait ]; do
-            status_output=$(flyctl status --app $app_name 2>&1 || echo "error")
-
-            if echo "$status_output" | grep -q "running"; then
-              echo "✅ Deployment ready"
-              break
-            elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
-              echo "❌ Deployment failed"
-              exit 1
-            fi
-
-            sleep $interval
-            elapsed=$((elapsed + interval))
-          done
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: '420'
+          expected-status: 'running'
 
       - name: Copy test fixture to VM
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Copying test fixture to VM..."
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
@@ -104,8 +76,10 @@ jobs:
 
       - name: Test transitive dependency installation
         timeout-minutes: 25
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing transitive dependencies: nodejs-devtools -> nodejs -> mise-config..."
 
@@ -148,8 +122,10 @@ jobs:
           '"
 
       - name: Test missing dependency error handling
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing error handling when dependency is missing..."
 
@@ -194,24 +170,10 @@ jobs:
             fi
           '"
 
-      - name: Cleanup
-        if: always()
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for machine in $machines; do
-            [[ -z "$machine" ]] && continue
-            flyctl machine stop $machine --app $app_name || true
-            sleep 2
-            flyctl machine destroy $machine --app $app_name --force || true
-          done
-
-          volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for volume in $volumes; do
-            [[ -z "$volume" ]] && continue
-            flyctl volumes destroy $volume --app $app_name --yes || true
-          done
-
-          flyctl apps destroy $app_name --yes || true
-          rm -f test_key test_key.pub
+      # Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

@@ -31,142 +31,44 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: 'integration'
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: '1024'
+          vm-cpu-kind: 'shared'
+          vm-cpu-count: '1'
+          volume-size: '5'
 
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Generate test app name
-        id: app-name
-        run: |
-          # Generate unique app name with timestamp
-          timestamp=$(date +%s)
-          app_name="${{ inputs.test_app_prefix }}-${timestamp}"
-          echo "app_name=$app_name" >> $GITHUB_OUTPUT
-          echo "Test app name: $app_name"
-
-      - name: Create test SSH key
-        id: ssh-key
-        run: |
-          # Generate SSH key for testing
-          ssh-keygen -t ed25519 -f test_key -N "" -C "github-actions-test"
-          echo "ssh_key_created=true" >> $GITHUB_OUTPUT
-
-          # Set proper permissions
-          chmod 600 test_key
-          chmod 644 test_key.pub
-
-      - name: Prepare fly.toml for testing
-        env:
-          APP_NAME: ${{ steps.app-name.outputs.app_name }}
-          VOLUME_NAME: "test_data"
-          VOLUME_SIZE: "5"
-          VM_MEMORY: "1024"
-          CPU_KIND: "shared"
-          CPU_COUNT: "1"
-          CI_MODE: "true"
-          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
-        run: |
-          # Use the configuration script in CI mode to prevent port conflicts
-          ./scripts/prepare-fly-config.sh --ci-mode
-
+      # Using composite action for deployment
       - name: Deploy test environment
-        run: |
-          echo "Creating Fly.io app for testing..."
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: '300'
 
-          # Create app
-          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || echo "App may already exist"
-
-          # Create volume
-          flyctl volumes create test_data \
-            --app ${{ steps.app-name.outputs.app_name }} \
-            --region ${{ inputs.region }} \
-            --size 5 \
-            --no-encryption \
-            --yes
-
-          # Set SSH key and CI mode as secrets
-          ssh_key_content=$(cat test_key.pub)
-          flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
-            --app ${{ steps.app-name.outputs.app_name }}
-          flyctl secrets set CI_MODE="true" \
-            --app ${{ steps.app-name.outputs.app_name }}
-
-          # Deploy the application using immediate strategy to skip health checks
-          # This prevents health check loops caused by port 22 conflicts with hallpass
-          echo "Starting deployment (this may take 3-5 minutes for image build)..."
-          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 300s --yes || {
-            echo "⚠️  Initial deployment command completed with warnings"
-            echo "Checking deployment status..."
-            flyctl status --app ${{ steps.app-name.outputs.app_name }}
-          }
-
+      # Using composite action for waiting
       - name: Wait for deployment
-        run: |
-          echo "Verifying deployment success..."
-
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          timeout=240
-          elapsed=0
-          interval=10
-
-          while [ $elapsed -lt $timeout ]; do
-            # Get deployment status with machine details
-            status_output=$(flyctl status --app $app_name 2>&1)
-
-            echo "=== Status Check (${elapsed}s/${timeout}s) ==="
-            echo "$status_output"
-
-            # Check if machines are started (immediate deployment bypasses health checks)
-            if echo "$status_output" | grep -q "started"; then
-              echo "✅ Machine reported as started"
-
-              # Get machine ID for detailed checks
-              machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
-
-              if [[ -n "$machine_id" ]]; then
-                echo "Machine ID: $machine_id"
-                echo "Machine details:"
-                flyctl machine status "$machine_id" --app $app_name || true
-              fi
-
-              # Give SSH daemon time to fully initialize (critical for CI)
-              echo "Waiting 15s for SSH daemon initialization..."
-              sleep 15
-
-              echo "✅ Deployment successful"
-              break
-            elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
-              echo "❌ Deployment failed"
-              echo "App status: $status_output"
-              echo "Recent logs:"
-              flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
-              exit 1
-            else
-              echo "Waiting for deployment to complete... (${elapsed}s/${timeout}s)"
-            fi
-
-            sleep $interval
-            elapsed=$((elapsed + interval))
-          done
-
-          if [ $elapsed -ge $timeout ]; then
-            echo "❌ Timeout waiting for deployment to complete"
-            echo "Final status:"
-            flyctl status --app $app_name
-            echo "Machine list:"
-            flyctl machines list --app $app_name --json | jq '.' || flyctl machines list --app $app_name
-            echo "Recent logs:"
-            flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
-            exit 1
-          fi
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: '240'
+          expected-status: 'started'
 
       - name: Test SSH connectivity
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           echo "Testing SSH connectivity..."
 
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
           max_attempts=8
           attempt=1
           wait_between=15
@@ -228,10 +130,12 @@ jobs:
           done
 
       - name: Test VM configuration and extension system
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           echo "Testing VM configuration, tools, and extension system..."
 
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           # Test that configuration script and extension system exists
           flyctl ssh console --app $app_name --user developer --command '
@@ -266,8 +170,10 @@ jobs:
             '
 
       - name: Verify CI extension manifest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
@@ -278,10 +184,12 @@ jobs:
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Verify volume mount
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           echo "Verifying volume mount..."
 
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           # Check volume mount and permissions
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
@@ -304,10 +212,12 @@ jobs:
             '"
 
       - name: Test volume persistence
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           echo "Testing volume persistence..."
 
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
           test_file="/workspace/test-persistence-$(date +%s).txt"
           test_content="integration-test-$(date +%s)"
 
@@ -453,10 +363,12 @@ jobs:
 
       - name: Test auto-suspend functionality
         if: success()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           echo "Testing auto-suspend functionality..."
 
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           # Check that machine can be suspended
           machine_id=$(flyctl machine list --app $app_name --json | jq -r '.[0].id')
@@ -528,8 +440,10 @@ jobs:
 
       - name: Test basic extension workflow
         if: success()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
+          app_name="${{ steps.setup.outputs.app-name }}"
 
           # Copy script to VM and execute
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
@@ -539,38 +453,13 @@ jobs:
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/test-basic-workflow.sh'"
 
+      # Using composite action for cleanup
       - name: Cleanup test resources
         if: always() && !inputs.skip_cleanup
-        run: |
-          echo "Cleaning up test resources..."
-
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          # Stop and destroy machines
-          machines=$(flyctl machine list --app $app_name --json | jq -r '.[].id')
-          for machine in $machines; do
-            echo "Stopping machine $machine..."
-            flyctl machine stop $machine --app $app_name || true
-            sleep 5
-            echo "Destroying machine $machine..."
-            flyctl machine destroy $machine --app $app_name --force || true
-          done
-
-          # Destroy volumes
-          volumes=$(flyctl volumes list --app $app_name --json | jq -r '.[].id')
-          for volume in $volumes; do
-            echo "Destroying volume $volume..."
-            flyctl volumes destroy $volume --app $app_name --yes || true
-          done
-
-          # Destroy app
-          echo "Destroying app $app_name..."
-          flyctl apps destroy $app_name --yes || true
-
-          # Clean up SSH key
-          rm -f test_key test_key.pub
-
-          echo "✅ Cleanup completed"
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
       - name: Report test results
         if: always()
