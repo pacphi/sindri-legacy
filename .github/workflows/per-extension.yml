@@ -138,6 +138,7 @@ jobs:
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Add extension to manifest
+        timeout-minutes: 3
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -273,17 +274,18 @@ jobs:
 
           echo "Verifying commands: $commands"
 
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          # Upload files directly to target locations to avoid permission issues
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh
-            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/test-helpers.sh
-            put .github/scripts/extension-tests/lib/assertions.sh /tmp/assertions.sh
+            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
+            put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh
             quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            mkdir -p /tmp/lib
-            mv /tmp/test-helpers.sh /tmp/lib/
-            mv /tmp/assertions.sh /tmp/lib/
             bash /tmp/verify-commands.sh \"$commands\"
           '"
 

@@ -1,0 +1,93 @@
+name: 'Test VM Configuration'
+description: 'Tests VM configuration, tools, and extension system'
+
+inputs:
+  app-name:
+    description: 'Fly.io app name'
+    required: true
+  fly-api-token:
+    description: 'Fly.io API token'
+    required: true
+  required-tools:
+    description: 'Comma-separated list of required tools to check (e.g., "curl,git,ssh")'
+    required: false
+    default: 'curl,git,ssh'
+  user:
+    description: 'SSH user'
+    required: false
+    default: 'developer'
+
+outputs:
+  status:
+    description: 'Test status (success or failure)'
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Test VM configuration
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Testing VM configuration, tools, and extension system..."
+
+        app_name="${{ inputs.app-name }}"
+        required_tools="${{ inputs.required-tools }}"
+        user="${{ inputs.user }}"
+
+        # Build tool checks dynamically
+        tool_checks=""
+        IFS=',' read -ra TOOLS <<< "$required_tools"
+        for tool in "${TOOLS[@]}"; do
+          tool=$(echo "$tool" | xargs)  # Trim whitespace
+          tool_checks="$tool_checks
+            which $tool || { echo \"❌ $tool not found\"; exit 1; }"
+        done
+
+        # Test that configuration script and extension system exists
+        if flyctl ssh console --app $app_name --user $user --command "
+          echo \"Testing VM environment...\"
+          echo \"\"
+
+          # Check extension manager
+          if [ -f \"/workspace/scripts/lib/extension-manager.sh\" ]; then
+            echo \"✅ Extension manager found\"
+          else
+            echo \"❌ Extension manager missing\"
+            exit 1
+          fi
+
+          # Check for extension examples
+          if [ -d \"/workspace/scripts/lib/extensions.d\" ]; then
+            ext_count=\$(ls -1 /workspace/scripts/lib/extensions.d/*.extension 2>/dev/null | wc -l)
+            echo \"✅ Extension directory found with \$ext_count extension examples\"
+          else
+            echo \"❌ Extensions directory missing\"
+            exit 1
+          fi
+
+          # Check basic tools
+          $tool_checks
+
+          # Check workspace directory
+          ls -la /workspace/ || { echo \"❌ workspace directory issue\"; exit 1; }
+
+          echo \"\"
+          echo \"✅ Basic VM tests passed\"
+        "; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ VM configuration test passed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=success" >> $GITHUB_OUTPUT
+          exit 0
+        else
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ VM configuration test failed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi

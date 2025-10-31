@@ -1,0 +1,103 @@
+name: 'Run VM Script'
+description: 'Copy script to VM and execute it via SSH'
+
+inputs:
+  app-name:
+    description: 'Fly.io app name'
+    required: true
+  fly-api-token:
+    description: 'Fly.io API token'
+    required: true
+  script-path:
+    description: 'Local path to script file'
+    required: true
+  vm-destination:
+    description: 'Destination path on VM'
+    required: false
+    default: '/tmp'
+  user:
+    description: 'SSH user'
+    required: false
+    default: 'developer'
+  script-args:
+    description: 'Arguments to pass to script'
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Execution status (success or failure)'
+    value: ${{ steps.run.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Copy and execute script on VM
+      id: run
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        app_name="${{ inputs.app-name }}"
+        script_path="${{ inputs.script-path }}"
+        vm_destination="${{ inputs.vm-destination }}"
+        user="${{ inputs.user }}"
+        script_args="${{ inputs.script-args }}"
+
+        # Extract script filename
+        script_name=$(basename "$script_path")
+        vm_script_path="$vm_destination/$script_name"
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Running script on VM"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Local script:  $script_path"
+        echo "VM destination: $vm_script_path"
+        echo "User:          $user"
+        if [ -n "$script_args" ]; then
+          echo "Arguments:     $script_args"
+        fi
+        echo ""
+
+        # Verify local script exists
+        if [ ! -f "$script_path" ]; then
+          echo "❌ Script not found: $script_path"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        # Copy script to VM via SFTP
+        echo "📤 Copying script to VM..."
+        flyctl ssh sftp shell --app $app_name <<SFTP_EOF
+          put $script_path $vm_script_path
+          quit
+        SFTP_EOF
+
+        if [ $? -ne 0 ]; then
+          echo "❌ Failed to copy script to VM"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        echo "✅ Script copied successfully"
+        echo ""
+
+        # Execute script on VM
+        echo "🚀 Executing script on VM..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -lc 'bash $vm_script_path $script_args'"; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Script executed successfully"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=success" >> $GITHUB_OUTPUT
+          exit 0
+        else
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ Script execution failed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi

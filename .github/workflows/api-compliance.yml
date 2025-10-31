@@ -69,7 +69,7 @@ jobs:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           timeout-seconds: "420"
-          expected-status: "running"
+          expected-status: "started"
 
       - name: Install extension
         env:
@@ -108,17 +108,18 @@ jobs:
 
           echo "Testing API compliance for $extension..."
 
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          # Upload files directly to target locations to avoid permission issues
           flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
             put .github/scripts/extension-tests/test-api-compliance.sh /tmp/test-api-compliance.sh
-            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/test-helpers.sh
-            put .github/scripts/extension-tests/lib/assertions.sh /tmp/assertions.sh
+            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
+            put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh
             quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            mkdir -p /tmp/lib
-            mv /tmp/test-helpers.sh /tmp/lib/
-            mv /tmp/assertions.sh /tmp/lib/
             bash /tmp/test-api-compliance.sh $extension
           '"
 

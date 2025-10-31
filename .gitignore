@@ -216,9 +216,6 @@ workspace/
 projects/sensitive/
 projects/private/
 
-# Common functions (in scripts directory)
-!scripts/lib
-!.github/scripts/extension-tests/lib/
 
 # Extension activation manifest (user-specific)
 docker/lib/extensions.d/active-extensions.conf

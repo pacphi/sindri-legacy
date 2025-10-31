@@ -21,7 +21,14 @@ inputs:
     description: 'Fly.io API token'
     required: true
   expected-status:
-    description: 'Expected machine status (started or running)'
+    description: |
+      Expected machine status (started or running).
+
+      **Important:** In CI_MODE=true deployments (no health checks), machines
+      remain in 'started' state and never transition to 'running'. Always use
+      'started' for CI workflows.
+
+      Use 'running' only for production deployments with health checks enabled.
     required: false
     default: 'started'
 

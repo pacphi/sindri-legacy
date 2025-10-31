@@ -1,0 +1,72 @@
+name: 'Test Volume Mount'
+description: 'Verifies volume mount, permissions, and write capability'
+
+inputs:
+  app-name:
+    description: 'Fly.io app name'
+    required: true
+  fly-api-token:
+    description: 'Fly.io API token'
+    required: true
+  mount-path:
+    description: 'Volume mount path to verify'
+    required: false
+    default: '/workspace'
+  user:
+    description: 'SSH user'
+    required: false
+    default: 'developer'
+
+outputs:
+  status:
+    description: 'Test status (success or failure)'
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Verify volume mount
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Verifying volume mount..."
+
+        app_name="${{ inputs.app-name }}"
+        mount_path="${{ inputs.mount-path }}"
+        user="${{ inputs.user }}"
+
+        # Check volume mount and permissions
+        if flyctl ssh console --app $app_name --user $user --command "/bin/bash -lc '
+          echo \"=== Volume Mount Verification ===\"
+          echo \"Checking $mount_path mount:\"
+          df -h $mount_path || echo \"WARNING: df command failed\"
+          echo \"\"
+          echo \"Directory contents:\"
+          ls -la $mount_path/ || echo \"WARNING: ls command failed\"
+          echo \"\"
+          echo \"Mount information:\"
+          mount | grep $(basename $mount_path) || echo \"WARNING: No mount found in mount output\"
+          echo \"\"
+          echo \"Directory permissions:\"
+          stat $mount_path/ || echo \"WARNING: stat command failed\"
+          echo \"\"
+          echo \"Testing write permissions:\"
+          touch $mount_path/mount-test-\$(date +%s).tmp && echo \"✅ Write permission confirmed\" || { echo \"❌ Write permission failed\"; exit 1; }
+          echo \"=== End Volume Mount Verification ===\"
+        '"; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Volume mount verification passed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=success" >> $GITHUB_OUTPUT
+          exit 0
+        else
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ Volume mount verification failed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
