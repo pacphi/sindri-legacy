@@ -38,6 +38,9 @@ jobs:
         extension: ['nodejs', 'python', 'rust', 'golang', 'tmux-workspace', 'monitoring']
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       # NEW: Using composite action for setup
       - name: Setup Fly.io test environment
         id: setup

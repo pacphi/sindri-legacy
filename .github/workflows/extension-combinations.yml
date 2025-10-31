@@ -45,6 +45,9 @@ jobs:
           - { name: 'ai-dev', extensions: 'workspace-structure,nodejs,python,ai-tools,monitoring', description: 'Python + AI Tools + Monitoring' }
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       # Using composite action for setup
       - name: Setup Fly.io test environment
         id: setup

@@ -76,6 +76,9 @@ jobs:
           - { name: 'post-cleanup', commands: 'echo', key_tool: 'echo', timeout: '10m', run_last: 'true' }
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Check if extension should be tested
         id: should-test
         run: |

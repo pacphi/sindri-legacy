@@ -33,6 +33,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-workflow]')
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       # Using composite action for setup
       - name: Setup Fly.io test environment
         id: setup
