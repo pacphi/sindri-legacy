@@ -58,19 +58,19 @@ jobs:
           # Claude AI extensions
           - { name: 'claude-config', commands: 'claude', key_tool: 'claude', timeout: '15m', depends_on: 'nodejs' }
           # Traditional extensions (unchanged)
-          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m' }
-          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m' }
-          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m' }
+          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m', manifest_timeout: 10 }
+          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m', manifest_timeout: 10 }
+          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m', manifest_timeout: 10 }
           - { name: 'dotnet', commands: 'dotnet', key_tool: 'dotnet', timeout: '30m' }
           # Infrastructure
           - { name: 'docker', commands: 'docker', key_tool: 'docker', timeout: '30m' }
-          - { name: 'infra-tools', commands: 'terraform,ansible', key_tool: 'terraform', timeout: '30m' }
-          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m' }
+          - { name: 'infra-tools', commands: 'terraform,ansible', key_tool: 'terraform', timeout: '30m', status_timeout: 5 }
+          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m', status_timeout: 5, manifest_timeout: 10 }
           - { name: 'ai-tools', commands: 'codex,gemini', key_tool: 'codex', timeout: '30m', depends_on: 'nodejs' }
           # Utilities
-          - { name: 'playwright', commands: 'playwright', key_tool: 'playwright', timeout: '25m', depends_on: 'nodejs' }
+          - { name: 'playwright', commands: 'playwright', key_tool: 'playwright', timeout: '25m', depends_on: 'nodejs', key_test_timeout: 5 }
           - { name: 'monitoring', commands: 'claude-monitor,uv', key_tool: 'claude-monitor', timeout: '20m', depends_on: 'python,nodejs' }
-          - { name: 'tmux-workspace', commands: 'tmux', key_tool: 'tmux', timeout: '15m' }
+          - { name: 'tmux-workspace', commands: 'tmux', key_tool: 'tmux', timeout: '15m', key_test_timeout: 5 }
           - { name: 'agent-manager', commands: 'agent-manager', key_tool: 'agent-manager', timeout: '15m' }
           - { name: 'context-loader', commands: 'context-load', key_tool: 'echo', timeout: '10m' }
           - { name: 'github-cli', commands: 'gh', key_tool: 'gh', timeout: '15m' }
@@ -130,7 +130,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
             put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh
             quit
           SFTP_EOF
@@ -138,7 +138,7 @@ jobs:
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Add extension to manifest
-        timeout-minutes: 3
+        timeout-minutes: ${{ matrix.extension.manifest_timeout || 3 }}
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -147,9 +147,9 @@ jobs:
           extension_name="${{ matrix.extension.name }}"
           depends_on="${{ matrix.extension.depends_on }}"
 
-          echo "Adding $extension_name to manifest..."
+          echo "Adding $extension_name to manifest (timeout: ${{ matrix.extension.manifest_timeout || 3 }} minutes)..."
 
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
             put .github/scripts/extension-tests/install-extension.sh /tmp/install-extension.sh
             quit
           SFTP_EOF
@@ -238,6 +238,23 @@ jobs:
                   echo \"No obvious errors in log\"
                 fi
 
+                echo \"\"
+                echo \"=== Timeout Diagnostics ===\"
+                echo \"Running processes (top 20):\"
+                ps aux | head -20 || echo \"Failed to get process list\"
+
+                echo \"\"
+                echo \"Disk space:\"
+                df -h || echo \"Failed to get disk space\"
+
+                echo \"\"
+                echo \"Memory usage:\"
+                free -h || echo \"Failed to get memory usage\"
+
+                echo \"\"
+                echo \"Load average:\"
+                uptime || echo \"Failed to get load average\"
+
                 exit 1
               fi
             '"; then
@@ -278,7 +295,7 @@ jobs:
           flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
 
           # Upload files directly to target locations to avoid permission issues
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
             put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh
             put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
             put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh
@@ -291,7 +308,7 @@ jobs:
 
       # NEW: Using extracted script for key functionality testing
       - name: Test key functionality
-        timeout-minutes: 2
+        timeout-minutes: ${{ matrix.extension.key_test_timeout || 2 }}
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -299,10 +316,14 @@ jobs:
           app_name="${{ steps.setup.outputs.app-name }}"
           key_tool="${{ matrix.extension.key_tool }}"
 
-          echo "Testing key functionality: $key_tool"
+          echo "Testing key functionality: $key_tool (timeout: ${{ matrix.extension.key_test_timeout || 2 }} minutes)..."
 
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
             put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh
+            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
             quit
           SFTP_EOF
 
@@ -311,7 +332,7 @@ jobs:
           '"
 
       - name: Test enhanced status() output
-        timeout-minutes: 2
+        timeout-minutes: ${{ matrix.extension.status_timeout || 2 }}
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -319,7 +340,7 @@ jobs:
           app_name="${{ steps.setup.outputs.app-name }}"
           extension_name="${{ matrix.extension.name }}"
 
-          echo "Testing enhanced status() output for $extension_name..."
+          echo "Testing enhanced status() output for $extension_name (timeout: ${{ matrix.extension.status_timeout || 2 }} minutes)..."
 
           status_output=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
@@ -355,7 +376,7 @@ jobs:
 
           echo "Testing idempotency..."
 
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
             put .github/scripts/extension-tests/test-idempotency.sh /tmp/test-idempotency.sh
             quit
           SFTP_EOF

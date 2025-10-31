@@ -83,9 +83,12 @@ install() {
   local UBUNTU_VERSION
   UBUNTU_VERSION=$(lsb_release -rs)
 
+  print_status "Downloading Microsoft package configuration for Ubuntu $UBUNTU_VERSION..."
   if wget -q https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb -O packages-microsoft-prod.deb; then
+    print_status "Installing Microsoft package repository..."
     sudo dpkg -i packages-microsoft-prod.deb
     rm packages-microsoft-prod.deb
+    print_status "Updating package lists..."
     sudo apt-get update -qq
     print_success "Microsoft package repository configured"
   else
@@ -94,7 +97,7 @@ install() {
   fi
 
   # Install .NET SDK versions
-  print_status "Installing .NET SDKs..."
+  print_status "Installing .NET SDKs (this may take 2-5 minutes)..."
   local dotnet_sdks=(
     "dotnet-sdk-9.0"    # Current LTS
     "dotnet-sdk-8.0"    # Previous version
@@ -103,6 +106,7 @@ install() {
   local installed_count=0
   for sdk in "${dotnet_sdks[@]}"; do
     print_debug "Installing $sdk..."
+    print_status "Downloading and installing $sdk..."
     if sudo apt-get install -y "$sdk" 2>/dev/null; then
       print_debug "✓ $sdk installed"
       ((installed_count++))
@@ -141,7 +145,7 @@ install() {
   export PATH=$PATH:$HOME/.dotnet/tools
 
   # Install .NET global tools
-  print_status "Installing .NET global tools..."
+  print_status "Installing .NET global tools (19 tools, this may take 3-5 minutes)..."
   local dotnet_tools=(
     "dotnet-ef"                           # Entity Framework Core tools
     "dotnet-aspnet-codegenerator"         # ASP.NET Core scaffolding
@@ -165,8 +169,16 @@ install() {
   )
 
   local tools_installed=0
+  local tool_count=0
   for tool in "${dotnet_tools[@]}"; do
+    ((tool_count++))
     print_debug "Installing $tool..."
+
+    # Show progress every 5 tools
+    if (( tool_count % 5 == 0 )); then
+      print_status "Progress: $tool_count/${#dotnet_tools[@]} tools processed..."
+    fi
+
     if dotnet tool install --global "$tool" 2>/dev/null; then
       print_debug "✓ $tool installed"
       ((tools_installed++))
@@ -186,12 +198,14 @@ install() {
   # Install NuGet CLI
   print_status "Installing NuGet CLI..."
   if ! command_exists nuget; then
+    print_status "Downloading NuGet executable..."
     if sudo wget -O /usr/local/bin/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe 2>/dev/null; then
       # Create wrapper script for nuget
       sudo cp "$(dirname "${BASH_SOURCE[0]}")/dotnet.nuget-wrapper.template" /usr/local/bin/nuget
       sudo chmod +x /usr/local/bin/nuget
 
       # Install mono for NuGet CLI
+      print_status "Installing Mono runtime (this may take 2-3 minutes)..."
       if sudo apt-get install -y mono-complete 2>/dev/null; then
         print_success "NuGet CLI installed"
       else

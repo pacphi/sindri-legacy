@@ -3,7 +3,14 @@
 # Extension API v1.0
 # Description: Installs mise (https://mise.jdx.dev) for managing development tool versions
 
-# Extension metadata
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
 EXT_NAME="mise-config"
 EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="mise unified tool version manager"
@@ -11,13 +18,8 @@ EXT_CATEGORY="core"
 EXT_INSTALL_METHOD="binary"
 EXT_UPGRADE_STRATEGY="automatic"
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../common.sh" ]]; then
-    source "$SCRIPT_DIR/../common.sh"
-elif [[ -f "$SCRIPT_DIR/../extensions-common.sh" ]]; then
-    source "$SCRIPT_DIR/../extensions-common.sh"
-fi
+# Initialize extension environment
+extension_init
 
 # ============================================================================
 # PREREQUISITES

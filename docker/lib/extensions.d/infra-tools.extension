@@ -452,10 +452,10 @@ status() {
       if command_exists "$tool"; then
         local version=""
         case "$tool" in
-          terraform) version=$(terraform version | head -1) ;;
-          kubectl) version=$(kubectl version --client --short 2>/dev/null | head -1) ;;
-          helm) version=$(helm version --short) ;;
-          k9s) version=$(k9s version --short 2>/dev/null || echo "installed") ;;
+          terraform) version=$(timeout 5 terraform version 2>/dev/null | head -1 || echo "installed") ;;
+          kubectl) version=$(timeout 5 kubectl version --client 2>/dev/null | grep -i "client version" || echo "installed") ;;
+          helm) version=$(timeout 5 helm version --short 2>/dev/null || echo "installed") ;;
+          k9s) version=$(timeout 5 k9s version --short 2>/dev/null || echo "installed") ;;
         esac
         echo "    ✓ $tool: $version"
       fi
@@ -468,10 +468,10 @@ status() {
       if command_exists "$tool"; then
         local version=""
         case "$tool" in
-          terraform) version=$(terraform version | head -1) ;;
-          kubectl) version=$(kubectl version --client --short 2>/dev/null | head -1) ;;
-          helm) version=$(helm version --short) ;;
-          k9s) version=$(k9s version --short 2>/dev/null || echo "installed") ;;
+          terraform) version=$(timeout 5 terraform version 2>/dev/null | head -1 || echo "installed") ;;
+          kubectl) version=$(timeout 5 kubectl version --client 2>/dev/null | grep -i "client version" || echo "installed") ;;
+          helm) version=$(timeout 5 helm version --short 2>/dev/null || echo "installed") ;;
+          k9s) version=$(timeout 5 k9s version --short 2>/dev/null || echo "installed") ;;
         esac
         echo "    ✓ $tool: $version"
       fi
@@ -481,7 +481,7 @@ status() {
   # Native tools
   echo "  Native tools:"
   if command_exists ansible; then
-    echo "    ✓ ansible (apt): $(ansible --version | head -1)"
+    echo "    ✓ ansible (apt): $(timeout 5 ansible --version 2>/dev/null | head -1 || echo "installed")"
   fi
 
   # Optional native tools

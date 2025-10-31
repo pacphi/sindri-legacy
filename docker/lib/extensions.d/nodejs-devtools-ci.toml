@@ -1,0 +1,15 @@
+# nodejs-devtools-ci.toml - Minimal npm dev tools configuration for CI
+# Lightweight config for CI/CD pipelines
+# Requires nodejs to be installed first
+
+[tools]
+# Core npm development tools for CI testing
+"npm:typescript" = "latest"
+"npm:eslint" = "latest"
+"npm:prettier" = "latest"
+"npm:nodemon" = "latest"
+
+[settings]
+experimental = true
+# Reduce verbosity in CI
+verbose = false

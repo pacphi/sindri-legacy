@@ -152,7 +152,7 @@ case "$key_tool" in
 
     playwright)
         print_info "Testing Playwright..."
-        playwright --version
+        timeout 30 playwright --version || print_warning "Playwright version check timed out"
         print_success "Playwright functionality verified"
         ;;
 

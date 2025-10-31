@@ -96,6 +96,67 @@ configure() {
     print_status "You'll need to create cf-with-context.sh manually"
   fi
 
+  # Create context-load CLI command
+  print_status "Creating context-load CLI command..."
+  sudo tee /usr/local/bin/context-load >/dev/null <<'EOF'
+#!/bin/bash
+# context-load - CLI wrapper for context loading utilities
+
+# Source the context loader library
+if [[ -f /workspace/scripts/lib/context-loader.sh ]]; then
+  source /workspace/scripts/lib/context-loader.sh
+else
+  echo "Error: context-loader.sh not found" >&2
+  exit 1
+fi
+
+# Parse command
+case "${1:-all}" in
+  all)
+    load_all_context
+    ;;
+  global)
+    load_global_context
+    ;;
+  user)
+    load_user_context
+    ;;
+  project)
+    load_project_context
+    ;;
+  agents)
+    load_mandatory_agents
+    ;;
+  validate)
+    validate_context
+    ;;
+  hierarchy)
+    show_context_hierarchy
+    ;;
+  help|--help|-h)
+    echo "Usage: context-load [COMMAND]"
+    echo ""
+    echo "Commands:"
+    echo "  all        Load all context (default)"
+    echo "  global     Load global context only"
+    echo "  user       Load user context only"
+    echo "  project    Load project context only"
+    echo "  agents     Load mandatory agents only"
+    echo "  validate   Validate context files"
+    echo "  hierarchy  Show context loading hierarchy"
+    echo "  help       Show this help message"
+    ;;
+  *)
+    echo "Unknown command: $1" >&2
+    echo "Run 'context-load help' for usage information" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  sudo chmod +x /usr/local/bin/context-load
+  print_success "context-load command installed"
+
   # Create context directories if they don't exist
   mkdir -p /workspace/context/global
   mkdir -p /workspace/context/templates
@@ -134,6 +195,21 @@ validate() {
 
     if [[ ! -x "/workspace/scripts/cf-with-context.sh" ]]; then
       print_warning "Wrapper is not executable"
+    fi
+  fi
+
+  # Check context-load CLI command
+  if ! command_exists context-load; then
+    print_error "context-load command not found in PATH"
+    all_valid=false
+  else
+    print_success "context-load command: installed"
+
+    # Test the command
+    if context-load help >/dev/null 2>&1; then
+      print_success "context-load command: functional"
+    else
+      print_warning "context-load command exists but may not be functional"
     fi
   fi
 
@@ -244,6 +320,12 @@ remove() {
       print_success "Removed: $(basename "$script")"
     fi
   done
+
+  # Remove CLI command
+  if [[ -f "/usr/local/bin/context-load" ]]; then
+    sudo rm -f /usr/local/bin/context-load
+    print_success "Removed: context-load command"
+  fi
 
   # Ask about context directories
   if [[ -d "/workspace/context" ]]; then

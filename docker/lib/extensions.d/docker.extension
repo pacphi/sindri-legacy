@@ -75,21 +75,26 @@ install() {
     print_status "Installing Docker Engine..."
 
     # Add Docker's official GPG key and repository
+    print_status "Updating package lists..."
     sudo apt-get update -qq
     sudo apt-get install -y ca-certificates curl gnupg
 
     # Add Docker's official GPG key
+    print_status "Adding Docker GPG key..."
     sudo /usr/bin/install -m 0755 -d /etc/apt/keyrings
     if curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
       sudo chmod a+r /etc/apt/keyrings/docker.gpg
+      print_status "✓ GPG key added"
 
       # Set up Docker repository
+      print_status "Configuring Docker repository..."
       echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
         sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
       # Install Docker Engine
+      print_status "Installing Docker Engine packages (this may take 2-3 minutes)..."
       if sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
         print_success "Docker Engine installed: $(docker --version)"
       else
@@ -129,10 +134,12 @@ install() {
   # Install dive (image analysis)
   if ! command_exists dive; then
     print_debug "Installing dive..."
+    print_status "Downloading dive (image analysis tool)..."
     local DIVE_VERSION="0.13.1"
     local DEB_FILE="dive_${DIVE_VERSION}_linux_amd64.deb"
 
     if wget -q "https://github.com/wagoodman/dive/releases/download/v${DIVE_VERSION}/${DEB_FILE}"; then
+      print_status "Installing dive package..."
       if sudo dpkg -i "${DEB_FILE}" 2>/dev/null; then
         rm -f "${DEB_FILE}"
         print_debug "✓ dive installed"
@@ -149,10 +156,12 @@ install() {
   # Install ctop (container monitoring)
   if ! command_exists ctop; then
     print_debug "Installing ctop..."
+    print_status "Downloading ctop (container monitoring tool)..."
     local TEMP_FILE="/tmp/ctop-$$"
 
     if wget -q "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64" \
        -O "${TEMP_FILE}"; then
+      print_status "Installing ctop binary..."
       if sudo mv "${TEMP_FILE}" /usr/local/bin/ctop && \
          sudo chmod +x /usr/local/bin/ctop; then
         print_debug "✓ ctop installed"

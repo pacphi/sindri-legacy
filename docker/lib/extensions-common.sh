@@ -226,20 +226,36 @@ install_mise_config() {
     local script_dir="${2:-$SCRIPT_DIR}"
 
     # Determine which TOML to use (CI vs dev)
-    local source_toml="${script_dir}/${ext_name}"
+    local toml_suffix=""
     if is_ci_mode; then
-        source_toml+="-ci"
+        toml_suffix="-ci"
         print_status "CI mode detected - using minimal configuration"
     else
         print_status "Using full configuration"
     fi
-    source_toml+=".toml"
+
+    # Try to find TOML in multiple locations
+    local source_toml=""
+    local search_paths=(
+        "${script_dir}/${ext_name}${toml_suffix}.toml"                    # Activated directory
+        "/docker/lib/extensions.d/${ext_name}${toml_suffix}.toml"         # Source directory
+    )
+
+    for path in "${search_paths[@]}"; do
+        if [[ -f "$path" ]]; then
+            source_toml="$path"
+            break
+        fi
+    done
 
     # Verify source file exists
-    if [[ ! -f "$source_toml" ]]; then
-        print_error "Configuration not found: $source_toml"
+    if [[ -z "$source_toml" ]] || [[ ! -f "$source_toml" ]]; then
+        print_error "Configuration not found: ${ext_name}${toml_suffix}.toml"
+        print_error "Searched in: ${search_paths[*]}"
         return 1
     fi
+
+    print_debug "Using configuration: $source_toml"
 
     # Ensure mise config directory exists
     mkdir -p "$HOME/.config/mise/conf.d"
