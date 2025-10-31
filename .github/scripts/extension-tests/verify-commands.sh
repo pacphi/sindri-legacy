@@ -17,11 +17,11 @@ if [ -z "$commands" ]; then
 fi
 
 # Source environment
+print_section "Environment Setup"
 source_environment
 
 print_section "Command Verification"
 print_info "Commands to verify: $commands"
-print_info "Current PATH: $PATH"
 echo ""
 
 # Convert comma-separated list to array
@@ -33,24 +33,45 @@ for cmd in "${CMD_ARRAY[@]}"; do
     # Trim whitespace
     cmd=$(echo "$cmd" | xargs)
 
-    echo "Checking command: $cmd"
+    print_info "Checking command: $cmd"
 
     # Try multiple methods to find the command
     if command -v "$cmd" >/dev/null 2>&1; then
-        print_success "$cmd available at: $(command -v "$cmd")"
+        cmd_path="$(command -v "$cmd")"
+        print_success "$cmd available at: $cmd_path"
+
+        # Show if it's a mise shim
+        if [[ "$cmd_path" == *".mise/shims"* ]]; then
+            print_info "  (mise shim - managed by mise)"
+            # Show the actual mise tool version
+            if command -v mise >/dev/null 2>&1; then
+                mise_info=$(mise which "$cmd" 2>/dev/null || echo "unknown")
+                print_info "  mise resolves to: $mise_info"
+            fi
+        fi
+
+        # Try version check
         timeout 5 "$cmd" --version 2>/dev/null || \
         timeout 5 "$cmd" version 2>/dev/null || \
         echo "  (version check not supported)"
     else
+        print_warning "$cmd not found via 'command -v'"
+
         # Try with full path expansion
         if type "$cmd" >/dev/null 2>&1; then
-            print_success "$cmd found via type: $(type -p "$cmd" || echo "builtin")"
+            type_result="$(type -p "$cmd" 2>/dev/null || echo "builtin")"
+            print_success "$cmd found via type: $type_result"
         else
-            # Check common locations
+            print_warning "$cmd not found via 'type'"
+
+            # Check common locations manually
+            print_info "Searching common locations..."
             found=false
             for path in /usr/local/bin /usr/bin /bin ~/.local/bin ~/.cargo/bin ~/.mise/shims; do
                 if [ -x "$path/$cmd" ]; then
                     print_success "$cmd found at: $path/$cmd"
+                    print_warning "Command exists but not in PATH!"
+                    print_info "Missing PATH entry: $path"
                     found=true
                     break
                 fi
@@ -58,6 +79,13 @@ for cmd in "${CMD_ARRAY[@]}"; do
 
             if [ "$found" = false ]; then
                 print_error "$cmd not found in PATH or common locations"
+
+                # Show mise status for mise-managed tools
+                if command -v mise >/dev/null 2>&1; then
+                    print_info "Checking mise for $cmd..."
+                    mise which "$cmd" 2>&1 | sed 's/^/  /' || echo "  (not a mise tool)"
+                fi
+
                 failed_commands+=("$cmd")
             fi
         fi

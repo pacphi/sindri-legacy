@@ -120,6 +120,7 @@ jobs:
         with:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: '300'
 
       # Keep these steps as they're extension-specific
       - name: Verify CI extension manifest
