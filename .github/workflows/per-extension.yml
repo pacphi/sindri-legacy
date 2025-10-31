@@ -6,6 +6,7 @@ on:
       extension_name:
         description: 'Test specific extension (optional)'
         required: false
+        default: ''
         type: string
       skip_cleanup:
         description: 'Skip cleanup for debugging'
@@ -142,7 +143,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
           extension_name="${{ matrix.extension.name }}"
-          depends_on="${{ matrix.extension.depends_on || '' }}"
+          depends_on="${{ matrix.extension.depends_on }}"
 
           echo "Adding $extension_name to manifest..."
 

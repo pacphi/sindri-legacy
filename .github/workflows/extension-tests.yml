@@ -79,6 +79,30 @@ on:
 
 jobs:
   # ============================================================================
+  # Setup Configuration
+  # ============================================================================
+
+  setup-config:
+    name: Setup Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      extension_name: ${{ steps.config.outputs.extension_name }}
+      skip_cleanup: ${{ steps.config.outputs.skip_cleanup }}
+      skip_idempotency: ${{ steps.config.outputs.skip_idempotency }}
+      test_app_prefix: ${{ steps.config.outputs.test_app_prefix }}
+      region: ${{ steps.config.outputs.region }}
+    steps:
+      - name: Set configuration
+        id: config
+        run: |
+          # Define defaults once - handles both workflow_dispatch and push/PR triggers
+          echo "extension_name=${{ github.event.inputs.extension_name || '' }}" >> $GITHUB_OUTPUT
+          echo "skip_cleanup=${{ github.event.inputs.skip_cleanup == 'true' }}" >> $GITHUB_OUTPUT
+          echo "skip_idempotency=${{ github.event.inputs.skip_idempotency == 'true' }}" >> $GITHUB_OUTPUT
+          echo "test_app_prefix=${{ github.event.inputs.test_app_prefix || 'ext-test' }}" >> $GITHUB_OUTPUT
+          echo "region=${{ github.event.inputs.region || 'sjc' }}" >> $GITHUB_OUTPUT
+
+  # ============================================================================
   # Validation Jobs
   # ============================================================================
 
@@ -96,14 +120,14 @@ jobs:
 
   per-extension-tests:
     name: Per-Extension Tests
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/per-extension.yml
     with:
-      extension_name: ${{ github.event.inputs.extension_name || '' }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
-      skip_idempotency: ${{ github.event.inputs.skip_idempotency == 'true' }}
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
+      extension_name: ${{ needs.setup-config.outputs.extension_name }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_idempotency: ${{ needs.setup-config.outputs.skip_idempotency }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -113,12 +137,12 @@ jobs:
 
   extension-api-tests:
     name: Extension API Compliance
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/api-compliance.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -128,12 +152,12 @@ jobs:
 
   protected-extensions-tests:
     name: Protected Extensions
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/protected-extensions-tests.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -143,12 +167,12 @@ jobs:
 
   cleanup-extensions-tests:
     name: Cleanup Extensions
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/cleanup-extensions-tests.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -158,12 +182,12 @@ jobs:
 
   manifest-operations-tests:
     name: Manifest Operations
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/manifest-operations-tests.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -173,12 +197,12 @@ jobs:
 
   dependency-chain-tests:
     name: Dependency Chains
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/dependency-chain-tests.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -188,12 +212,12 @@ jobs:
 
   extension-combinations:
     name: Extension Combinations
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/extension-combinations.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -203,34 +227,34 @@ jobs:
 
   test-upgrade-helpers:
     name: Upgrade Helpers
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/test-upgrade-helpers.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   test-extensions-metadata:
     name: Extensions Metadata
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/test-extensions-metadata.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   test-extensions-upgrade-vm:
     name: Extensions Upgrade VM
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/test-extensions-upgrade-vm.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -240,12 +264,12 @@ jobs:
 
   test-documentation:
     name: Documentation
-    needs: [extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/test-documentation.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -257,6 +281,7 @@ jobs:
     name: Test Results Summary
     if: always()
     needs:
+      - setup-config
       - extension-manager-validation
       - extension-syntax-validation
       - per-extension-tests
@@ -272,9 +297,9 @@ jobs:
       - test-documentation
     uses: ./.github/workflows/report-results.yml
     with:
-      test_app_prefix: ${{ github.event.inputs.test_app_prefix }}
-      region: ${{ github.event.inputs.region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
       manager_validation_result: ${{ needs.extension-manager-validation.result }}
       syntax_validation_result: ${{ needs.extension-syntax-validation.result }}
     secrets:

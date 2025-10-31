@@ -62,16 +62,37 @@ on:
 
 jobs:
   # ============================================================================
+  # Setup Configuration
+  # ============================================================================
+
+  setup-config:
+    name: Setup Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      region: ${{ steps.config.outputs.region }}
+      test_app_prefix: ${{ steps.config.outputs.test_app_prefix }}
+      skip_cleanup: ${{ steps.config.outputs.skip_cleanup }}
+    steps:
+      - name: Set configuration
+        id: config
+        run: |
+          # Define defaults once - handles both workflow_dispatch and push/PR triggers
+          echo "region=${{ github.event.inputs.test_region || 'sjc' }}" >> $GITHUB_OUTPUT
+          echo "test_app_prefix=sindri-ci-test" >> $GITHUB_OUTPUT
+          echo "skip_cleanup=${{ github.event.inputs.skip_cleanup == 'true' }}" >> $GITHUB_OUTPUT
+
+  # ============================================================================
   # Core Integration Test
   # ============================================================================
 
   integration-test:
     name: Integration Test
+    needs: setup-config
     uses: ./.github/workflows/integration-test.yml
     with:
-      test_app_prefix: 'sindri-ci-test'
-      region: ${{ github.event.inputs.test_region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -81,12 +102,12 @@ jobs:
 
   developer-workflow:
     name: Developer Workflow
-    needs: integration-test
+    needs: [setup-config, integration-test]
     uses: ./.github/workflows/developer-workflow.yml
     with:
-      test_app_prefix: 'sindri-ci-test'
-      region: ${{ github.event.inputs.test_region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -96,12 +117,12 @@ jobs:
 
   mise-stack-integration:
     name: Mise Stack Integration
-    needs: integration-test
+    needs: [setup-config, integration-test]
     uses: ./.github/workflows/mise-stack-integration.yml
     with:
-      test_app_prefix: 'sindri-ci-test'
-      region: ${{ github.event.inputs.test_region }}
-      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -112,7 +133,7 @@ jobs:
   notify-failure:
     name: Notify on Failure
     if: failure()
-    needs: [integration-test, developer-workflow, mise-stack-integration]
+    needs: [setup-config, integration-test, developer-workflow, mise-stack-integration]
     runs-on: ubuntu-latest
 
     steps:
