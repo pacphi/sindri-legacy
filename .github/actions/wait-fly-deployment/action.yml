@@ -87,6 +87,10 @@ runs:
             fi
           fi
 
+          # Extract and display current machine status
+          current_status=$(echo "$status_output" | grep -oE "(created|starting|started|running|stopping|stopped|replacing|destroying|destroyed|failed|crashed)" | head -1 || echo "unknown")
+          echo "   Current status: $current_status (expected: $expected_status)"
+
           if echo "$status_output" | grep -q "$expected_status"; then
             echo ""
             echo "✅ Deployment successful - machine $expected_status (after ${actual_elapsed}s)"
@@ -103,7 +107,7 @@ runs:
             exit 1
           fi
 
-          echo "   Status: still waiting..."
+          echo "   Still waiting for status change..."
           sleep $interval
           elapsed=$((elapsed + interval))
         done
