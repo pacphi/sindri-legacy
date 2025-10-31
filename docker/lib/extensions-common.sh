@@ -32,12 +32,18 @@ extension_init() {
     elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
         source "/workspace/scripts/lib/common.sh"
     else
-        # Fallback: define minimal required functions
+        # Fallback: define minimal required functions (invoked indirectly by extension scripts)
+        # shellcheck disable=SC2329
         print_status() { echo "[INFO] $1"; }
+        # shellcheck disable=SC2329
         print_success() { echo "[SUCCESS] $1"; }
+        # shellcheck disable=SC2329
         print_error() { echo "[ERROR] $1" >&2; }
+        # shellcheck disable=SC2329
         print_warning() { echo "[WARNING] $1"; }
+        # shellcheck disable=SC2329
         print_debug() { [[ "${DEBUG:-}" == "true" ]] && echo "[DEBUG] $1"; }
+        # shellcheck disable=SC2329
         command_exists() { command -v "$1" >/dev/null 2>&1; }
     fi
 
@@ -668,6 +674,7 @@ upgrade_git_repo() {
     if is_dry_run; then
         local remote_commit
         git fetch --quiet
+        # shellcheck disable=SC1083 # @{u} is valid git syntax for upstream branch
         remote_commit=$(git rev-parse @{u})
         if [[ "$current_commit" != "$remote_commit" ]]; then
             print_status "Would update: ${current_commit:0:8} → ${remote_commit:0:8}"
