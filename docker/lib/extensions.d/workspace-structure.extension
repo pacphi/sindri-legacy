@@ -14,9 +14,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="workspace-structure"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Creates workspace directory structure"
 EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -296,6 +298,20 @@ remove() {
   print_status "To fully reset, manually remove $WORKSPACE_DIR"
 
   return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Checking ${EXT_NAME}..."
+
+    # Workspace structure is static - no upgrade needed
+    print_success "Workspace structure is up to date"
+    print_status "Directory structure does not require upgrades"
+
+    return 0
 }
 
 # ============================================================================

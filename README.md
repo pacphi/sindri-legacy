@@ -86,6 +86,11 @@ claude
 - **[Release Process](docs/RELEASE.md)** - Creating and publishing releases
 - **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines and roadmap
 
+### CI/CD Infrastructure
+
+- **[Composite Actions](.github/actions/README.md)** - Reusable GitHub Actions
+- **[Test Scripts](.github/scripts/extension-tests/README.md)** - Shell test utilities
+
 ## 🌟 Key Features
 
 - **Zero Local Setup** - All AI tools run on remote VMs
@@ -146,31 +151,36 @@ extension-manager status <name>     # Check status
 ### Extension Categories
 
 **Core Environment:**
+
 - `workspace-structure` - Base directory structure
 - `nodejs` - Node.js LTS (mise-powered)
 - `ssh-environment` - SSH wrappers
 
-**Claude AI:**
+**AI:**
+
+- `ai-tools` - AI coding assistants
 - `claude-config` - Claude Code CLI (requires nodejs)
-- `nodejs-devtools` - Node.js dev tools (mise-powered)
 
 **Development Tools:**
+
 - `github-cli` - GitHub CLI
 - `python` - Python 3.13 (mise-powered)
 - `rust` - Rust stable (mise-powered)
 - `golang` - Go 1.24 (mise-powered)
+- `nodejs-devtools` - Node.js dev tools (mise-powered)
 - `ruby` - Ruby 3.4/3.3 (rbenv)
 - `php` - PHP 8.3
 - `jvm` - Java/Kotlin/Scala (SDKMAN)
 - `dotnet` - .NET SDK 9.0/8.0
 
 **Infrastructure:**
+
 - `docker` - Docker Engine
 - `infra-tools` - Terraform, Ansible, kubectl, Helm
 - `cloud-tools` - AWS, Azure, GCP CLIs
-- `ai-tools` - AI coding assistants
 
 **Monitoring & Utilities:**
+
 - `monitoring` - System monitoring tools
 - `tmux-workspace` - Tmux session management
 - `playwright` - Browser automation testing

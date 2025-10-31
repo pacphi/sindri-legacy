@@ -14,9 +14,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="tmux-workspace"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Tmux workspace management with helper scripts"
 EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"  # Installed via apt
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -283,6 +285,19 @@ status() {
     echo "  (no active sessions)"
   fi
 
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # Tmux is a system package - no automatic upgrades
+  print_success "No upgrades needed for tmux workspace scripts"
+  print_status "To upgrade tmux: sudo apt-get upgrade tmux"
   return 0
 }
 

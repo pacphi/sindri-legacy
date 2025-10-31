@@ -1,0 +1,113 @@
+name: Extension Manager Validation
+
+on:
+  workflow_call:
+
+jobs:
+  extension-manager-validation:
+    name: Validate Extension Manager
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Validate extension-manager.sh syntax
+        run: |
+          echo "Running shellcheck on extension-manager.sh..."
+          shellcheck docker/lib/extension-manager.sh
+
+      - name: Test extension-manager list command
+        run: |
+          echo "Testing extension-manager list command..."
+          cd docker/lib
+          bash extension-manager.sh list
+
+      - name: Test extension name extraction
+        run: |
+          echo "Testing extension name extraction..."
+          cd docker/lib
+
+          # Test with new non-numbered filename format
+          test_file="extensions.d/rust.extension"
+          if [[ -f "$test_file" ]]; then
+            # Extract name using the same logic as extension-manager
+            name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
+            echo "Extracted name from $test_file: $name"
+
+            if [[ "$name" != "rust" ]]; then
+              echo "ERROR: Expected 'rust', got '$name'"
+              exit 1
+            fi
+            echo "✅ New naming convention works"
+          else
+            echo "⚠️  New format file not found, checking legacy format..."
+            # Fallback to test legacy format if it exists
+            test_file="extensions.d/10-rust.extension"
+            if [[ -f "$test_file" ]]; then
+              name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
+              echo "Extracted name from legacy file: $name"
+              if [[ "$name" != "rust" ]]; then
+                echo "ERROR: Expected 'rust', got '$name'"
+                exit 1
+              fi
+              echo "✅ Legacy naming convention still supported"
+            else
+              echo "ERROR: No test files found"
+              exit 1
+            fi
+          fi
+
+          echo "✅ Extension name extraction working correctly"
+
+      - name: Test manifest file operations
+        run: |
+          echo "Testing manifest file operations..."
+          cd docker/lib
+
+          # Create a test manifest
+          test_manifest="extensions.d/test-active-extensions.conf"
+          cat > "$test_manifest" << 'EOF'
+          # Test manifest
+          workspace-structure
+          nodejs
+          # python
+          rust
+          EOF
+
+          echo "✅ Test manifest created"
+
+          # Test parsing the manifest (count non-comment lines)
+          active_count=$(grep -v '^[[:space:]]*#' "$test_manifest" | grep -v '^[[:space:]]*$' | wc -l)
+          echo "Active extensions in test manifest: $active_count"
+
+          if [[ "$active_count" -eq 3 ]]; then
+            echo "✅ Manifest parsing correct (workspace-structure, nodejs, rust = 3)"
+          else
+            echo "❌ Manifest parsing failed: expected 3, got $active_count"
+            exit 1
+          fi
+
+          # Cleanup
+          rm -f "$test_manifest"
+          echo "✅ Manifest file operations working correctly"
+
+      - name: Report validation results
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Extension manager validation passed"
+            echo "## ✅ Extension Manager Validation" >> $GITHUB_STEP_SUMMARY
+            echo "All extension manager validation checks passed successfully." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Extension manager validation failed"
+            echo "## ❌ Extension Manager Validation Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Extension manager validation encountered errors. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

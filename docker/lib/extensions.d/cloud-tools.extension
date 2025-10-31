@@ -21,9 +21,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="cloud-tools"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Cloud provider CLI tools (AWS, Azure, GCP, OCI, Alibaba, DO, IBM)"
 EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="mixed"  # Binary downloads + apt
+EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
 extension_init
@@ -356,6 +358,82 @@ status() {
 # ============================================================================
 
 # check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  local upgraded_count=0
+  local failed_count=0
+
+  # Get current versions
+  print_status "Current versions:"
+  command_exists aws && echo "  aws: $(aws --version 2>&1)"
+  command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
+  command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+  echo ""
+
+  # Upgrade AWS CLI
+  if command_exists aws; then
+    print_status "Upgrading AWS CLI..."
+    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+       && unzip -q awscliv2.zip \
+       && sudo ./aws/install --update 2>/dev/null; then
+      rm -rf aws awscliv2.zip
+      print_success "AWS CLI upgraded"
+      ((upgraded_count++))
+    else
+      rm -rf aws awscliv2.zip 2>/dev/null
+      print_warning "Failed to upgrade AWS CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade Azure CLI
+  if command_exists az; then
+    print_status "Upgrading Azure CLI..."
+    if sudo apt-get update -qq && sudo apt-get upgrade -y azure-cli 2>/dev/null; then
+      print_success "Azure CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Azure CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade Google Cloud CLI
+  if command_exists gcloud; then
+    print_status "Upgrading Google Cloud CLI..."
+    if sudo apt-get update -qq && sudo apt-get upgrade -y google-cloud-cli 2>/dev/null; then
+      print_success "Google Cloud CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Google Cloud CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Summary
+  echo ""
+  print_status "Updated versions:"
+  command_exists aws && echo "  aws: $(aws --version 2>&1)"
+  command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
+  command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+
+  echo ""
+  print_status "Upgrade summary: $upgraded_count upgraded, $failed_count failed"
+
+  if [[ $upgraded_count -gt 0 ]]; then
+    print_success "Cloud tools upgrade completed"
+    return 0
+  else
+    print_warning "No cloud tools were upgraded"
+    return 1
+  fi
+}
 
 # ============================================================================
 # REMOVE

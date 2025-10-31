@@ -1,6 +1,6 @@
 #!/bin/bash
 # template.extension - Extension Template and Reference Implementation
-# Extension API v1.0
+# Extension API v2.0
 #
 # This template demonstrates the standard extension structure with all required
 # functions. Use this as a reference when creating new extensions.
@@ -14,9 +14,11 @@
 # Note: Priority/order is defined in /workspace/config/active-extensions.conf
 
 EXT_NAME="template"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Extension template and reference implementation"
 EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="mixed"        # NEW: mise | apt | binary | git | native | mixed | manual
+EXT_UPGRADE_STRATEGY="automatic"  # NEW: automatic | manual | pinned | security-only
 
 # ============================================================================
 # COMMON UTILITIES
@@ -507,10 +509,123 @@ remove() {
 }
 
 # ============================================================================
+# FUNCTION 7: UPGRADE - Extension API v2.0
+# ============================================================================
+# Upgrade installed packages and tools
+# Returns: 0 on success, 1 on failure
+#
+# Common patterns:
+# - mise upgrades: upgrade_mise_tools "${EXT_NAME}"
+# - APT upgrades: upgrade_apt_packages "pkg1" "pkg2"
+# - Binary upgrades: upgrade_github_binary "repo/name" "binary" "/path"
+# - Git upgrades: upgrade_git_repo "/path/to/repo" "rebuild-cmd"
+# - Native tools: check_native_update "tool-name" "--version"
+#
+# Best practices:
+# - Check current versions before upgrading
+# - Provide progress feedback
+# - Handle dry-run mode (DRY_RUN=true)
+# - Return appropriate exit codes
+# - Show before/after versions
+#
+# Example usage:
+#   if upgrade; then
+#     echo "Upgrade successful"
+#   else
+#     echo "Upgrade failed"
+#     exit 1
+#   fi
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Check if installed
+    if ! command_exists example-tool; then
+        print_error "${EXT_NAME} is not installed"
+        return 1
+    fi
+
+    # Get current version
+    print_status "Current version:"
+    example-tool --version
+
+    local upgrade_failed=0
+
+    # Pattern 1: mise-managed tools
+    if [[ "${EXT_INSTALL_METHOD}" == "mise" ]]; then
+        if upgrade_mise_tools "${EXT_NAME}"; then
+            print_success "mise tools upgraded"
+        else
+            print_error "mise upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 2: APT packages
+    if [[ "${EXT_INSTALL_METHOD}" == "apt" ]]; then
+        if upgrade_apt_packages "example-package" "example-lib"; then
+            print_success "APT packages upgraded"
+        else
+            print_error "APT upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 3: GitHub binary
+    if [[ "${EXT_INSTALL_METHOD}" == "binary" ]]; then
+        if upgrade_github_binary "owner/repo" "binary-name" "/usr/local/bin/binary"; then
+            print_success "Binary upgraded"
+        else
+            print_error "Binary upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 4: Git repository
+    if [[ "${EXT_INSTALL_METHOD}" == "git" ]]; then
+        if upgrade_git_repo "$HOME/.example-tool" "make build"; then
+            print_success "Git repo upgraded"
+        else
+            print_error "Git upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 5: Native (pre-installed)
+    if [[ "${EXT_INSTALL_METHOD}" == "native" ]]; then
+        check_native_update "example-tool" "--version"
+        return $?
+    fi
+
+    # Pattern 6: Mixed (custom logic)
+    if [[ "${EXT_INSTALL_METHOD}" == "mixed" ]]; then
+        # Combine multiple methods
+        print_status "Upgrading APT packages..."
+        upgrade_apt_packages "pkg1" "pkg2" || upgrade_failed=1
+
+        print_status "Upgrading binaries..."
+        upgrade_github_binary "repo/name" "binary" "/path" || upgrade_failed=1
+    fi
+
+    if [[ $upgrade_failed -eq 0 ]]; then
+        print_success "${EXT_NAME} upgraded successfully"
+
+        # Show new version
+        print_status "Updated version:"
+        example-tool --version
+
+        return 0
+    else
+        print_error "${EXT_NAME} upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
 # MAIN EXECUTION (for testing)
 # ============================================================================
 # This allows testing the extension directly
-# Usage: ./template.extension [prerequisites|install|configure|validate|status|remove]
+# Usage: ./template.extension [prerequisites|install|configure|validate|status|remove|upgrade]
 # Note: Use the extension_main helper instead of manual case statement
 
 extension_main "$@"

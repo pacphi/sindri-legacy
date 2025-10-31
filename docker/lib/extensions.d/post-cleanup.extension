@@ -15,9 +15,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="post-cleanup"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Post-installation cleanup and system optimization"
 EXT_CATEGORY="utility"
+EXT_INSTALL_METHOD="native"  # No installation needed
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -316,6 +318,18 @@ status() {
     free -h | awk 'NR==2 {print "  Memory: " $3 " used / " $2 " total (" $7 " available)"}'
   fi
 
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # Cleanup extension has no tools to upgrade
+  print_success "No upgrades needed for cleanup tasks"
   return 0
 }
 

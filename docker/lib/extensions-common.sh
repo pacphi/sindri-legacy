@@ -289,7 +289,7 @@ extension_main() {
         local command="${1:-status}"
 
         case "$command" in
-            prerequisites|install|configure|validate|status|remove)
+            prerequisites|install|configure|validate|status|remove|upgrade)
                 if "$command"; then
                     exit 0
                 else
@@ -297,7 +297,7 @@ extension_main() {
                 fi
                 ;;
             *)
-                echo "Usage: $0 {prerequisites|install|configure|validate|status|remove}"
+                echo "Usage: $0 {prerequisites|install|configure|validate|status|remove|upgrade}"
                 exit 1
                 ;;
         esac
@@ -408,6 +408,333 @@ show_dependent_extensions_warning() {
 }
 
 # ============================================================================
+# UPGRADE HELPERS - Extension API v2.0
+# ============================================================================
+
+# Check if extension supports upgrade (has upgrade() function)
+# Usage: if supports_upgrade; then ... fi
+# Returns: 0 if upgrade() function exists, 1 otherwise
+supports_upgrade() {
+    declare -f upgrade >/dev/null 2>&1
+}
+
+# Check if running in dry-run mode
+# Usage: if is_dry_run; then ... fi
+# Returns: 0 if DRY_RUN=true, 1 otherwise
+is_dry_run() {
+    [[ "${DRY_RUN:-false}" == "true" ]]
+}
+
+# Get dry-run prefix for logging
+# Usage: echo "$(dry_run_prefix)Upgrading package..."
+dry_run_prefix() {
+    if is_dry_run; then
+        echo "[DRY-RUN] "
+    fi
+}
+
+# ============================================================================
+# MISE UPGRADE HELPERS
+# ============================================================================
+
+# Upgrade mise-managed tools for an extension
+# Usage: upgrade_mise_tools "extension-name"
+# Returns: 0 on success, 1 on failure
+upgrade_mise_tools() {
+    local extension_name="$1"
+
+    print_status "$(dry_run_prefix)Upgrading mise-managed tools for ${extension_name}..."
+
+    if ! command_exists mise; then
+        print_error "mise is not installed"
+        return 1
+    fi
+
+    # Get tools managed by this extension's TOML
+    local toml_path="$HOME/.config/mise/conf.d/${extension_name}.toml"
+    if [[ ! -f "$toml_path" ]]; then
+        print_warning "No mise configuration found for ${extension_name}"
+        return 1
+    fi
+
+    # Dry-run mode
+    if is_dry_run; then
+        print_status "Would run: mise upgrade"
+        local outdated
+        if outdated=$(mise outdated 2>/dev/null); then
+            echo "$outdated"
+        fi
+        return 0
+    fi
+
+    # Upgrade tools
+    if mise upgrade; then
+        print_success "Tools upgraded successfully"
+        return 0
+    else
+        print_error "mise upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# APT UPGRADE HELPERS
+# ============================================================================
+
+# Check which APT packages have updates available
+# Usage: check_apt_updates "package1" "package2" ...
+# Returns: 0 if updates available, 1 if all up-to-date
+check_apt_updates() {
+    local -a packages=("$@")
+
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        print_error "No packages specified"
+        return 1
+    fi
+
+    sudo apt-get update -qq >/dev/null 2>&1
+
+    local has_updates=0
+    for pkg in "${packages[@]}"; do
+        if apt list --upgradable 2>/dev/null | grep -q "^${pkg}/"; then
+            local current_ver available_ver
+            current_ver=$(dpkg -l "$pkg" 2>/dev/null | awk '/^ii/ {print $3}')
+            available_ver=$(apt-cache policy "$pkg" | awk '/Candidate:/ {print $2}')
+
+            print_status "${pkg}: ${current_ver} → ${available_ver}"
+            has_updates=1
+        fi
+    done
+
+    return $has_updates
+}
+
+# Upgrade APT packages
+# Usage: upgrade_apt_packages "package1" "package2" ...
+# Returns: 0 on success, 1 on failure
+upgrade_apt_packages() {
+    local -a packages=("$@")
+
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        print_error "No packages specified"
+        return 1
+    fi
+
+    print_status "$(dry_run_prefix)Upgrading APT packages: ${packages[*]}"
+
+    # Update package lists
+    if ! sudo apt-get update -qq; then
+        print_error "Failed to update package lists"
+        return 1
+    fi
+
+    # Check which packages have updates available
+    local has_updates=0
+    local -a upgradeable=()
+
+    for pkg in "${packages[@]}"; do
+        if apt list --upgradable 2>/dev/null | grep -q "^${pkg}/"; then
+            upgradeable+=("$pkg")
+            has_updates=1
+        fi
+    done
+
+    if [[ $has_updates -eq 0 ]]; then
+        print_success "All packages are up to date"
+        return 0
+    fi
+
+    print_status "Upgradeable packages: ${upgradeable[*]}"
+
+    # Dry-run mode
+    if is_dry_run; then
+        print_status "Would upgrade: ${upgradeable[*]}"
+        return 0
+    fi
+
+    # Upgrade packages
+    if sudo apt-get install --only-upgrade -y "${upgradeable[@]}"; then
+        print_success "Packages upgraded successfully"
+        return 0
+    else
+        print_error "Package upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# BINARY UPGRADE HELPERS
+# ============================================================================
+
+# Compare semantic versions
+# Usage: version_gt "2.0.0" "1.9.0" && echo "2.0.0 is greater"
+# Returns: 0 if first version > second, 1 otherwise
+version_gt() {
+    local ver1="$1"
+    local ver2="$2"
+
+    if [[ "$ver1" == "$ver2" ]]; then
+        return 1
+    fi
+
+    printf '%s\n%s\n' "$ver1" "$ver2" | sort -V | head -n1 | grep -q "^${ver2}$"
+}
+
+# Upgrade GitHub binary release
+# Usage: upgrade_github_binary "repo/name" "binary-name" "/path/to/install" ["--version-flag"]
+# Example: upgrade_github_binary "docker/compose" "docker-compose" "/usr/local/bin/docker-compose" "version"
+# Returns: 0 on success, 1 on failure
+upgrade_github_binary() {
+    local repo="$1"           # e.g., "docker/compose"
+    local binary_name="$2"    # e.g., "docker-compose"
+    local install_path="$3"   # e.g., "/usr/local/bin/docker-compose"
+    local version_flag="${4:---version}"
+
+    print_status "$(dry_run_prefix)Checking for updates to ${binary_name}..."
+
+    # Get current version
+    local current_version
+    if [[ -f "$install_path" ]]; then
+        current_version=$("$install_path" $version_flag 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+    else
+        print_error "Binary not found: ${install_path}"
+        return 1
+    fi
+
+    # Get latest release from GitHub API
+    local latest_version
+    latest_version=$(curl -s "https://api.github.com/repos/${repo}/releases/latest" | \
+        grep -oP '"tag_name": "\K[^"]+' | sed 's/^v//')
+
+    if [[ -z "$latest_version" ]]; then
+        print_error "Failed to fetch latest version from GitHub"
+        return 1
+    fi
+
+    # Compare versions
+    if [[ "$current_version" == "$latest_version" ]]; then
+        print_success "${binary_name} is up to date (${current_version})"
+        return 0
+    fi
+
+    print_status "Update available: ${current_version} → ${latest_version}"
+
+    # Dry-run mode
+    if is_dry_run; then
+        print_status "Would upgrade ${binary_name} to ${latest_version}"
+        return 0
+    fi
+
+    # Download and install
+    local download_url="https://github.com/${repo}/releases/download/v${latest_version}/${binary_name}-$(uname -s)-$(uname -m)"
+    local temp_file="/tmp/${binary_name}-${latest_version}"
+
+    if curl -L "$download_url" -o "$temp_file"; then
+        sudo mv "$temp_file" "$install_path"
+        sudo chmod +x "$install_path"
+        print_success "${binary_name} upgraded to ${latest_version}"
+        return 0
+    else
+        print_error "Failed to download ${binary_name}"
+        return 1
+    fi
+}
+
+# ============================================================================
+# GIT UPGRADE HELPERS
+# ============================================================================
+
+# Upgrade git repository
+# Usage: upgrade_git_repo "/path/to/repo" ["rebuild-command"]
+# Returns: 0 on success, 1 on failure
+upgrade_git_repo() {
+    local repo_path="$1"
+    local rebuild_cmd="${2:-}"
+
+    if [[ ! -d "$repo_path" ]]; then
+        print_error "Repository not found: ${repo_path}"
+        return 1
+    fi
+
+    print_status "$(dry_run_prefix)Updating git repository: ${repo_path}"
+
+    cd "$repo_path" || return 1
+
+    # Get current commit
+    local current_commit
+    current_commit=$(git rev-parse HEAD)
+
+    # Dry-run mode
+    if is_dry_run; then
+        local remote_commit
+        git fetch --quiet
+        remote_commit=$(git rev-parse @{u})
+        if [[ "$current_commit" != "$remote_commit" ]]; then
+            print_status "Would update: ${current_commit:0:8} → ${remote_commit:0:8}"
+        else
+            print_success "Repository is up to date"
+        fi
+        return 0
+    fi
+
+    # Pull latest changes
+    if ! git pull --ff-only; then
+        print_error "Failed to update repository"
+        return 1
+    fi
+
+    local new_commit
+    new_commit=$(git rev-parse HEAD)
+
+    if [[ "$current_commit" == "$new_commit" ]]; then
+        print_success "Repository is up to date"
+        return 0
+    fi
+
+    print_status "Repository updated: ${current_commit:0:8} → ${new_commit:0:8}"
+
+    # Rebuild if command provided
+    if [[ -n "$rebuild_cmd" ]]; then
+        print_status "Rebuilding..."
+        if eval "$rebuild_cmd"; then
+            print_success "Rebuild successful"
+            return 0
+        else
+            print_error "Rebuild failed"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# NATIVE/MANUAL UPGRADE HELPERS
+# ============================================================================
+
+# Check native tool version (informational only)
+# Usage: check_native_update "tool-name" ["--version"]
+# Returns: 2 (special code indicating manual action required)
+check_native_update() {
+    local tool_name="$1"
+    local version_cmd="${2:---version}"
+
+    if ! command_exists "$tool_name"; then
+        print_error "${tool_name} not found"
+        return 1
+    fi
+
+    local current_version
+    current_version=$($tool_name $version_cmd 2>/dev/null | head -1)
+
+    print_status "${tool_name}: ${current_version}"
+    print_warning "Native tools require Docker image rebuild to upgrade"
+    print_status "Run: docker build --no-cache to rebuild image"
+
+    return 2  # Special code: update requires manual action
+}
+
+# ============================================================================
 # EXPORTS
 # ============================================================================
 
@@ -442,3 +769,11 @@ export -f cleanup_bashrc
 export -f setup_git_aliases
 export -f cleanup_git_aliases
 export -f prompt_confirmation
+
+# Upgrade helpers (Extension API v2.0)
+export -f supports_upgrade is_dry_run dry_run_prefix
+export -f upgrade_mise_tools
+export -f check_apt_updates upgrade_apt_packages
+export -f version_gt upgrade_github_binary
+export -f upgrade_git_repo
+export -f check_native_update

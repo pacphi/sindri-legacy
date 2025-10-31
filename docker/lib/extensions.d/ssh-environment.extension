@@ -15,9 +15,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="ssh-environment"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="SSH daemon configuration for non-interactive environment support"
 EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -259,6 +261,21 @@ remove() {
   print_warning "Non-interactive SSH sessions will use default environment"
 
   return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Checking ${EXT_NAME}..."
+
+    # SSH configuration is managed by templates - no upgrade needed
+    print_success "SSH environment is up to date"
+    print_status "SSH configuration does not require upgrades"
+    print_status "To update, reinstall the extension"
+
+    return 0
 }
 
 # ============================================================================

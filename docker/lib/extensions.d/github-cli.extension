@@ -23,9 +23,11 @@ fi
 # ============================================================================
 
 EXT_NAME="github-cli"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="GitHub CLI authentication and workflow configuration"
 EXT_CATEGORY="development"
+EXT_INSTALL_METHOD="native"  # Pre-installed in Docker image
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -227,6 +229,18 @@ status() {
   fi
 
   return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # GitHub CLI is pre-installed - requires Docker rebuild to upgrade
+  check_native_update "gh" "version"
+  return $?
 }
 
 # ============================================================================

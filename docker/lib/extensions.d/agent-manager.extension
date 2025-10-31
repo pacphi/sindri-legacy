@@ -14,9 +14,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="agent-manager"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Claude Code agent manager for managing AI agents"
 EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="git"  # GitHub releases
+EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
 extension_init
@@ -414,6 +416,79 @@ status() {
 # ============================================================================
 
 # check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Get current version
+  if [[ -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    print_status "Current version:"
+    local current_version
+    current_version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+    echo "  agent-manager: $current_version"
+  else
+    print_error "agent-manager not installed"
+    return 1
+  fi
+
+  echo ""
+
+  # Get latest release
+  print_status "Checking for updates..."
+  local latest_tag
+  latest_tag=$(get_latest_release true)
+
+  if [[ -z "$latest_tag" ]]; then
+    print_error "Failed to check for updates"
+    return 1
+  fi
+
+  print_status "Latest release: $latest_tag"
+
+  # Detect platform
+  local platform_arch
+  platform_arch=$(detect_platform)
+
+  if [[ "$platform_arch" == "unsupported" ]]; then
+    print_error "Unsupported platform: $(uname -s)-$(uname -m)"
+    return 1
+  fi
+
+  # Download and replace binary
+  local binary_name="${BINARY_NAME}-${platform_arch}"
+  local download_url="https://github.com/${GITHUB_REPO}/releases/download/${latest_tag}/${binary_name}"
+  local temp_binary="/tmp/${BINARY_NAME}.new"
+
+  print_status "Downloading new version..."
+  if curl -L -o "$temp_binary" "$download_url" 2>&1; then
+    chmod +x "$temp_binary"
+
+    # Verify new binary works
+    if "$temp_binary" version >/dev/null 2>&1; then
+      mv "$temp_binary" "${INSTALL_PATH}/${BINARY_NAME}"
+      print_success "agent-manager upgraded successfully"
+
+      echo ""
+      print_status "Updated version:"
+      local new_version
+      new_version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+      echo "  agent-manager: $new_version"
+
+      return 0
+    else
+      rm -f "$temp_binary"
+      print_error "New binary verification failed"
+      return 1
+    fi
+  else
+    print_error "Failed to download new version"
+    return 1
+  fi
+}
 
 # ============================================================================
 # REMOVE

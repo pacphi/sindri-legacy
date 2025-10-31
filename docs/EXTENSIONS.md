@@ -1239,6 +1239,52 @@ run = "npm run deploy"
 
 Run with: `mise run setup`
 
+## Extension API v2.0 - Upgrade Support
+
+All extensions now support the `upgrade()` function, enabling seamless upgrades across all installation methods.
+
+### Upgrading Extensions
+
+```bash
+# Upgrade single extension
+extension-manager upgrade nodejs
+
+# Preview upgrades (dry-run)
+extension-manager upgrade-all --dry-run
+
+# Upgrade all extensions
+extension-manager upgrade-all
+
+# Check for available updates
+extension-manager check-updates
+
+# View upgrade history
+extension-manager upgrade-history
+
+# Rollback extension
+extension-manager rollback nodejs
+```
+
+### Installation Methods
+
+Extensions declare their installation method:
+
+- **mise**: Tools managed by mise (Node.js, Python, Rust, Go, etc.)
+- **apt**: APT package manager (Docker, monitoring, PHP, .NET, etc.)
+- **binary**: Direct binary downloads (GitHub releases)
+- **git**: Git clone + manual build (rbenv, etc.)
+- **native**: Pre-installed in Docker image (GitHub CLI, etc.)
+- **mixed**: Multiple methods (Docker uses APT + binary)
+
+### Upgrade Strategies
+
+- **automatic**: Upgrade to latest automatically
+- **manual**: Require explicit confirmation
+- **pinned**: Never upgrade (version locked)
+- **security-only**: Only security updates
+
+For developers creating extensions, see [Extension API v2.0 Specification](EXTENSION_API_V2.md).
+
 ## References
 
 - **Extension API**: Extension API v1.0 specification

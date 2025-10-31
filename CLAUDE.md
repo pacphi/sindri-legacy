@@ -104,6 +104,13 @@ extension-manager uninstall <name>
 
 # Reorder extension priority
 extension-manager reorder <name> <position>
+
+# Upgrade commands (Extension API v2.0)
+extension-manager upgrade <name>         # Upgrade specific extension
+extension-manager upgrade-all            # Upgrade all extensions
+extension-manager upgrade-all --dry-run  # Preview upgrades
+extension-manager check-updates          # Check for updates
+extension-manager upgrade-history        # View upgrade history
 ```
 
 ### Available Extensions
@@ -353,6 +360,64 @@ No specific test framework enforced - check each project's README for:
 - Build processes
 
 Always run project-specific linting/formatting before commits.
+
+## CI/CD & GitHub Actions
+
+Sindri uses GitHub Actions for automated testing and validation. The workflows are designed to be maintainable and reusable.
+
+### Available Workflows
+
+**Extension Testing (`extension-tests.yml`)**
+- Tests Extension API v1.0 and v2.0
+- Validates extension manager functionality
+- Tests individual extensions in parallel
+- Verifies upgrade functionality
+- Location: `.github/workflows/extension-tests.yml`
+
+**Integration Testing (`integration.yml`)**
+- End-to-end VM deployment tests
+- Developer workflow validation
+- mise-powered stack integration
+- Location: `.github/workflows/integration.yml`
+
+**Validation (`validate.yml`)**
+- Shell script validation with shellcheck
+- YAML syntax validation
+- Documentation checks
+- Location: `.github/workflows/validate.yml`
+
+**Release (`release.yml`)**
+- Automated release creation
+- Changelog generation
+- Version tagging
+- Location: `.github/workflows/release.yml`
+
+### Composite Actions
+
+Reusable workflow components in `.github/actions/`:
+
+- `setup-fly-test-env/` - Complete test environment setup
+- `deploy-fly-app/` - Fly.io app deployment with retry logic
+- `wait-fly-deployment/` - Wait for deployment completion
+- `cleanup-fly-app/` - Cleanup test resources
+
+### Test Scripts
+
+Reusable test scripts in `.github/scripts/extension-tests/`:
+
+- `verify-commands.sh` - Verify command availability
+- `test-key-functionality.sh` - Test primary tool functionality
+- `test-api-compliance.sh` - Validate Extension API compliance
+- `test-idempotency.sh` - Test idempotent installation
+- `lib/test-helpers.sh` - Shared utility functions (20+)
+- `lib/assertions.sh` - Test assertion library (10+)
+
+### Documentation
+
+For detailed information about workflows and testing:
+
+- `.github/actions/README.md` - Composite actions usage guide
+- `.github/scripts/extension-tests/README.md` - Test scripts reference
 
 ## Agent Configuration
 

@@ -1,0 +1,88 @@
+name: Test Extensions Metadata
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: 'Test app prefix'
+        required: false
+        default: 'ext-test'
+        type: string
+      region:
+        description: 'Fly.io region'
+        required: false
+        default: 'sjc'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup for debugging'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  test-extensions-metadata:
+    name: Verify Extension API v2.0 Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Verify all extensions have upgrade()
+        run: |
+          MISSING=0
+          for ext in docker/lib/extensions.d/*.extension; do
+            [[ "$(basename "$ext")" == "template.extension" ]] && continue
+            if ! grep -q "^upgrade()" "$ext"; then
+              echo "✗ Missing upgrade(): $ext"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✓ Has upgrade(): $ext"
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "ERROR: $MISSING extensions missing upgrade() function"
+            exit 1
+          fi
+          echo "SUCCESS: All extensions have upgrade() function"
+
+      - name: Verify all extensions have metadata
+        run: |
+          MISSING=0
+          for ext in docker/lib/extensions.d/*.extension; do
+            [[ "$(basename "$ext")" == "template.extension" ]] && continue
+            if ! grep -q "^EXT_INSTALL_METHOD=" "$ext"; then
+              echo "✗ Missing EXT_INSTALL_METHOD: $ext"
+              MISSING=$((MISSING + 1))
+            fi
+            if ! grep -q "^EXT_UPGRADE_STRATEGY=" "$ext"; then
+              echo "✗ Missing EXT_UPGRADE_STRATEGY: $ext"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "ERROR: $MISSING metadata fields missing"
+            exit 1
+          fi
+          echo "SUCCESS: All extensions have required metadata"
+
+      - name: Verify all extensions are v2.0.0
+        run: |
+          OLD_VERSION=0
+          for ext in docker/lib/extensions.d/*.extension; do
+            [[ "$(basename "$ext")" == "template.extension" ]] && continue
+            VERSION=$(grep "^EXT_VERSION=" "$ext" | cut -d'"' -f2)
+            if [[ "$VERSION" != "2.0.0" ]]; then
+              echo "✗ Not v2.0.0: $ext (version: $VERSION)"
+              OLD_VERSION=$((OLD_VERSION + 1))
+            else
+              echo "✓ v2.0.0: $ext"
+            fi
+          done
+          if [ $OLD_VERSION -gt 0 ]; then
+            echo "ERROR: $OLD_VERSION extensions not upgraded to v2.0.0"
+            exit 1
+          fi
+          echo "SUCCESS: All extensions are v2.0.0"

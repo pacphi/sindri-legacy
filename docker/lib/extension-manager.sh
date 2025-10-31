@@ -33,6 +33,13 @@ else
     EXTENSIONS_BASE="./extensions.d"
 fi
 
+# Source upgrade history tracking
+if [[ -f "$SCRIPT_DIR/upgrade-history.sh" ]]; then
+    source "$SCRIPT_DIR/upgrade-history.sh"
+elif [[ -f "/workspace/scripts/lib/upgrade-history.sh" ]]; then
+    source "/workspace/scripts/lib/upgrade-history.sh"
+fi
+
 # Activation manifest file location (colocated with extensions)
 if [[ -f "$EXTENSIONS_BASE/active-extensions.conf" ]]; then
     MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
@@ -59,6 +66,33 @@ CLEANUP_EXTENSIONS=(
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+# Check if extension is installed (has successful status)
+# Returns: 0 if installed, 1 if not installed or no status function
+is_extension_installed() {
+    local ext_name="$1"
+
+    # Get the activated file
+    local activated_file
+    activated_file=$(get_activated_file "$ext_name")
+
+    if [[ -z "$activated_file" ]] || [[ ! -f "$activated_file" ]]; then
+        return 1
+    fi
+
+    # Source the extension
+    source "$activated_file"
+
+    # Check if status function exists and succeeds
+    if declare -F status >/dev/null 2>&1; then
+        # Suppress output and just check exit code
+        if status >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
 
 # Function to extract extension name from filename
 get_extension_name() {
@@ -1251,37 +1285,262 @@ doctor_extensions() {
     fi
 }
 
-# Function to upgrade all tools managed by mise
-upgrade_all_tools() {
-    print_status "Upgrading all mise-managed tools..."
-    echo ""
+# ============================================================================
+# UPGRADE COMMANDS - Extension API v2.0
+# ============================================================================
 
-    # Check if mise is available
-    if ! command -v mise >/dev/null 2>&1; then
-        print_warning "mise is not installed"
-        print_status "This command requires mise for tool management"
-        print_status "Install mise with: extension-manager install mise"
+# Upgrade a single extension
+# Usage: upgrade_extension "extension-name"
+# Returns: 0 on success, 1 on failure, 2 if upgrade not supported
+upgrade_extension() {
+    local extension_name="$1"
+    local extension_file
+    extension_file=$(find_extension_file "$extension_name")
+
+    if [[ -z "$extension_file" ]]; then
+        print_error "Extension not found: ${extension_name}"
         return 1
     fi
 
-    # Run mise upgrade
-    print_status "Running 'mise upgrade'..."
+    # Source extension
+    source "$extension_file"
+
+    # Check if extension is installed
+    if ! is_extension_installed "$extension_name"; then
+        print_error "Extension not installed: ${extension_name}"
+        print_status "Install with: extension-manager install ${extension_name}"
+        return 1
+    fi
+
+    # Check if extension implements upgrade()
+    if ! supports_upgrade; then
+        print_warning "Extension ${extension_name} does not support upgrades (Extension API v1.0)"
+        print_status "This extension requires Extension API v2.0 for upgrade support"
+        print_status "Contact the extension maintainer to add upgrade() function"
+        return 2
+    fi
+
+    # Get current version before upgrade
+    local old_version="${EXT_VERSION:-unknown}"
+
+    # Show current status
+    print_status "Current status:"
+    status
     echo ""
 
-    if mise upgrade; then
-        print_success "mise upgrade completed successfully"
+    # Run upgrade
+    print_status "Starting upgrade..."
+    local start_time
+    start_time=$(date +%s)
+
+    if upgrade; then
+        local end_time duration new_version
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+
+        # Source extension again to get new version
+        source "$extension_file"
+        new_version="${EXT_VERSION:-unknown}"
+
+        # Record in history
+        if declare -F record_upgrade >/dev/null 2>&1; then
+            record_upgrade "$extension_name" "$old_version" "$new_version" "success" "$duration"
+        fi
+
+        print_success "Upgrade completed successfully in ${duration}s"
+
+        # Validate after upgrade
+        echo ""
+        print_status "Validating installation..."
+        if validate; then
+            print_success "Validation passed"
+            return 0
+        else
+            print_warning "Validation failed after upgrade"
+            return 1
+        fi
     else
-        print_error "mise upgrade failed"
+        # Record failure
+        if declare -F record_upgrade >/dev/null 2>&1; then
+            record_upgrade "$extension_name" "$old_version" "$old_version" "failed" "0"
+        fi
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# Upgrade all installed extensions
+# Usage: upgrade_all_extensions [--dry-run]
+# Returns: 0 on success, 1 if any failures
+upgrade_all_extensions() {
+    local dry_run="false"
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run="true"
+                export DRY_RUN="true"
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ "$dry_run" == "true" ]]; then
+        print_status "DRY RUN MODE - No changes will be made"
+        echo ""
+    fi
+
+    print_status "Upgrading all installed extensions..."
+    echo ""
+
+    # Read manifest
+    local manifest="${EXTENSIONS_DIR}/active-extensions.conf"
+    if [[ ! -f "$manifest" ]]; then
+        print_error "Manifest not found: ${manifest}"
         return 1
     fi
 
+    local -a extensions=()
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+
+        extensions+=("$line")
+    done < "$manifest"
+
+    if [[ ${#extensions[@]} -eq 0 ]]; then
+        print_warning "No extensions found in manifest"
+        return 0
+    fi
+
+    local total=${#extensions[@]}
+    local upgraded=0
+    local skipped=0
+    local failed=0
+
+    for extension in "${extensions[@]}"; do
+        print_header "Upgrading: ${extension}"
+
+        local result
+        upgrade_extension "$extension"
+        result=$?
+
+        case $result in
+            0)
+                ((upgraded++))
+                ;;
+            2)
+                # Extension doesn't support upgrades
+                ((skipped++))
+                ;;
+            *)
+                ((failed++))
+                ;;
+        esac
+
+        echo ""
+    done
+
+    # Summary
+    print_header "Upgrade Summary"
+    print_status "Total extensions: ${total}"
+    print_success "Upgraded: ${upgraded}"
+
+    if [[ $skipped -gt 0 ]]; then
+        print_warning "Skipped (no upgrade support): ${skipped}"
+    fi
+
+    if [[ $failed -gt 0 ]]; then
+        print_error "Failed: ${failed}"
+        return 1
+    fi
+
+    print_success "All upgrades completed successfully"
+
+    # Cleanup dry-run mode
+    if [[ "$dry_run" == "true" ]]; then
+        unset DRY_RUN
+    fi
+
+    return 0
+}
+
+# Check for available updates
+# Usage: check_updates
+# Returns: 0 if updates found, 1 if all up-to-date
+check_updates() {
+    print_status "Checking for available updates..."
     echo ""
-    print_status "Checking for extension updates..."
-    print_status "Extension files are managed via git repository updates"
-    print_status "To update extensions, pull the latest changes from the repository"
+
+    # Read manifest
+    local manifest="${EXTENSIONS_DIR}/active-extensions.conf"
+    local -a extensions=()
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+        extensions+=("$line")
+    done < "$manifest"
+
+    local has_updates=0
+
+    for extension in "${extensions[@]}"; do
+        local extension_file
+        extension_file=$(find_extension_file "$extension")
+
+        if [[ -z "$extension_file" ]]; then
+            continue
+        fi
+
+        # Source extension
+        source "$extension_file"
+
+        # Check if upgrade() exists
+        if ! supports_upgrade; then
+            continue
+        fi
+
+        # Get installation method
+        local method="${EXT_INSTALL_METHOD:-unknown}"
+
+        case "$method" in
+            mise)
+                if command_exists mise; then
+                    # Check for mise updates
+                    local outdated
+                    if outdated=$(mise outdated 2>/dev/null) && [[ -n "$outdated" ]]; then
+                        print_status "${extension}: Updates available"
+                        echo "$outdated" | sed 's/^/  /'
+                        has_updates=1
+                    fi
+                fi
+                ;;
+            apt)
+                print_status "${extension}: Check with 'apt list --upgradable'"
+                ;;
+            binary)
+                print_status "${extension}: Checking GitHub releases..."
+                # Would need to implement per-binary checks
+                ;;
+            *)
+                print_status "${extension}: Manual check required (${method})"
+                ;;
+        esac
+    done
 
     echo ""
-    print_success "Upgrade process completed"
+    if [[ $has_updates -eq 0 ]]; then
+        print_success "All extensions are up to date"
+    else
+        print_status "Run 'extension-manager upgrade-all' to upgrade"
+    fi
+
     return 0
 }
 
@@ -1378,6 +1637,56 @@ status_diff_extensions() {
     return 0
 }
 
+# ============================================================================
+# ADVANCED FEATURES - Extension API v2.0 Phase 7
+# ============================================================================
+
+# Show upgrade history
+# Usage: upgrade_history [extension-name] [limit]
+upgrade_history() {
+    local extension="${1:-}"
+    local limit="${2:-10}"
+
+    if declare -F show_upgrade_history >/dev/null 2>&1; then
+        show_upgrade_history "$extension" "$limit"
+    else
+        print_error "Upgrade history not available"
+        print_status "Upgrade history tracking requires upgrade-history.sh"
+        return 1
+    fi
+}
+
+# Rollback extension to previous version
+# Usage: rollback_extension "extension-name"
+rollback_extension() {
+    local extension_name="$1"
+
+    print_warning "Rollback functionality is limited to reinstallation"
+    print_status "This will uninstall and reinstall ${extension_name}"
+
+    if ! confirm "Continue with rollback?" "n"; then
+        print_status "Rollback cancelled"
+        return 0
+    fi
+
+    # Uninstall
+    print_status "Uninstalling ${extension_name}..."
+    if ! uninstall_extension "$extension_name"; then
+        print_error "Uninstall failed"
+        return 1
+    fi
+
+    # Reinstall
+    print_status "Reinstalling ${extension_name}..."
+    if ! install_extension "$extension_name"; then
+        print_error "Reinstall failed"
+        return 1
+    fi
+
+    print_success "Rollback completed"
+    return 0
+}
+
 # Function to show help
 show_help() {
     cat << EOF
@@ -1399,8 +1708,14 @@ Commands:
   status <name>            Check extension installation status
   status-all [--json]      Show status of all active extensions
 
+  upgrade <name>           Upgrade a specific extension (API v2.0)
+  upgrade-all              Upgrade all installed extensions (API v2.0)
+  upgrade-all --dry-run    Preview upgrades without making changes
+  check-updates            Check for available updates
+  upgrade-history [name] [limit]  Show upgrade history (default: last 10)
+  rollback <name>          Rollback extension (uninstall and reinstall)
+
   doctor                   Run health check on extension system
-  upgrade-all              Upgrade all mise-managed tools
   status-diff [snapshot]   Compare status with previous snapshot
 
   deactivate <name>        Remove extension from manifest
@@ -1436,8 +1751,19 @@ Examples:
   # Run health check
   $(basename "$0") doctor
 
-  # Upgrade all tools
-  $(basename "$0") upgrade-all
+  # Upgrade extensions (API v2.0)
+  $(basename "$0") upgrade nodejs               # Upgrade single extension
+  $(basename "$0") upgrade-all --dry-run        # Preview upgrades
+  $(basename "$0") upgrade-all                  # Upgrade all extensions
+  $(basename "$0") check-updates                # Check for available updates
+
+  # View upgrade history
+  $(basename "$0") upgrade-history              # Show last 10 upgrades
+  $(basename "$0") upgrade-history nodejs       # Show history for nodejs
+  $(basename "$0") upgrade-history nodejs 20    # Show last 20 nodejs upgrades
+
+  # Rollback an extension
+  $(basename "$0") rollback rust                # Rollback rust extension
 
   # Create and compare status snapshots
   $(basename "$0") status-diff                    # Create snapshot
@@ -1527,8 +1853,20 @@ main() {
         doctor)
             doctor_extensions
             ;;
+        upgrade)
+            if [[ -z "${1:-}" ]]; then
+                print_error "Extension name required"
+                echo "Usage: extension-manager upgrade <name>"
+                exit 1
+            fi
+            upgrade_extension "$1"
+            ;;
         upgrade-all)
-            upgrade_all_tools
+            shift
+            upgrade_all_extensions "$@"
+            ;;
+        check-updates)
+            check_updates
             ;;
         status-diff)
             status_diff_extensions "$1"
@@ -1549,6 +1887,17 @@ main() {
                 exit 1
             fi
             reorder_extension "$1" "$2"
+            ;;
+        upgrade-history)
+            upgrade_history "$1" "$2"
+            ;;
+        rollback)
+            if [[ -z "$1" ]]; then
+                print_error "Extension name required"
+                echo "Usage: extension-manager rollback <extension-name>"
+                exit 1
+            fi
+            rollback_extension "$1"
             ;;
         help|--help|-h)
             show_help

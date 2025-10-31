@@ -14,9 +14,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="playwright"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Playwright browser automation framework with Chromium"
 EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="mise"  # Uses mise npm plugin
+EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
 extension_init
@@ -324,6 +326,53 @@ status() {
   fi
 
   return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  cd "$WORKSPACE_DIR" || return 1
+
+  # Get current version
+  print_status "Current version:"
+  if [[ -f "node_modules/.bin/playwright" ]]; then
+    npx playwright --version 2>/dev/null || echo "  playwright: version check failed"
+  else
+    echo "  playwright: not installed"
+  fi
+  echo ""
+
+  # Upgrade via npm
+  if [[ -f "package.json" ]]; then
+    print_status "Upgrading Playwright packages..."
+    if npm update playwright @playwright/test 2>&1; then
+      print_success "Playwright packages upgraded"
+
+      # Update browsers
+      print_status "Updating Chromium browser..."
+      if npx playwright install chromium 2>&1; then
+        print_success "Chromium browser updated"
+      else
+        print_warning "Failed to update Chromium browser"
+      fi
+
+      echo ""
+      print_status "Updated version:"
+      npx playwright --version 2>/dev/null || echo "  playwright: version check failed"
+
+      return 0
+    else
+      print_error "Failed to upgrade Playwright"
+      return 1
+    fi
+  else
+    print_error "package.json not found in $WORKSPACE_DIR"
+    return 1
+  fi
 }
 
 # ============================================================================

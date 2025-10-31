@@ -1,0 +1,596 @@
+name: Integration Test Job
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: 'Test app prefix'
+        required: false
+        default: 'sindri-ci-test'
+        type: string
+      region:
+        description: 'Fly.io region'
+        required: false
+        default: 'sjc'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup for debugging'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  integration-test:
+    name: End-to-End Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Generate test app name
+        id: app-name
+        run: |
+          # Generate unique app name with timestamp
+          timestamp=$(date +%s)
+          app_name="${{ inputs.test_app_prefix }}-${timestamp}"
+          echo "app_name=$app_name" >> $GITHUB_OUTPUT
+          echo "Test app name: $app_name"
+
+      - name: Create test SSH key
+        id: ssh-key
+        run: |
+          # Generate SSH key for testing
+          ssh-keygen -t ed25519 -f test_key -N "" -C "github-actions-test"
+          echo "ssh_key_created=true" >> $GITHUB_OUTPUT
+
+          # Set proper permissions
+          chmod 600 test_key
+          chmod 644 test_key.pub
+
+      - name: Prepare fly.toml for testing
+        env:
+          APP_NAME: ${{ steps.app-name.outputs.app_name }}
+          VOLUME_NAME: "test_data"
+          VOLUME_SIZE: "5"
+          VM_MEMORY: "1024"
+          CPU_KIND: "shared"
+          CPU_COUNT: "1"
+          CI_MODE: "true"
+        run: |
+          # Use the configuration script in CI mode to prevent port conflicts
+          ./scripts/prepare-fly-config.sh --ci-mode
+
+      - name: Deploy test environment
+        run: |
+          echo "Creating Fly.io app for testing..."
+
+          # Create app
+          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || echo "App may already exist"
+
+          # Create volume
+          flyctl volumes create test_data \
+            --app ${{ steps.app-name.outputs.app_name }} \
+            --region ${{ inputs.region }} \
+            --size 5 \
+            --no-encryption \
+            --yes
+
+          # Set SSH key and CI mode as secrets
+          ssh_key_content=$(cat test_key.pub)
+          flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
+            --app ${{ steps.app-name.outputs.app_name }}
+          flyctl secrets set CI_MODE="true" \
+            --app ${{ steps.app-name.outputs.app_name }}
+
+          # Deploy the application using immediate strategy to skip health checks
+          # This prevents health check loops caused by port 22 conflicts with hallpass
+          echo "Starting deployment (this may take 3-5 minutes for image build)..."
+          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 300s --yes || {
+            echo "⚠️  Initial deployment command completed with warnings"
+            echo "Checking deployment status..."
+            flyctl status --app ${{ steps.app-name.outputs.app_name }}
+          }
+
+      - name: Wait for deployment
+        run: |
+          echo "Verifying deployment success..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          timeout=240
+          elapsed=0
+          interval=10
+
+          while [ $elapsed -lt $timeout ]; do
+            # Get deployment status with machine details
+            status_output=$(flyctl status --app $app_name 2>&1)
+
+            echo "=== Status Check (${elapsed}s/${timeout}s) ==="
+            echo "$status_output"
+
+            # Check if machines are started (immediate deployment bypasses health checks)
+            if echo "$status_output" | grep -q "started"; then
+              echo "✅ Machine reported as started"
+
+              # Get machine ID for detailed checks
+              machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
+
+              if [[ -n "$machine_id" ]]; then
+                echo "Machine ID: $machine_id"
+                echo "Machine details:"
+                flyctl machine status "$machine_id" --app $app_name || true
+              fi
+
+              # Give SSH daemon time to fully initialize (critical for CI)
+              echo "Waiting 15s for SSH daemon initialization..."
+              sleep 15
+
+              echo "✅ Deployment successful"
+              break
+            elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
+              echo "❌ Deployment failed"
+              echo "App status: $status_output"
+              echo "Recent logs:"
+              flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
+              exit 1
+            else
+              echo "Waiting for deployment to complete... (${elapsed}s/${timeout}s)"
+            fi
+
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+          if [ $elapsed -ge $timeout ]; then
+            echo "❌ Timeout waiting for deployment to complete"
+            echo "Final status:"
+            flyctl status --app $app_name
+            echo "Machine list:"
+            flyctl machines list --app $app_name --json | jq '.' || flyctl machines list --app $app_name
+            echo "Recent logs:"
+            flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
+            exit 1
+          fi
+
+      - name: Test SSH connectivity
+        run: |
+          echo "Testing SSH connectivity..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          max_attempts=8
+          attempt=1
+          wait_between=15
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "SSH connectivity attempt $attempt/$max_attempts..."
+
+            # Test SSH connection with timeout using flyctl console
+            # Use explicit bash invocation to ensure command execution
+            if timeout 45s flyctl ssh console --app $app_name --user developer -C "echo 'SSH_TEST_SUCCESS' && whoami && pwd" 2>&1 | grep -q "SSH_TEST_SUCCESS"; then
+              echo "✅ SSH connection successful"
+
+              # Verify environment is ready
+              echo "Verifying SSH environment..."
+              flyctl ssh console --app $app_name --user developer -C "echo \"User: \$(whoami)\" && echo \"Home: \$HOME\" && echo \"Path: \$PATH\" && ls -la /workspace/ | head -5"
+
+              echo "✅ SSH connectivity verified"
+              break
+            else
+              echo "⚠️  SSH attempt $attempt failed"
+
+              if [ $attempt -eq $max_attempts ]; then
+                echo "❌ All SSH attempts failed after $max_attempts tries"
+
+                # Comprehensive debug information
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "DIAGNOSTIC INFORMATION"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                echo ""
+                echo "=== App Status ==="
+                flyctl status --app $app_name
+
+                echo ""
+                echo "=== Machine List ==="
+                flyctl machines list --app $app_name
+
+                echo ""
+                echo "=== Recent Logs (last 100 lines) ==="
+                flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
+
+                echo ""
+                echo "=== Machine Events ==="
+                machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
+                if [[ -n "$machine_id" ]]; then
+                  flyctl machine status "$machine_id" --app $app_name || echo "Could not get machine status"
+                fi
+
+                exit 1
+              fi
+
+              echo "Waiting ${wait_between}s before retry..."
+              sleep $wait_between
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+      - name: Test VM configuration and extension system
+        run: |
+          echo "Testing VM configuration, tools, and extension system..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Test that configuration script and extension system exists
+          flyctl ssh console --app $app_name --user developer --command '
+            echo "Testing VM environment..."
+
+            # Check extension manager
+            if [ -f "/workspace/scripts/lib/extension-manager.sh" ]; then
+              echo "✅ Extension manager found"
+            else
+              echo "❌ Extension manager missing"
+              exit 1
+            fi
+
+            # Check for extension examples
+            if [ -d "/workspace/scripts/lib/extensions.d" ]; then
+              ext_count=$(ls -1 /workspace/scripts/lib/extensions.d/*.extension 2>/dev/null | wc -l)
+              echo "✅ Extension directory found with $ext_count extension examples"
+            else
+              echo "❌ Extensions directory missing"
+              exit 1
+            fi
+
+            # Check basic tools
+            which curl || { echo "❌ curl not found"; exit 1; }
+            which git || { echo "❌ git not found"; exit 1; }
+            which ssh || { echo "❌ ssh not found"; exit 1; }
+
+            # Check workspace directory
+            ls -la /workspace/ || { echo "❌ workspace directory issue"; exit 1; }
+
+            echo "✅ Basic VM tests passed"
+            '
+
+      - name: Verify CI extension manifest
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/verify-manifest.sh /tmp/verify-manifest.sh
+            quit
+          SFTP_EOF
+
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
+
+      - name: Verify volume mount
+        run: |
+          echo "Verifying volume mount..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Check volume mount and permissions
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            echo \"=== Volume Mount Verification ===\"
+            echo \"Checking /workspace mount:\"
+            df -h /workspace || echo \"WARNING: df command failed\"
+            echo \"\"
+            echo \"Workspace directory contents:\"
+            ls -la /workspace/ || echo \"WARNING: ls command failed\"
+            echo \"\"
+            echo \"Mount information:\"
+            mount | grep workspace || echo \"WARNING: No workspace mount found in mount output\"
+            echo \"\"
+            echo \"Workspace permissions:\"
+            stat /workspace/ || echo \"WARNING: stat command failed\"
+            echo \"\"
+            echo \"Testing write permissions:\"
+            touch /workspace/mount-test-$(date +%s).tmp && echo \"✅ Write permission confirmed\" || echo \"❌ Write permission failed\"
+            echo \"=== End Volume Mount Verification ===\"
+            '"
+
+      - name: Test volume persistence
+        run: |
+          echo "Testing volume persistence..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          test_file="/workspace/test-persistence-$(date +%s).txt"
+          test_content="integration-test-$(date +%s)"
+
+          # Create test file with explicit sync operations
+          echo "Creating test file with content: $test_content"
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            echo \"Creating and syncing test file...\"
+            echo \"$test_content\" > $test_file
+            sync
+            sleep 2
+            echo \"Verifying file was written correctly...\"
+            if [ -f \"$test_file\" ]; then
+              file_size=\$(wc -c < \"$test_file\")
+              echo \"File created with size: \$file_size bytes\"
+              cat \"$test_file\"
+            else
+              echo \"ERROR: File was not created\"
+              exit 1
+            fi
+          '"
+
+          # Force filesystem sync before restart
+          echo "Forcing filesystem sync before restart..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            echo \"Syncing filesystem before restart...\"
+            sync
+            echo \"Sync completed\"
+            sleep 3
+            echo \"Final file verification before restart:\"
+            ls -la \"$test_file\" 2>/dev/null || echo \"File not found\"
+            wc -c \"$test_file\" 2>/dev/null || echo \"Cannot get file size\"
+            cat \"$test_file\" 2>/dev/null || echo \"Cannot read file\"
+          '"
+
+          # Wait additional time for any remaining buffer flushes
+          echo "Waiting for buffer flush before restart..."
+          sleep 10
+
+          # Restart the machine to test persistence
+          echo "Restarting machine to test persistence..."
+          machine_id=$(flyctl machine list --app $app_name --json | jq -r '.[0].id')
+          flyctl machine restart $machine_id --app $app_name
+
+          # Wait for restart and ensure machine is ready
+          echo "Waiting for machine to restart and become ready..."
+          sleep 45
+
+          # Verify machine is running
+          max_attempts=5
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking machine status (attempt $attempt/$max_attempts)..."
+            if flyctl status --app $app_name | grep -q "started"; then
+              echo "✅ Machine is running"
+              break
+            else
+              echo "⚠️  Machine not ready, waiting..."
+              sleep 10
+              attempt=$((attempt + 1))
+            fi
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ Machine failed to start after restart"
+            exit 1
+          fi
+
+          # Test volume persistence with retry logic
+          echo "Testing file persistence after restart..."
+          max_attempts=3
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Persistence test attempt $attempt/$max_attempts..."
+
+            # Enhanced file verification with metadata
+            echo "Performing comprehensive file verification..."
+
+            verification_result=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+              echo \"=== Post-Restart File Verification ===\"
+              if [ -f \"$test_file\" ]; then
+                echo \"✅ File exists\"
+                echo \"File metadata:\"
+                ls -la \"$test_file\"
+                echo \"File size: \$(wc -c < \"$test_file\") bytes\"
+                echo \"File content:\"
+                content=\$(cat \"$test_file\" 2>/dev/null)
+                if [ -n \"\$content\" ]; then
+                  echo \"\$content\"
+                  echo \"VERIFICATION_STATUS=SUCCESS\"
+                else
+                  echo \"[EMPTY FILE]\"
+                  echo \"VERIFICATION_STATUS=EMPTY\"
+                fi
+              else
+                echo \"❌ File missing\"
+                echo \"VERIFICATION_STATUS=MISSING\"
+              fi
+              echo \"=== End Verification ===\"
+            '")
+
+            echo "$verification_result"
+
+            if echo "$verification_result" | grep -q "VERIFICATION_STATUS=SUCCESS"; then
+              echo "✅ Test file exists with content after restart"
+
+              # Extract and verify content
+              actual_content=$(echo "$verification_result" | grep -A 1 "File content:" | tail -1)
+
+              if [ "$actual_content" = "$test_content" ]; then
+                echo "✅ Volume persistence test passed - content matches perfectly"
+                break
+              else
+                echo "❌ File content mismatch:"
+                echo "  Expected: '$test_content'"
+                echo "  Actual:   '$actual_content'"
+                echo "  Expected length: ${#test_content}"
+                echo "  Actual length:   ${#actual_content}"
+                exit 1
+              fi
+            elif echo "$verification_result" | grep -q "VERIFICATION_STATUS=EMPTY"; then
+              echo "⚠️  File exists but is empty (attempt $attempt/$max_attempts)"
+              echo "This indicates a filesystem sync issue during restart"
+              if [ $attempt -eq $max_attempts ]; then
+                echo "❌ File content lost after restart - filesystem sync failure"
+                echo "Debugging information:"
+                echo "$verification_result"
+                exit 1
+              fi
+            else
+              echo "⚠️  Test file not found (attempt $attempt/$max_attempts)"
+              if [ $attempt -eq $max_attempts ]; then
+                echo "❌ Test file disappeared after restart"
+                echo "Debugging - workspace contents:"
+                flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc 'ls -la /workspace/ | head -20'"
+                exit 1
+              fi
+            fi
+
+            sleep 10
+            attempt=$((attempt + 1))
+          done
+
+      - name: Test auto-suspend functionality
+        if: success()
+        run: |
+          echo "Testing auto-suspend functionality..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Check that machine can be suspended
+          machine_id=$(flyctl machine list --app $app_name --json | jq -r '.[0].id')
+
+          if [ -z "$machine_id" ] || [ "$machine_id" = "null" ]; then
+            echo "❌ Failed to get machine ID"
+            exit 1
+          fi
+
+          echo "Stopping machine $machine_id..."
+          if ! flyctl machine stop $machine_id --app $app_name 2>&1; then
+            echo "⚠️  Machine stop command failed, may already be stopped"
+          fi
+
+          # Wait for stop
+          sleep 10
+
+          # Check status
+          if flyctl status --app $app_name 2>&1 | grep -q "stopped"; then
+            echo "✅ Auto-suspend test passed - machine stopped"
+          else
+            echo "⚠️  Machine did not show stopped status, but continuing..."
+          fi
+
+          # Start it back up for cleanup
+          echo "Starting machine $machine_id..."
+          if ! flyctl machine start $machine_id --app $app_name 2>&1; then
+            echo "❌ Failed to start machine"
+            flyctl status --app $app_name
+            exit 1
+          fi
+
+          # Wait for machine to fully restart with verification
+          echo "Waiting for machine to restart..."
+          sleep 30
+
+          # Verify machine is running before proceeding to cleanup
+          max_attempts=8
+          attempt=1
+          machine_started=false
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking machine status (attempt $attempt/$max_attempts)..."
+
+            status_output=$(flyctl status --app $app_name 2>&1 || echo "status_failed")
+
+            if echo "$status_output" | grep -q "started"; then
+              echo "✅ Machine fully restarted and ready for cleanup"
+              machine_started=true
+              break
+            elif echo "$status_output" | grep -q "status_failed"; then
+              echo "⚠️  Status check failed, retrying..."
+            else
+              echo "⚠️  Machine not ready yet (status: $(echo "$status_output" | grep -oE 'stopped|starting|started|stopping' | head -1)), waiting..."
+            fi
+
+            sleep 10
+            attempt=$((attempt + 1))
+          done
+
+          if [ "$machine_started" = "false" ]; then
+            echo "❌ Machine failed to start after $max_attempts attempts"
+            echo "Final status:"
+            flyctl status --app $app_name
+            echo "Machine logs:"
+            flyctl logs --app $app_name
+            exit 1
+          fi
+
+      - name: Test basic extension workflow
+        if: success()
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Copy script to VM and execute
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/scripts/integration/test-basic-workflow.sh /tmp/test-basic-workflow.sh
+            quit
+          SFTP_EOF
+
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/test-basic-workflow.sh'"
+
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        run: |
+          echo "Cleaning up test resources..."
+
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          # Stop and destroy machines
+          machines=$(flyctl machine list --app $app_name --json | jq -r '.[].id')
+          for machine in $machines; do
+            echo "Stopping machine $machine..."
+            flyctl machine stop $machine --app $app_name || true
+            sleep 5
+            echo "Destroying machine $machine..."
+            flyctl machine destroy $machine --app $app_name --force || true
+          done
+
+          # Destroy volumes
+          volumes=$(flyctl volumes list --app $app_name --json | jq -r '.[].id')
+          for volume in $volumes; do
+            echo "Destroying volume $volume..."
+            flyctl volumes destroy $volume --app $app_name --yes || true
+          done
+
+          # Destroy app
+          echo "Destroying app $app_name..."
+          flyctl apps destroy $app_name --yes || true
+
+          # Clean up SSH key
+          rm -f test_key test_key.pub
+
+          echo "✅ Cleanup completed"
+
+      - name: Report test results
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All integration tests passed successfully"
+            echo "## ✅ Integration Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All end-to-end integration tests completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Validated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ VM deployment and configuration" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ SSH connectivity (Fly.io hallpass)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Volume persistence across restarts" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Extension system presence and basic workflow" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Auto-suspend functionality" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some integration tests failed"
+            echo "Check the logs above for details"
+            echo "## ❌ Integration Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some integration tests failed. Review the job logs for detailed error information." >> $GITHUB_STEP_SUMMARY
+          fi
+

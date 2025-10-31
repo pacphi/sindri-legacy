@@ -1,0 +1,235 @@
+name: Developer Workflow Test
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: 'Test app prefix'
+        required: false
+        default: 'sindri-ci-test'
+        type: string
+      region:
+        description: 'Fly.io region'
+        required: false
+        default: 'sjc'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup for debugging'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  developer-workflow:
+    name: Developer Workflow Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    # Only run on workflow_dispatch or when explicitly requested
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-workflow]')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Generate test app name
+        id: app-name
+        run: |
+          timestamp=$(date +%s)
+          app_name="${{ inputs.test_app_prefix }}-workflow-${timestamp}"
+          echo "app_name=$app_name" >> $GITHUB_OUTPUT
+          echo "Test app name: $app_name"
+
+      - name: Create test SSH key
+        run: |
+          ssh-keygen -t ed25519 -f test_key -N "" -C "workflow-test"
+          chmod 600 test_key
+          chmod 644 test_key.pub
+
+      - name: Prepare fly.toml for testing
+        env:
+          APP_NAME: ${{ steps.app-name.outputs.app_name }}
+          VOLUME_NAME: "test_data"
+          VOLUME_SIZE: "10"
+          VM_MEMORY: "2048"
+          CPU_KIND: "shared"
+          CPU_COUNT: "1"
+          CI_MODE: "true"
+        run: |
+          ./scripts/prepare-fly-config.sh --ci-mode
+
+      - name: Deploy test environment
+        run: |
+          echo "Creating Fly.io app for workflow testing..."
+          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || echo "App may already exist"
+
+          flyctl volumes create test_data \
+            --app ${{ steps.app-name.outputs.app_name }} \
+            --region ${{ inputs.region }} \
+            --size 10 \
+            --no-encryption \
+            --yes
+
+          ssh_key_content=$(cat test_key.pub)
+          flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
+            --app ${{ steps.app-name.outputs.app_name }}
+          flyctl secrets set CI_MODE="true" \
+            --app ${{ steps.app-name.outputs.app_name }}
+
+          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 90s --yes
+
+      - name: Wait for deployment
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          timeout=180
+          elapsed=0
+          interval=10
+
+          while [ $elapsed -lt $timeout ]; do
+            status_output=$(flyctl status --app $app_name 2>&1)
+            if echo "$status_output" | grep -q "started"; then
+              echo "✅ Deployment successful"
+              sleep 30
+              break
+            fi
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+      - name: Add core extensions to manifest
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Setting up manifest with protected core extensions..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest_file=\"extensions.d/active-extensions.conf\"
+
+            # Create manifest from CI template (already has protected extensions)
+            if [ ! -f \"\$manifest_file\" ]; then
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+            fi
+
+            echo \"\"
+            echo \"=== Protected Extensions in Manifest (from CI config) ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+
+            # Verify protected extensions are present
+            echo \"\"
+            echo \"Verifying protected extensions...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present in manifest\"
+              else
+                echo \"❌ \$ext missing from CI config - this should not happen\"
+                exit 1
+              fi
+            done
+          '"
+
+      - name: Install all extensions from manifest
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Installing all activated extensions..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            echo \"Running install-all...\"
+            if bash extension-manager.sh install-all; then
+              echo \"✅ All extensions installed\"
+            else
+              echo \"❌ Extension installation failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Verify all extensions installed correctly
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Verifying extension installations..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            # Source SSH environment
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              source /etc/profile.d/00-ssh-environment.sh
+            fi
+
+            echo \"=== Verification ===\"
+
+            # Verify workspace structure
+            if [ -d /workspace/src ] && [ -d /workspace/tests ]; then
+              echo \"✅ Workspace structure created\"
+            else
+              echo \"❌ Workspace structure missing\"
+              exit 1
+            fi
+
+            # Verify Node.js
+            if command -v node >/dev/null 2>&1; then
+              echo \"✅ Node.js installed: \$(node --version)\"
+            else
+              echo \"❌ Node.js not found\"
+              exit 1
+            fi
+
+            # Verify SSH environment
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              echo \"✅ SSH environment configured\"
+            else
+              echo \"❌ SSH environment not configured\"
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ All extensions verified\"
+          '"
+
+      - name: Test extension status command
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Testing extension status command..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            for ext in workspace-structure nodejs ssh-environment; do
+              echo \"\"
+              echo \"Checking status of \$ext...\"
+              if bash extension-manager.sh status \$ext; then
+                echo \"✅ Status command works for \$ext\"
+              else
+                echo \"⚠️  Status command failed for \$ext\"
+              fi
+            done
+          '"
+
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+          for machine in $machines; do
+            [[ -z "$machine" ]] && continue
+            flyctl machine stop $machine --app $app_name || true
+            sleep 3
+            flyctl machine destroy $machine --app $app_name --force || true
+          done
+
+          volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+          for volume in $volumes; do
+            [[ -z "$volume" ]] && continue
+            flyctl volumes destroy $volume --app $app_name --yes || true
+          done
+
+          flyctl apps destroy $app_name --yes || true
+          rm -f test_key test_key.pub
+

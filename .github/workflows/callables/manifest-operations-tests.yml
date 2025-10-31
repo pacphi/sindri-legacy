@@ -1,0 +1,216 @@
+name: Manifest Operations Tests
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: 'Test app prefix'
+        required: false
+        default: 'ext-test'
+        type: string
+      region:
+        description: 'Fly.io region'
+        required: false
+        default: 'sjc'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup for debugging'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  manifest-operations-tests:
+    name: Test Manifest Operations
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Generate test app name
+        id: app-name
+        run: |
+          timestamp=$(date +%s)
+          app_name="${TEST_APP_PREFIX}-manifest-${timestamp}"
+          echo "app_name=$app_name" >> $GITHUB_OUTPUT
+
+      - name: Create test SSH key
+        run: |
+          ssh-keygen -t ed25519 -f test_key -N "" -C "manifest-test"
+          chmod 600 test_key
+          chmod 644 test_key.pub
+
+      - name: Prepare fly.toml
+        env:
+          APP_NAME: ${{ steps.app-name.outputs.app_name }}
+          VOLUME_NAME: "test_data"
+          VOLUME_SIZE: "10"
+          VM_MEMORY: "2048"
+          CPU_KIND: "shared"
+          CPU_COUNT: "1"
+          CI_MODE: "true"
+        run: ./scripts/prepare-fly-config.sh --ci-mode
+
+      - name: Deploy test environment
+        run: |
+          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || true
+          flyctl deploy --app ${{ steps.app-name.outputs.app_name }} \
+            --strategy immediate \
+            --wait-timeout 600 \
+            --ha=false
+
+      - name: Wait for deployment
+        timeout-minutes: 8
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+          max_wait=420
+          interval=15
+          elapsed=0
+
+          while [ $elapsed -lt $max_wait ]; do
+            status_output=$(flyctl status --app $app_name 2>&1 || echo "error")
+
+            if echo "$status_output" | grep -q "running"; then
+              echo "✅ Deployment ready"
+              break
+            elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
+              echo "❌ Deployment failed"
+              exit 1
+            fi
+
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+      - name: Copy test fixtures to VM
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Copying test fixtures to VM..."
+          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
+            put .github/workflows/test-fixtures/manifest-reorder-test.conf /tmp/manifest-reorder.conf
+            put .github/workflows/test-fixtures/manifest-with-comments.conf /tmp/manifest-comments.conf
+            quit
+          SFTP_EOF
+
+      - name: Test reorder functionality
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Testing extension reorder functionality..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Using test fixture for reorder test...\"
+            cp /tmp/manifest-reorder.conf \$manifest
+
+            echo \"\"
+            echo \"=== Initial manifest ===\"
+            cat -n \$manifest
+
+            echo \"\"
+            echo \"Running: extension-manager reorder python 5\"
+            if bash extension-manager.sh reorder python 5 2>&1; then
+              echo \"\"
+              echo \"=== Manifest after reorder ===\"
+              cat -n \$manifest
+
+              # Check that python is at the 5th non-comment line (extension position 5)
+              # With 1 comment line at top, this would be file line 6
+              extension_line=\$(grep -v \"^#\" \$manifest | grep -v \"^$\" | sed -n \"5p\")
+              if echo \"\$extension_line\" | grep -q \"^python\"; then
+                echo \"\"
+                echo \"✅ python correctly moved to extension position 5\"
+                echo \"Extension at position 5: \$extension_line\"
+              else
+                echo \"\"
+                echo \"❌ python not at extension position 5\"
+                echo \"Extension at position 5: \$extension_line\"
+                echo \"\"
+                echo \"All extensions (non-comment lines):\"
+                grep -v \"^#\" \$manifest | grep -v \"^$\" | cat -n
+                exit 1
+              fi
+            else
+              echo \"❌ reorder command failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Test manifest comment preservation
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          echo "Testing that comments are preserved in manifest operations..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Using test fixture with comments...\"
+            cp /tmp/manifest-comments.conf \$manifest
+
+            echo \"\"
+            echo \"=== Manifest with comments ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Running: extension-manager deactivate python\"
+            bash extension-manager.sh deactivate python
+
+            echo \"\"
+            echo \"=== Manifest after deactivate ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Verifying comments preserved...\"
+            if grep -q \"^# My custom header comment\" \$manifest && \
+               grep -q \"^# Language runtimes\" \$manifest && \
+               grep -q \"^# This is my important comment\" \$manifest; then
+              echo \"✅ All comments preserved\"
+            else
+              echo \"❌ Comments were not preserved\"
+              exit 1
+            fi
+
+            if grep -q \"^python\" \$manifest; then
+              echo \"❌ python still in manifest\"
+              exit 1
+            else
+              echo \"✅ python correctly removed\"
+            fi
+          '"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          app_name="${{ steps.app-name.outputs.app_name }}"
+
+          machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+          for machine in $machines; do
+            [[ -z "$machine" ]] && continue
+            flyctl machine stop $machine --app $app_name || true
+            sleep 2
+            flyctl machine destroy $machine --app $app_name --force || true
+          done
+
+          volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+          for volume in $volumes; do
+            [[ -z "$volume" ]] && continue
+            flyctl volumes destroy $volume --app $app_name --yes || true
+          done
+
+          flyctl apps destroy $app_name --yes || true
+          rm -f test_key test_key.pub

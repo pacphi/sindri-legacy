@@ -19,9 +19,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="ruby"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Ruby with rbenv, Rails, and Sinatra"
 EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mixed"  # apt (build deps) + git (rbenv)
+EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
 extension_init
@@ -400,6 +402,77 @@ remove() {
   print_success "Ruby uninstalled"
   print_warning "Restart shell: source ~/.bashrc"
   return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    local upgrade_failed=0
+
+    # Part 1: Upgrade build dependencies via APT
+    print_status "Upgrading Ruby build dependencies..."
+    local build_deps=(
+        "build-essential"
+        "libssl-dev"
+        "libreadline-dev"
+        "zlib1g-dev"
+        "libyaml-dev"
+        "libffi-dev"
+    )
+
+    if upgrade_apt_packages "${build_deps[@]}"; then
+        print_success "Build dependencies upgraded"
+    else
+        print_warning "Build dependency upgrade failed"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    # Part 2: Upgrade rbenv and ruby-build
+    print_status "Upgrading rbenv..."
+    if upgrade_git_repo "$HOME/.rbenv" ""; then
+        print_success "rbenv upgraded"
+    else
+        print_warning "rbenv upgrade failed"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    print_status "Upgrading ruby-build..."
+    if upgrade_git_repo "$HOME/.rbenv/plugins/ruby-build" ""; then
+        print_success "ruby-build upgraded"
+    else
+        print_warning "ruby-build upgrade failed"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    # Part 3: Check for Ruby version updates (informational only)
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init - bash)"
+
+    local current_ruby
+    current_ruby=$(rbenv version 2>/dev/null | awk '{print $1}')
+
+    print_status "Current Ruby version: ${current_ruby}"
+    print_status "To upgrade Ruby itself, run:"
+    print_status "  rbenv install <version>"
+    print_status "  rbenv global <version>"
+
+    if [[ $upgrade_failed -eq 0 ]]; then
+        print_success "Ruby toolchain upgraded successfully"
+        return 0
+    else
+        print_warning "Some Ruby components failed to upgrade"
+        return 1
+    fi
 }
 
 # ============================================================================

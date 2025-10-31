@@ -15,9 +15,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="nodejs"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Node.js LTS and npm via mise"
 EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
 extension_init
@@ -233,6 +235,45 @@ remove() {
   print_warning "Restart your shell or run: exec bash"
 
   return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Check if mise is available
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    # Activate mise environment
+    activate_mise_environment
+
+    # Get current versions
+    print_status "Current versions:"
+    mise current node 2>/dev/null || echo "  node: not installed"
+    mise current npm 2>/dev/null || echo "  npm: not installed"
+    echo ""
+
+    # Use helper function for mise upgrades
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Upgrade completed successfully"
+
+        # Show new versions
+        echo ""
+        print_status "Updated versions:"
+        mise current node
+        mise current npm
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
 }
 
 # ============================================================================

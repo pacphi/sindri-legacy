@@ -1,0 +1,63 @@
+name: Test Documentation
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: 'Test app prefix'
+        required: false
+        default: 'ext-test'
+        type: string
+      region:
+        description: 'Fly.io region'
+        required: false
+        default: 'sjc'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup for debugging'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  test-documentation:
+    name: Verify Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Check API v2.0 spec exists
+        run: |
+          if [ ! -f "docs/EXTENSION_API_V2.md" ]; then
+            echo "ERROR: Extension API v2.0 spec not found"
+            exit 1
+          fi
+          echo "✓ Extension API v2.0 spec exists"
+
+      - name: Check migration guide exists
+        run: |
+          if [ ! -f "docs/EXTENSION_API_V2_MIGRATION_GUIDE.md" ]; then
+            echo "ERROR: Migration guide not found"
+            exit 1
+          fi
+          echo "✓ Migration guide exists"
+
+      - name: Verify EXTENSIONS.md mentions v2.0
+        run: |
+          if ! grep -q "Extension API v2.0" docs/EXTENSIONS.md; then
+            echo "ERROR: EXTENSIONS.md not updated for v2.0"
+            exit 1
+          fi
+          echo "✓ EXTENSIONS.md mentions Extension API v2.0"
+
+      - name: Verify CLAUDE.md has upgrade commands
+        run: |
+          if ! grep -q "upgrade" CLAUDE.md; then
+            echo "ERROR: CLAUDE.md missing upgrade commands"
+            exit 1
+          fi
+          echo "✓ CLAUDE.md has upgrade commands"

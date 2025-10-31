@@ -1,0 +1,17 @@
+# Extension Upgrade History
+# Format: TIMESTAMP|EXTENSION|OLD_VERSION|NEW_VERSION|STATUS|DURATION
+#
+# This file tracks all extension upgrade attempts for auditing and troubleshooting.
+# Managed by extension-manager via docker/lib/upgrade-history.sh
+#
+# TIMESTAMP: ISO 8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ)
+# EXTENSION: Extension name
+# OLD_VERSION: Version before upgrade
+# NEW_VERSION: Version after upgrade (same as OLD if failed)
+# STATUS: success | failed
+# DURATION: Time in seconds
+#
+# Example entries:
+# 2025-01-30T10:15:32Z|nodejs|1.0.0|2.0.0|success|45s
+# 2025-01-30T10:16:20Z|python|1.0.0|2.0.0|success|38s
+# 2025-01-30T10:17:05Z|docker|1.0.0|1.0.0|failed|0s

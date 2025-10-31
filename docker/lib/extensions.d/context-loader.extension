@@ -14,9 +14,11 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="context-loader"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="Claude Code context management utilities"
 EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"  # Shell scripts
+EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
 extension_init
@@ -191,6 +193,18 @@ status() {
     echo "  ✗ templates: not found"
   fi
 
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # Context management utilities are static scripts - no upgrades needed
+  print_success "No upgrades needed for context management utilities"
   return 0
 }
 
