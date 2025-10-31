@@ -66,6 +66,7 @@ jobs:
           CPU_KIND: "shared"
           CPU_COUNT: "1"
           CI_MODE: "true"
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Use the configuration script in CI mode to prevent port conflicts
           ./scripts/prepare-fly-config.sh --ci-mode

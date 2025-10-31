@@ -73,6 +73,7 @@ jobs:
           CPU_KIND: "performance"
           CPU_COUNT: "4"
           CI_MODE: "true"
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           ./scripts/prepare-fly-config.sh --ci-mode
 
