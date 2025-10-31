@@ -9,6 +9,9 @@ inputs:
     description: 'Extension name for app naming (will be sanitized)'
     required: false
     default: 'generic'
+  fly-api-token:
+    description: 'Fly.io API token'
+    required: true
   vm-memory:
     description: 'VM memory in MB'
     required: false
@@ -73,6 +76,7 @@ runs:
     - name: Prepare fly.toml for testing
       shell: bash
       env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
         APP_NAME: ${{ steps.generate-app-name.outputs.app_name }}
         VOLUME_NAME: ${{ inputs.volume-name }}
         VOLUME_SIZE: ${{ inputs.volume-size }}
