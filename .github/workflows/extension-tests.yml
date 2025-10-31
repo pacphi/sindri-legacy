@@ -124,8 +124,8 @@ jobs:
     uses: ./.github/workflows/per-extension.yml
     with:
       extension_name: ${{ needs.setup-config.outputs.extension_name }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
-      skip_idempotency: ${{ needs.setup-config.outputs.skip_idempotency }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      skip_idempotency: ${{ fromJSON(needs.setup-config.outputs.skip_idempotency) }}
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
     secrets:
@@ -142,7 +142,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -157,7 +157,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -172,7 +172,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -187,7 +187,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -202,7 +202,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -217,7 +217,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -232,7 +232,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -243,7 +243,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -254,7 +254,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -269,7 +269,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -299,7 +299,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
       manager_validation_result: ${{ needs.extension-manager-validation.result }}
       syntax_validation_result: ${{ needs.extension-syntax-validation.result }}
     secrets:

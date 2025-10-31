@@ -92,7 +92,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -107,7 +107,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -122,7 +122,7 @@ jobs:
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ needs.setup-config.outputs.skip_cleanup }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
