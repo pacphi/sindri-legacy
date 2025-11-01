@@ -90,16 +90,15 @@ Similar to integration/verify-manifest.sh but with fallback logic for test envir
 - Creates manifest from CI template if missing
 - Auto-repairs missing protected extensions
 
-### install-extension.sh
-Handles extension installation with dependency resolution.
+### add-extension.sh
+Handles adding an extension to manifest with dependency resolution.
 
-**Usage**: `install-extension.sh <extension-name> [dependencies...]`
+**Usage**: `add-extension.sh <extension-name> [dependencies...]`
 
 **Features**:
 - Processes dependency list
 - Skips protected extensions (already in CI conf)
 - Adds extension to manifest
-- Runs `extension-manager install-all`
 
 ### test-protected.sh
 Tests protected extension enforcement (cannot deactivate/uninstall).

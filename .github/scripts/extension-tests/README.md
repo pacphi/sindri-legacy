@@ -10,7 +10,7 @@ extension-tests/
 │   ├── test-helpers.sh    # Shared utility functions
 │   └── assertions.sh      # Test assertion library
 ├── verify-manifest.sh     # Verify manifest structure
-├── install-extension.sh   # Install extension with dependencies
+├── add-extension.sh   # Install extension with dependencies
 ├── verify-commands.sh     # Verify commands are available
 ├── test-key-functionality.sh  # Test primary tool functionality
 ├── test-api-compliance.sh # Test Extension API
@@ -114,7 +114,7 @@ bash /tmp/verify-manifest.sh
 
 ---
 
-### install-extension.sh
+### add-extension.sh
 
 Installs extension with its dependencies.
 
@@ -131,10 +131,10 @@ Installs extension with its dependencies.
 **Usage:**
 ```bash
 # Install rust with mise-config dependency
-bash install-extension.sh rust mise-config
+bash add-extension.sh rust mise-config
 
 # Install monitoring with multiple dependencies
-bash install-extension.sh monitoring mise-config,nodejs,python
+bash add-extension.sh monitoring mise-config,nodejs,python
 ```
 
 **From GitHub Actions:**
@@ -142,12 +142,12 @@ bash install-extension.sh monitoring mise-config,nodejs,python
 - name: Add extension to manifest
   run: |
     flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
-      put .github/scripts/extension-tests/install-extension.sh /tmp/install-extension.sh
+      put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh
       quit
     SFTP_EOF
 
     flyctl ssh console --app $app_name --user developer \
-      --command "/bin/bash -lc 'bash /tmp/install-extension.sh nodejs mise-config'"
+      --command "/bin/bash -lc 'bash /tmp/add-extension.sh nodejs mise-config'"
 ```
 
 ---
@@ -313,8 +313,8 @@ COMMANDS="node,npm"
 KEY_TOOL="node"
 
 # Install extension
-print_section "Installing $EXTENSION"
-bash "$SCRIPT_DIR/install-extension.sh" "$EXTENSION" "$DEPENDS_ON"
+print_section "Adding $EXTENSION"
+bash "$SCRIPT_DIR/add-extension.sh" "$EXTENSION" "$DEPENDS_ON"
 
 # Verify commands
 print_section "Verifying Commands"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install extension with dependencies
-# Usage: install-extension.sh <extension-name> [dependencies]
+# Usage: add-extension.sh <extension-name> [dependencies]
 set -e
 
 # Source environment for non-interactive sessions
@@ -69,5 +69,3 @@ echo "=== Active Extensions in Manifest ==="
 grep -v "^[[:space:]]*#" "$manifest_file" | grep -v "^[[:space:]]*$" || echo "(empty)"
 
 echo ""
-echo "Running: extension-manager install-all"
-bash extension-manager.sh install-all

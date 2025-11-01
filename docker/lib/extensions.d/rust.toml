@@ -14,7 +14,7 @@ rust = "stable"
 
 [env]
 RUST_BACKTRACE = "1"
-CARGO_HOME = "$HOME/.cargo"
+CARGO_HOME = "{{home}}/.cargo"
 
 [settings]
 experimental = true

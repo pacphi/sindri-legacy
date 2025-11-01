@@ -42,7 +42,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 3
       matrix:
         extension:
           # Core extensions (always needed)
@@ -58,14 +58,14 @@ jobs:
           # Claude AI extensions
           - { name: 'claude-config', commands: 'claude', key_tool: 'claude', timeout: '15m', depends_on: 'nodejs' }
           # Traditional extensions (unchanged)
-          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m', manifest_timeout: 10 }
-          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m', manifest_timeout: 10 }
-          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m', manifest_timeout: 10 }
+          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m' }
+          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m' }
+          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m' }
           - { name: 'dotnet', commands: 'dotnet', key_tool: 'dotnet', timeout: '30m' }
           # Infrastructure
           - { name: 'docker', commands: 'docker', key_tool: 'docker', timeout: '30m' }
           - { name: 'infra-tools', commands: 'terraform,ansible', key_tool: 'terraform', timeout: '30m', status_timeout: 5 }
-          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m', status_timeout: 5, manifest_timeout: 10 }
+          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m', status_timeout: 5 }
           - { name: 'ai-tools', commands: 'codex,gemini', key_tool: 'codex', timeout: '30m', depends_on: 'nodejs' }
           # Utilities
           - { name: 'playwright', commands: 'playwright', key_tool: 'playwright', timeout: '25m', depends_on: 'nodejs', key_test_timeout: 5 }
@@ -138,7 +138,6 @@ jobs:
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Add extension to manifest
-        timeout-minutes: ${{ matrix.extension.manifest_timeout || 3 }}
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -147,19 +146,19 @@ jobs:
           extension_name="${{ matrix.extension.name }}"
           depends_on="${{ matrix.extension.depends_on }}"
 
-          echo "Adding $extension_name to manifest (timeout: ${{ matrix.extension.manifest_timeout || 3 }} minutes)..."
+          echo "Adding $extension_name to manifest"
 
           flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/install-extension.sh /tmp/install-extension.sh
+            put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh
             quit
           SFTP_EOF
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/install-extension.sh $extension_name $depends_on
+            bash /tmp/add-extension.sh $extension_name $depends_on
           '"
 
       - name: Install extension using install-all
-        timeout-minutes: 35
+        timeout-minutes: 30
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}

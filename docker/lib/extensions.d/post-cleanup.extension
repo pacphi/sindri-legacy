@@ -66,113 +66,137 @@ install() {
 configure() {
   print_status "Running post-installation cleanup and optimization..."
 
+  # Detect if running in CI/test mode to skip aggressive operations
+  local ci_mode="${CI_MODE:-false}"
+  if [[ "$ci_mode" == "true" ]]; then
+    print_status "Running in CI mode - using safe cleanup operations only"
+  fi
+
   # Clean package manager caches
   print_status "Cleaning package manager caches..."
 
   # System package managers
   if command_exists apt-get; then
     print_debug "Cleaning apt cache..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq 2>/dev/null || true
-    sudo DEBIAN_FRONTEND=noninteractive apt-get autoclean -qq 2>/dev/null || true
+
+    # Skip aggressive autoremove in CI mode - it can break ongoing installations
+    if [[ "$ci_mode" != "true" ]]; then
+      (sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq 2>/dev/null) || true
+    fi
+
+    # autoclean is safe - just removes old .deb files
+    (sudo DEBIAN_FRONTEND=noninteractive apt-get autoclean -qq 2>/dev/null) || true
   fi
 
   # JavaScript/Node.js
   if command_exists npm; then
     print_debug "Cleaning npm cache..."
-    npm cache clean --force 2>/dev/null || true
+    (timeout 30s npm cache clean --force 2>/dev/null) || true
   fi
 
   if command_exists yarn; then
     print_debug "Cleaning yarn cache..."
-    yarn cache clean 2>/dev/null || true
+    (timeout 30s yarn cache clean 2>/dev/null) || true
   fi
 
   if command_exists pnpm; then
     print_debug "Cleaning pnpm cache..."
-    pnpm store prune 2>/dev/null || true
+    (timeout 30s pnpm store prune 2>/dev/null) || true
   fi
 
   # Python
   if command_exists pip3; then
     print_debug "Cleaning pip cache..."
-    pip3 cache purge 2>/dev/null || true
+    (timeout 30s pip3 cache purge 2>/dev/null) || true
   fi
 
   if command_exists poetry; then
     print_debug "Cleaning poetry cache..."
-    poetry cache clear pypi --all -n 2>/dev/null || true
+    (timeout 30s poetry cache clear pypi --all -n 2>/dev/null) || true
   fi
 
   if command_exists pipenv; then
     print_debug "Cleaning pipenv cache..."
-    pipenv --clear 2>/dev/null || true
+    (timeout 30s pipenv --clear 2>/dev/null) || true
   fi
 
   # Rust
   if command_exists cargo; then
     print_debug "Cleaning cargo cache..."
-    rm -rf ~/.cargo/registry/cache 2>/dev/null || true
-    rm -rf ~/.cargo/git/checkouts 2>/dev/null || true
-    if cargo --list | grep -q "cache"; then
-      cargo cache --autoclean 2>/dev/null || true
+    [[ -d ~/.cargo/registry/cache ]] && (rm -rf ~/.cargo/registry/cache 2>/dev/null) || true
+    [[ -d ~/.cargo/git/checkouts ]] && (rm -rf ~/.cargo/git/checkouts 2>/dev/null) || true
+    if cargo --list 2>/dev/null | grep -q "cache"; then
+      (timeout 30s cargo cache --autoclean 2>/dev/null) || true
     fi
   fi
 
   # Go
   if command_exists go; then
     print_debug "Cleaning go module cache..."
-    go clean -modcache 2>/dev/null || true
+    (timeout 30s go clean -modcache 2>/dev/null) || true
   fi
 
   # JVM (Maven, Gradle)
   if command_exists mvn; then
     print_debug "Cleaning Maven snapshots..."
-    rm -rf ~/.m2/repository/*-SNAPSHOT 2>/dev/null || true
+    [[ -d ~/.m2/repository ]] && (find ~/.m2/repository -type d -name "*-SNAPSHOT" -exec rm -rf {} + 2>/dev/null) || true
   fi
 
   if command_exists gradle; then
     print_debug "Cleaning Gradle cache..."
-    rm -rf ~/.gradle/caches/build-cache-* 2>/dev/null || true
+    [[ -d ~/.gradle/caches ]] && (find ~/.gradle/caches -type d -name "build-cache-*" -exec rm -rf {} + 2>/dev/null) || true
   fi
 
   # PHP
   if command_exists composer; then
     print_debug "Cleaning Composer cache..."
-    composer clear-cache 2>/dev/null || true
+    (timeout 30s composer clear-cache 2>/dev/null) || true
   fi
 
   # Ruby
   if command_exists gem; then
     print_debug "Cleaning Ruby gem cache..."
-    gem cleanup 2>/dev/null || true
+    (timeout 60s gem cleanup 2>/dev/null) || true
   fi
 
   if command_exists bundle; then
     print_debug "Cleaning Bundler cache..."
-    bundle clean --force 2>/dev/null || true
+    (timeout 30s bundle clean --force 2>/dev/null) || true
   fi
 
   # .NET
   if command_exists dotnet; then
     print_debug "Cleaning .NET NuGet cache..."
-    dotnet nuget locals all --clear 2>/dev/null || true
+    # Use timeout and subshell to prevent hanging or shell exit
+    (timeout 10s dotnet nuget locals all --clear 2>/dev/null) || true
   fi
 
   # Docker
   if command_exists docker; then
-    print_debug "Cleaning Docker system..."
-    docker system prune -f 2>/dev/null || true
+    # Skip aggressive Docker cleanup in CI mode
+    if [[ "$ci_mode" != "true" ]]; then
+      print_debug "Cleaning Docker system..."
+      (timeout 30s docker system prune -f 2>/dev/null) || true
+    fi
   fi
 
   # Remove temporary files
-  print_debug "Removing temporary files..."
-  rm -rf /tmp/* 2>/dev/null || true
-  rm -rf ~/.cache/pip/* 2>/dev/null || true
+  if [[ "$ci_mode" != "true" ]]; then
+    # Skip /tmp cleanup in CI mode - tests may be using temp files
+    print_debug "Removing temporary files..."
+    (find /tmp -maxdepth 1 -type f -mtime +1 -delete 2>/dev/null) || true
+  fi
+
+  # Clean pip cache (safe in CI)
+  if [[ -d ~/.cache/pip ]]; then
+    print_debug "Cleaning pip cache..."
+    (rm -rf ~/.cache/pip/* 2>/dev/null) || true
+  fi
 
   # Set proper permissions on workspace
   print_debug "Setting workspace permissions..."
-  sudo chown -R developer:developer /workspace 2>/dev/null || true
-  chmod -R 755 /workspace/scripts 2>/dev/null || true
+  (sudo chown -R developer:developer /workspace 2>/dev/null) || true
+  (chmod -R 755 /workspace/scripts 2>/dev/null) || true
 
   # Create comprehensive tools summary by delegating to each extension
   print_status "Creating comprehensive tools summary..."
@@ -184,6 +208,8 @@ configure() {
   # Fall back to docker/lib/extensions.d if workspace path doesn't exist
   [[ ! -f "$active_conf" ]] && active_conf="${extensions_dir}/active-extensions.conf"
 
+  # Wrap in subshell to prevent any summary generation errors from breaking configure
+  (
   {
     echo "# Installed Development Tools"
     echo "# Generated on $(date)"
@@ -228,19 +254,26 @@ configure() {
     fi
 
   } > "$summary_file"
+  ) || print_warning "Tools summary generation encountered errors (non-fatal)"
 
-  print_success "Tools summary saved to $summary_file (delegated to extension status functions)"
-
-  # Run final system optimization
-  print_status "Running final system optimization..."
-
-  # Update locate database if available
-  if command_exists updatedb; then
-    sudo updatedb 2>/dev/null || true
+  if [[ -f "$summary_file" ]]; then
+    print_success "Tools summary saved to $summary_file (delegated to extension status functions)"
+  else
+    print_warning "Tools summary file was not created"
   fi
 
-  # Sync filesystem
-  sync
+  # Run final system optimization
+  if [[ "$ci_mode" != "true" ]]; then
+    print_status "Running final system optimization..."
+
+    # Update locate database if available (skip in CI - can be slow)
+    if command_exists updatedb; then
+      (timeout 60s sudo updatedb 2>/dev/null) || true
+    fi
+  fi
+
+  # Sync filesystem (always safe to do)
+  sync 2>/dev/null || true
 
   print_success "Post-installation cleanup completed"
   return 0

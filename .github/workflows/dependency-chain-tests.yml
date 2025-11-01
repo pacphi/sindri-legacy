@@ -124,52 +124,111 @@ jobs:
             fi
           '"
 
-      - name: Test missing dependency error handling
+      - name: Test playwright dependency on nodejs
+        timeout-minutes: 15
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Testing error handling when dependency is missing..."
+          echo "Testing playwright → nodejs dependency chain..."
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
-            echo \"Creating manifest with nodejs only...\"
-            echo \"nodejs\" > \$manifest
+            echo \"Creating minimal manifest with only protected extensions...\"
+            echo \"workspace-structure\" > \$manifest
+            echo \"mise-config\" >> \$manifest
+            echo \"ssh-environment\" >> \$manifest
 
             echo \"\"
-            echo \"Temporarily disabling mise to test prerequisite check...\"
-            if command -v mise >/dev/null 2>&1; then
-              mise_path=\$(command -v mise)
-              sudo mv \$mise_path \${mise_path}.disabled 2>/dev/null || mv \$mise_path \${mise_path}.disabled
-            fi
+            echo \"=== Manifest before test ===\"
+            cat \$manifest
 
             echo \"\"
-            echo \"Running: extension-manager install nodejs (should fail - mise missing)\"
-            # Capture exit code before piping to tee
-            bash extension-manager.sh install nodejs 2>&1 | tee /tmp/prereq_fail.log
-            install_exit=\${PIPESTATUS[0]}
+            echo \"Attempting to install playwright without nodejs...\"
+            if timeout 5m bash extension-manager.sh install playwright 2>&1 | tee /tmp/playwright_test.log; then
+              echo \"\"
+              echo \"Installation completed, checking if nodejs was auto-installed...\"
 
-            if [ \$install_exit -eq 0 ]; then
-              echo \"❌ Installation succeeded when mise dependency missing\"
-              sudo mv \${mise_path}.disabled \$mise_path 2>/dev/null || mv \${mise_path}.disabled \$mise_path
-              cat /tmp/prereq_fail.log
-              exit 1
+              if command -v node >/dev/null 2>&1; then
+                echo \"✅ nodejs was auto-installed as dependency\"
+
+                # Verify both are in manifest
+                if grep -q \"^nodejs\" \$manifest && grep -q \"^playwright\" \$manifest; then
+                  echo \"✅ Both nodejs and playwright added to manifest\"
+                else
+                  echo \"⚠️  Extensions installed but manifest may need updating\"
+                fi
+              else
+                echo \"❌ playwright installed but nodejs is missing\"
+                exit 1
+              fi
             else
               echo \"\"
-              echo \"✅ Installation correctly failed due to missing mise dependency\"
-
-              if grep -qi \"prerequisite\|mise.*required\|mise.*not found\" /tmp/prereq_fail.log; then
-                echo \"✅ Appropriate error message shown (dependency check working)\"
+              echo \"Installation failed, checking error message...\"
+              if grep -qi \"node.*required\|install.*nodejs\" /tmp/playwright_test.log; then
+                echo \"✅ Appropriate error message shown (prerequisite check working)\"
               else
-                echo \"⚠️  Error message could be clearer\"
-                cat /tmp/prereq_fail.log
+                echo \"❌ Error message unclear\"
+                cat /tmp/playwright_test.log
+                exit 1
               fi
+            fi
+          '"
 
-              # Restore mise for subsequent tests
-              sudo mv \${mise_path}.disabled \$mise_path 2>/dev/null || mv \${mise_path}.disabled \$mise_path
+      - name: Test monitoring dependency on python
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing monitoring → python dependency chain..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Creating minimal manifest with only protected extensions...\"
+            echo \"workspace-structure\" > \$manifest
+            echo \"mise-config\" >> \$manifest
+            echo \"ssh-environment\" >> \$manifest
+
+            echo \"\"
+            echo \"=== Manifest before test ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Attempting to install monitoring without python...\"
+            if timeout 5m bash extension-manager.sh install monitoring 2>&1 | tee /tmp/monitoring_test.log; then
+              echo \"\"
+              echo \"Installation completed, checking if python was auto-installed...\"
+
+              if command -v python3 >/dev/null 2>&1; then
+                echo \"✅ python was auto-installed as dependency\"
+
+                # Verify both are in manifest
+                if grep -q \"^python\" \$manifest && grep -q \"^monitoring\" \$manifest; then
+                  echo \"✅ Both python and monitoring added to manifest\"
+                else
+                  echo \"⚠️  Extensions installed but manifest may need updating\"
+                fi
+              else
+                echo \"❌ monitoring installed but python is missing\"
+                exit 1
+              fi
+            else
+              echo \"\"
+              echo \"Installation failed, checking error message...\"
+              if grep -qi \"python.*required\|install.*python\" /tmp/monitoring_test.log; then
+                echo \"✅ Appropriate error message shown (prerequisite check working)\"
+              else
+                echo \"❌ Error message unclear\"
+                cat /tmp/monitoring_test.log
+                exit 1
+              fi
             fi
           '"
 
