@@ -16,6 +16,9 @@ if [ -z "$extension" ]; then
     exit 1
 fi
 
+# Mark test start
+mark_test_phase "API Compliance Test: $extension" "start"
+
 print_section "Testing Extension API Compliance: $extension"
 
 # Change to extension manager directory
@@ -23,9 +26,10 @@ cd "$(get_extension_manager_path)" || exit 1
 
 # Test 1: validate() function
 print_section "Test 1: validate() function"
-if bash extension-manager.sh validate "$extension"; then
+if run_with_error_capture "bash extension-manager.sh validate '$extension'"; then
     print_success "validate() returned success for installed extension"
 else
+    mark_test_phase "API Compliance Test: $extension" "failure"
     print_error "validate() failed for installed extension"
     exit 1
 fi
@@ -76,4 +80,5 @@ else
 fi
 
 print_section "Extension API Compliance Tests Completed"
+mark_test_phase "API Compliance Test: $extension" "success"
 print_success "All API compliance tests passed for $extension"

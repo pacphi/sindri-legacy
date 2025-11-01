@@ -122,10 +122,35 @@ is_ci_mode() {
 # This function evaluates mise activation and adds shims to PATH
 activate_mise_environment() {
     if command_exists mise; then
-        eval "$(mise activate bash)" 2>/dev/null || true
-        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
-            export PATH="$HOME/.local/share/mise/shims:$PATH"
+        # Activate mise with error capture
+        local activation_output
+        if activation_output=$(mise activate bash 2>&1); then
+            eval "$activation_output"
+            print_debug "mise activated successfully"
+        else
+            print_warning "mise activation returned non-zero: $activation_output"
+            # Continue anyway as activation might still work
         fi
+
+        # Ensure shims directory is in PATH
+        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+            # Only add if not already in PATH
+            if [[ ":$PATH:" != *":$HOME/.local/share/mise/shims:"* ]]; then
+                export PATH="$HOME/.local/share/mise/shims:$PATH"
+                print_debug "Added mise shims to PATH"
+            fi
+        fi
+
+        # Also add installs directories for tools that don't use shims
+        if [[ -d "$HOME/.local/share/mise/installs" ]]; then
+            for bin_dir in "$HOME/.local/share/mise/installs/"*/*/bin; do
+                if [[ -d "$bin_dir" ]] && [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+                    export PATH="$bin_dir:$PATH"
+                fi
+            done
+        fi
+    else
+        print_debug "mise not available - skipping activation"
     fi
 }
 
@@ -269,13 +294,43 @@ install_mise_config() {
         return 1
     fi
 
-    # Install via mise
+    # Install via mise with timeout and error capture
     print_status "Installing via mise..."
-    if mise install; then
-        print_success "Installed successfully"
-        return 0
+    local install_log="/tmp/mise-install-${ext_name}-$$.log"
+
+    # Run mise install with output capture
+    if timeout 600 mise install 2>&1 | tee "$install_log"; then
+        local install_exit_code=${PIPESTATUS[0]}
+
+        if [ $install_exit_code -eq 0 ]; then
+            print_success "Installed successfully"
+
+            # Verify installation by checking mise ls
+            print_status "Verifying installation..."
+            if mise ls 2>&1 | grep -q "$ext_name" || mise ls 2>&1 | head -1 | grep -q "node\|python\|go\|rust"; then
+                print_success "Installation verified in mise"
+            else
+                print_warning "Installed but not showing in mise ls - may need environment refresh"
+            fi
+
+            rm -f "$install_log"
+            return 0
+        elif [ $install_exit_code -eq 124 ]; then
+            print_error "mise install timed out after 600 seconds"
+            echo "Last 30 lines of output:"
+            tail -30 "$install_log"
+            rm -f "$install_log"
+            return 1
+        else
+            print_error "mise install failed with exit code $install_exit_code"
+            echo "Last 30 lines of output:"
+            tail -30 "$install_log"
+            rm -f "$install_log"
+            return 1
+        fi
     else
-        print_error "mise install failed"
+        print_error "mise install command failed"
+        rm -f "$install_log"
         return 1
     fi
 }

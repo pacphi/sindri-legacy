@@ -113,18 +113,10 @@ configure() {
 validate() {
   print_status "Validating Go installation..."
 
-  local all_valid=true
-
   # Activate mise for current session - ensure Go binaries are accessible
   activate_mise_environment
-  # Also add go install directory to PATH as fallback
-  if [[ -d "$HOME/.local/share/mise/installs/go" ]]; then
-    for go_dir in "$HOME/.local/share/mise/installs/go"/*/bin; do
-      if [[ -d "$go_dir" ]]; then
-        export PATH="$go_dir:$PATH"
-      fi
-    done
-  fi
+
+  local all_valid=true
 
   # Check mise has Go installed
   if ! mise ls go 2>/dev/null | grep -q "1.24"; then

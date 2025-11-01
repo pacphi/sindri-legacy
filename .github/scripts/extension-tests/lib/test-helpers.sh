@@ -252,6 +252,165 @@ dump_manifest() {
     fi
 }
 
+# Check VM resources (disk, memory, processes)
+check_vm_resources() {
+    local context="${1:-Current}"
+    print_section "$context VM Resource Status"
+
+    echo "📊 Disk Usage:"
+    df -h / /workspace 2>/dev/null | tail -n +2 || echo "  ⚠️  Could not check disk usage"
+    echo ""
+
+    echo "💾 Memory Usage:"
+    free -h 2>/dev/null || echo "  ⚠️  Could not check memory usage"
+    echo ""
+
+    echo "🔝 Top Processes by Memory (top 10):"
+    ps aux --sort=-%mem 2>/dev/null | head -11 | tail -n +2 || echo "  ⚠️  Could not list processes"
+    echo ""
+
+    echo "⚡ CPU Load:"
+    uptime 2>/dev/null || echo "  ⚠️  Could not check load"
+    echo ""
+}
+
+# Verify SSH connection is responsive
+verify_ssh_connection() {
+    local max_attempts="${1:-3}"
+    local attempt=1
+
+    print_info "Verifying SSH connection responsiveness..."
+
+    while [ $attempt -le $max_attempts ]; do
+        if timeout 5 echo "SSH connection test" >/dev/null 2>&1; then
+            print_success "SSH connection is responsive (attempt $attempt/$max_attempts)"
+            return 0
+        else
+            print_warning "SSH connection test failed (attempt $attempt/$max_attempts)"
+            if [ $attempt -lt $max_attempts ]; then
+                sleep 2
+                attempt=$((attempt + 1))
+            else
+                print_error "SSH connection appears unresponsive after $max_attempts attempts"
+                return 1
+            fi
+        fi
+    done
+}
+
+# Run command with enhanced error capture
+run_with_error_capture() {
+    local cmd="$*"
+    local stdout_file="/tmp/cmd_stdout_$$.log"
+    local stderr_file="/tmp/cmd_stderr_$$.log"
+    local exit_code
+
+    print_info "Running: $cmd"
+
+    # Run command, capture stdout and stderr separately
+    eval "$cmd" >"$stdout_file" 2>"$stderr_file"
+    exit_code=$?
+
+    # Display stdout
+    if [ -s "$stdout_file" ]; then
+        cat "$stdout_file"
+    fi
+
+    # Display stderr if present
+    if [ -s "$stderr_file" ]; then
+        echo ""
+        print_warning "Error output:"
+        cat "$stderr_file" | sed 's/^/  /'
+    fi
+
+    # Cleanup
+    rm -f "$stdout_file" "$stderr_file"
+
+    return $exit_code
+}
+
+# Enhanced extension-manager runner with error capture
+run_extension_manager_verbose() {
+    local cmd="$*"
+    local stderr_file="/tmp/ext_mgr_stderr_$$.log"
+    local exit_code
+
+    cd "$(get_extension_manager_path)" || return 1
+
+    print_info "Running extension-manager: $cmd"
+    print_info "Working directory: $(pwd)"
+
+    # Run with stderr captured separately
+    bash extension-manager.sh $cmd 2> >(tee "$stderr_file" >&2)
+    exit_code=$?
+
+    # Show stderr summary if errors occurred
+    if [ $exit_code -ne 0 ] && [ -s "$stderr_file" ]; then
+        print_error "Extension manager failed with exit code $exit_code"
+        print_warning "Error summary:"
+        tail -20 "$stderr_file" | sed 's/^/  /'
+    fi
+
+    rm -f "$stderr_file"
+    return $exit_code
+}
+
+# Check mise health for mise-powered extensions
+check_mise_health() {
+    if ! command -v mise >/dev/null 2>&1; then
+        print_warning "mise not available - skipping mise health check"
+        return 0
+    fi
+
+    print_section "Mise Health Check"
+
+    # Run mise doctor with timeout
+    if timeout 30 mise doctor 2>&1; then
+        print_success "mise doctor check passed"
+        return 0
+    else
+        local exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+            print_error "mise doctor timed out after 30 seconds"
+        else
+            print_warning "mise doctor reported issues (exit code: $exit_code)"
+        fi
+
+        # Still show mise status even if doctor fails
+        print_info "Current mise tools:"
+        timeout 10 mise ls --current 2>/dev/null | head -10 || echo "  (could not list tools)"
+
+        return 1
+    fi
+}
+
+# Mark test phase with unique identifier
+mark_test_phase() {
+    local phase="$1"
+    local status="${2:-start}"  # start, success, failure
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    echo ""
+    echo "█████████████████████████████████████████████████"
+    case "$status" in
+        start)
+            echo "▶️  TEST PHASE START: $phase"
+            ;;
+        success)
+            echo "✅ TEST PHASE SUCCESS: $phase"
+            ;;
+        failure)
+            echo "❌ TEST PHASE FAILURE: $phase"
+            ;;
+        *)
+            echo "📍 TEST PHASE: $phase ($status)"
+            ;;
+    esac
+    echo "⏰ Timestamp: $timestamp"
+    echo "█████████████████████████████████████████████████"
+    echo ""
+}
+
 # Export functions for use in subshells
 export -f print_success print_error print_warning print_info print_section
 export -f source_environment command_exists check_command_with_version
@@ -260,3 +419,6 @@ export -f get_extension_manager_path get_manifest_path
 export -f is_extension_in_manifest is_protected_extension
 export -f run_extension_manager verify_extension_installed get_extension_status
 export -f dump_environment dump_manifest
+export -f check_vm_resources verify_ssh_connection
+export -f run_with_error_capture run_extension_manager_verbose
+export -f check_mise_health mark_test_phase

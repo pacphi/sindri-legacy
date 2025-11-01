@@ -15,6 +15,15 @@ if [ -z "$key_tool" ]; then
     exit 1
 fi
 
+# Mark test start
+mark_test_phase "Key Functionality Test: $key_tool" "start"
+
+# Check resources before test
+check_vm_resources "Pre-test"
+
+# Verify SSH connection
+verify_ssh_connection || print_warning "SSH connection check failed, but continuing..."
+
 print_section "Testing key functionality for: $key_tool"
 
 # Test based on tool type
@@ -185,4 +194,6 @@ case "$key_tool" in
         ;;
 esac
 
+# Mark test success
+mark_test_phase "Key Functionality Test: $key_tool" "success"
 print_success "Key functionality test passed for $key_tool"

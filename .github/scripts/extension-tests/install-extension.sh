@@ -3,6 +3,19 @@
 # Usage: install-extension.sh <extension-name> [dependencies]
 set -e
 
+# Source environment for non-interactive sessions
+if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+    source /etc/profile.d/00-ssh-environment.sh
+fi
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+
+# Activate mise if available
+if command -v mise >/dev/null 2>&1; then
+    eval "$(mise activate bash 2>/dev/null || true)"
+fi
+
 extension_name="$1"
 shift
 # Support both space-separated and comma-separated dependencies
