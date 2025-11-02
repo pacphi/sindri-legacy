@@ -48,7 +48,7 @@ jobs:
             }
           - {
               name: "full-node",
-              extensions: "workspace-structure,nodejs,nodejs-devtools,claude-config",
+              extensions: "workspace-structure,nodejs,nodejs-devtools,claude",
               description: "Complete Node.js Development Stack",
             }
           - {

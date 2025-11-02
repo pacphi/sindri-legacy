@@ -1,6 +1,6 @@
 #!/bin/bash
-# claude-config.aliases - Claude Flow, Agent-Flow, and project management aliases
-# Sourced by claude-config extension
+# claude.aliases - Claude Flow, Agent-Flow, and project management aliases
+# Sourced by claude extension
 
 # 4. CLAUDE FLOW OPERATIONS
 # ============================================================================

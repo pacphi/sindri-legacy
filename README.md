@@ -163,7 +163,7 @@ extension-manager status <name>     # Check status
 **AI:**
 
 - `ai-tools` - AI coding assistants
-- `claude-config` - Claude Code CLI (requires nodejs)
+- `claude` - Claude Code CLI
 
 **Development Tools:**
 

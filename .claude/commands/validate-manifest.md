@@ -85,7 +85,6 @@ Extension Manifest Validation Report
 ✓ Dependency Order
   ✓ mise-config before nodejs
   ✓ mise-config before python
-  ✓ nodejs before claude-config
 
 ✗ Issues Found (2)
   ✗ Extension 'ruby' listed but file not found

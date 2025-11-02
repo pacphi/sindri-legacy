@@ -39,7 +39,7 @@ ssh-environment
 # ============================================================================
 # While not protected, nodejs is highly recommended as many tools depend on it
 
-# Node.js LTS via mise and npm (required by claude-config, nodejs-devtools, playwright, monitoring)
+# Node.js LTS via mise and npm (required by nodejs-devtools, playwright, monitoring)
 # Depends on: mise-config
 nodejs
 
@@ -51,9 +51,9 @@ python
 # CLAUDE AI (recommended)
 # ============================================================================
 
-# Claude Code CLI with developer configuration (depends on nodejs)
+# Claude Code CLI with developer configuration
 # Creates ~/.claude/CLAUDE.md and ~/.claude/settings.json with hooks
-claude-config
+claude
 
 # ============================================================================
 # DEVELOPMENT TOOLS (optional - uncomment as needed)

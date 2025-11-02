@@ -58,7 +58,7 @@ Thanks for the inspiration [Marcus Patman](https://github.com/marcuspat)!
 **Available Extensions:**
 
 - Core: `workspace-structure`, `nodejs`, `ssh-environment`
-- Claude AI: `claude-config`, `nodejs-devtools`, `agent-manager`, `context-loader`
+- Claude AI: `claude`, `nodejs-devtools`, `agent-manager`, `context-loader`
 - Languages: `python`, `rust`, `golang`, `ruby`, `php`, `jvm`, `dotnet`
 - Infrastructure: `docker`, `infra-tools`, `cloud-tools`, `ai-tools`
 - Tools: `monitoring`, `tmux-workspace`, `playwright`

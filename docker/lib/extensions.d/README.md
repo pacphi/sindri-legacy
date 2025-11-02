@@ -232,7 +232,7 @@ Extensions are organized by category in the activation manifest.
 
 ### Claude AI
 
-- **claude-config** - Claude Code CLI with developer configuration
+- **claude** - Claude Code CLI with developer configuration
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie
 
 ### Development Tools
@@ -279,7 +279,7 @@ nodejs
 python
 
 # Claude AI
-claude-config
+claude
 nodejs-devtools
 
 # Languages
@@ -314,11 +314,10 @@ extension-manager list
 ```bash
 # Manually add to manifest (doesn't install yet)
 # Edit: /workspace/scripts/lib/extensions.d/active-extensions.conf
-# Add lines: nodejs, claude-config
+# Add line: claude
 
 # Or install directly (auto-activates)
-extension-manager install nodejs
-extension-manager install claude-config
+extension-manager install claude
 ```
 
 ### Install Extension
@@ -646,13 +645,16 @@ echo "export PATH=\"$HOME/.local/bin:\$PATH\"" >> "$HOME/.bashrc"
 Consider dependencies when ordering in manifest:
 
 ```bash
-# Good: nodejs before claude-config
+# Good: nodejs before nodejs-devtools
 nodejs
-claude-config
+nodejs-devtools
 
-# Bad: claude-config will fail prerequisites
-claude-config
+# Bad: nodejs-devtools will fail prerequisites
+nodejs-devtools
 nodejs
+
+# Note: claude extension has no dependencies and can be placed anywhere
+claude
 ```
 
 ## Debugging

@@ -68,7 +68,7 @@ While not protected, these are highly recommended:
 
 #### Claude AI
 
-- **claude-config** - Claude Code CLI with developer configuration (depends on nodejs)
+- **claude** - Claude Code CLI with developer configuration
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
 
 #### Language Runtimes
@@ -191,7 +191,7 @@ mise-config
 ssh-environment
 
 # Claude AI tools
-claude-config
+claude
 nodejs-devtools
 
 # Language runtimes

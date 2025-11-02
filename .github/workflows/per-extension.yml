@@ -91,7 +91,7 @@ jobs:
               uses_mise: "true",
             }
           # Claude AI extensions
-          - { name: "claude-config", commands: "claude", key_tool: "claude", timeout: "15m", depends_on: "nodejs" }
+          - { name: "claude", commands: "claude", key_tool: "claude", timeout: "15m" }
           # Traditional extensions (unchanged)
           - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 5 }
           - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }

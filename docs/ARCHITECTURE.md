@@ -186,7 +186,7 @@ Extensions are organized by capability:
 - **Language Tools**: nodejs, python, rust, golang, ruby, php, dotnet, jvm
 - **Infrastructure**: docker, infra-tools (Terraform, Ansible, kubectl)
 - **Cloud Platforms**: cloud-tools (AWS, Azure, GCP CLIs)
-- **AI Development**: ai-tools, claude-config, agent-manager
+- **AI Development**: ai-tools, claude, agent-manager
 - **Development Tools**: nodejs-devtools, playwright, monitoring
 - **Workspace Tools**: workspace-structure, ssh-environment, tmux-workspace
 

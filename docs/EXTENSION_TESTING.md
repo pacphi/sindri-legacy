@@ -261,7 +261,7 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 | jvm                          | java, sdk          | -                   | SDKMAN, Java             |
 | dotnet                       | dotnet             | -                   | .NET SDK, ASP.NET        |
 | **Claude AI**                |                    |                     |                          |
-| claude-config                | claude             | nodejs              | CLI authentication       |
+| claude                       | claude             | -                   | CLI authentication       |
 | **Infrastructure**           |                    |                     |                          |
 | docker                       | docker, compose    | -                   | Container runtime        |
 | infra-tools                  | terraform, ansible | -                   | IaC tools                |
@@ -413,7 +413,7 @@ Each combination activates multiple extensions in `active-extensions.conf`:
 
 - **core-stack**: workspace-structure, mise-config, ssh-environment (Protected Core Extensions)
 - **mise-stack**: workspace-structure, mise-config, nodejs, python, rust, golang, ssh-environment (mise-Powered Languages)
-- **full-node**: workspace-structure, nodejs, nodejs-devtools, claude-config (Complete Node.js Development Stack)
+- **full-node**: workspace-structure, nodejs, nodejs-devtools, claude (Complete Node.js Development Stack)
 - **fullstack**: workspace-structure, nodejs, python, docker, cloud-tools (Python + Docker + Cloud)
 - **systems**: workspace-structure, rust, golang, docker (Rust + Go + Docker)
 - **enterprise**: workspace-structure, nodejs, jvm, docker, infra-tools (JVM + Docker + Infrastructure)

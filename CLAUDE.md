@@ -128,7 +128,7 @@ extension-manager upgrade-history        # View upgrade history
 
 **Claude AI:**
 
-- `claude-config` - Claude Code CLI with developer configuration (requires nodejs)
+- `claude` - Claude Code CLI with developer configuration
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
 **Development Tools:**
@@ -229,10 +229,10 @@ Provides:
 - goalie AI research assistant
 - Tools managed via mise npm plugin
 
-**claude-config** (Recommended):
+**claude** (Recommended):
 
 ```bash
-extension-manager install claude-config
+extension-manager install claude
 ```
 
 Provides:

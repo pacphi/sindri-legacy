@@ -174,7 +174,7 @@ While not protected, these are highly recommended as many tools depend on them.
 
 | Extension         | Description                                   | Tool Manager       | Version | Dependencies        |
 | ----------------- | --------------------------------------------- | ------------------ | ------- | ------------------- |
-| `claude-config`   | Claude Code CLI with developer configuration  | npm                | 1.0.0   | nodejs              |
+| `claude`          | Claude Code CLI with developer configuration  | native             | 3.0.0   | -                   |
 | `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0   | nodejs, mise-config |
 
 ### Additional Language Runtimes
@@ -509,7 +509,7 @@ Use standard categories for consistency:
 | `language`       | Language runtimes                  | nodejs, python, rust, golang                      |
 | `devtools`       | Development utilities              | nodejs-devtools, monitoring                       |
 | `infrastructure` | Infrastructure tools               | docker, infra-tools, cloud-tools                  |
-| `ai`             | AI coding assistants               | claude-config, ai-tools, agent-manager            |
+| `ai`             | AI coding assistants               | claude, ai-tools, agent-manager                   |
 | `core`           | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
 | `utility`        | General utilities                  | tmux-workspace, playwright                        |
 
@@ -1258,7 +1258,7 @@ infra-tools
 
 # Development tools
 nodejs-devtools
-claude-config
+claude
 
 # Monitoring
 monitoring
@@ -1269,7 +1269,6 @@ monitoring
 1. **Order matters**: List dependencies before dependents
    - `mise-config` must come before mise-powered extensions
    - `nodejs` must come before `nodejs-devtools`
-   - `nodejs` must come before `claude-config`
 
 2. **Core first**: Protected extensions are automatically installed first
 

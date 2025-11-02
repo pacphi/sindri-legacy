@@ -1,9 +1,9 @@
 #!/bin/bash
-# claude-config.sh.example - Claude Code CLI and configuration
-# Extension API v1.0
+# claude.extension - Claude Code CLI and configuration
+# Extension API v2.0
 #
-# This extension installs Claude Code CLI and creates developer configuration.
-# Requires the nodejs extension to be installed first.
+# This extension installs Claude Code CLI using the native installer
+# and creates developer configuration. No Node.js/npm required.
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,11 +13,11 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 # METADATA
 # ============================================================================
 
-EXT_NAME="claude-config"
-EXT_VERSION="2.0.0"
+EXT_NAME="claude"
+EXT_VERSION="3.0.0"
 EXT_DESCRIPTION="Claude Code CLI with developer preferences and hooks"
 EXT_CATEGORY="dev-tools"
-EXT_INSTALL_METHOD="mise"  # Uses mise npm plugin
+EXT_INSTALL_METHOD="native"  # Uses curl-based installer
 EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
@@ -30,17 +30,14 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Hard requirement: Node.js
-  if ! command_exists node; then
-    print_error "Node.js is required but not installed"
-    print_status "Install with: extension-manager install nodejs"
+  # Check for required commands
+  if ! command_exists curl; then
+    print_error "curl is required but not installed"
     return 1
   fi
 
-  # Hard requirement: npm
-  if ! command_exists npm; then
-    print_error "npm is required but not found"
-    print_status "Install the nodejs extension first"
+  if ! command_exists bash; then
+    print_error "bash is required but not found"
     return 1
   fi
 
@@ -55,10 +52,6 @@ prerequisites() {
 install() {
   print_status "Installing Claude Code..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
   # Check if already installed
   if command_exists claude; then
     local claude_version=$(claude --version 2>/dev/null || echo "installed")
@@ -67,21 +60,30 @@ install() {
     return 0
   fi
 
-  # Install Claude Code globally
-  if ! npm install -g @anthropic-ai/claude-code; then
+  # Install Claude Code using official installer
+  print_status "Downloading and running Claude Code installer..."
+  if ! curl -fsSL https://claude.ai/install.sh | bash; then
     print_error "Claude Code installation failed"
     return 1
   fi
 
+  # The installer adds Claude to PATH via shell config
+  # Need to source the config or use explicit path
+  local claude_path="$HOME/.local/bin/claude"
+
   # Verify installation
-  if ! command_exists claude; then
+  if [[ -f "$claude_path" ]] || command_exists claude; then
+    # Try to get version - reload shell environment first
+    export PATH="$HOME/.local/bin:$PATH"
+    local claude_version=$(claude --version 2>/dev/null || echo "Installed successfully")
+    print_success "Claude Code installed: $claude_version"
+    print_status "Location: $HOME/.local/bin/claude"
+  else
     print_warning "Claude Code installed but command not found in PATH"
-    print_status "You may need to reload your shell"
+    print_status "You may need to reload your shell or run: source ~/.bashrc"
     return 1
   fi
 
-  local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
-  print_success "Claude Code installed: $claude_version"
   return 0
 }
 
@@ -92,16 +94,15 @@ install() {
 configure() {
   print_status "Setting up Claude Code configuration..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
 
   # Create Claude configuration directory
   mkdir -p "$HOME/.claude"
 
   # Create global CLAUDE.md with user preferences
   if [[ ! -f "$HOME/.claude/CLAUDE.md" ]]; then
-    cat "$(dirname "${BASH_SOURCE[0]}")/claude-config.claude-md.template" > "$HOME/.claude/CLAUDE.md"
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude.claude-md.template" > "$HOME/.claude/CLAUDE.md"
     print_success "Created global preferences: ~/.claude/CLAUDE.md"
   else
     print_status "Global preferences already exist: ~/.claude/CLAUDE.md"
@@ -109,7 +110,7 @@ configure() {
 
   # Create settings.json with useful hooks
   if [[ ! -f "$HOME/.claude/settings.json" ]]; then
-    cat "$(dirname "${BASH_SOURCE[0]}")/claude-config.settings-json.template" > "$HOME/.claude/settings.json"
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude.settings-json.template" > "$HOME/.claude/settings.json"
     print_success "Created Claude hooks: ~/.claude/settings.json"
   else
     print_status "Claude hooks already exist: ~/.claude/settings.json"
@@ -117,13 +118,13 @@ configure() {
 
   # Create SSH wrapper
   if command_exists create_tool_wrapper 2>/dev/null; then
-    if command_exists claude; then
-      create_tool_wrapper "claude" "$(which claude)"
+    if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
+      create_tool_wrapper "claude" "$HOME/.local/bin/claude"
     fi
   fi
 
   # Add aliases to bashrc
-  local alias_file="$(dirname "${BASH_SOURCE[0]}")/claude-config.aliases"
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/claude.aliases"
   if [[ -f "$alias_file" ]]; then
     if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
       echo "" >> "$HOME/.bashrc"
@@ -131,7 +132,7 @@ configure() {
       echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
       echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
       echo "fi" >> "$HOME/.bashrc"
-      print_success "Added Claude Flow aliases to .bashrc"
+      print_success "Added Claude aliases to .bashrc"
     fi
   fi
 
@@ -147,14 +148,13 @@ configure() {
 validate() {
   print_status "Validating Claude Code installation..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
 
   local all_valid=true
 
   # Check claude command exists
-  if ! command_exists claude; then
+  if ! command_exists claude && [[ ! -f "$HOME/.local/bin/claude" ]]; then
     print_error "claude command not found"
     all_valid=false
   else
@@ -211,12 +211,11 @@ validate() {
 status() {
   print_extension_header
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
 
   # Check installation status
-  if ! command_exists claude; then
+  if ! command_exists claude && [[ ! -f "$HOME/.local/bin/claude" ]]; then
     echo "Status: ✗ NOT INSTALLED"
     return 1
   fi
@@ -228,6 +227,7 @@ status() {
   print_status "Installed tools:"
   local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
   echo "  ✓ claude: $claude_version"
+  echo "  Location: $HOME/.local/bin/claude"
   echo ""
 
   print_status "Authentication: Check with 'claude' command"
@@ -262,13 +262,12 @@ status() {
 upgrade() {
   print_status "Upgrading ${EXT_NAME}..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
 
   # Get current version
   print_status "Current version:"
-  if command_exists claude; then
+  if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
     local current_version=$(claude --version 2>/dev/null || echo "version check failed")
     echo "  claude: $current_version"
   else
@@ -276,14 +275,14 @@ upgrade() {
   fi
   echo ""
 
-  # Upgrade via npm
-  print_status "Upgrading Claude Code..."
-  if npm update -g @anthropic-ai/claude-code 2>&1; then
+  # Upgrade by running the installer again
+  print_status "Running Claude Code installer to upgrade..."
+  if curl -fsSL https://claude.ai/install.sh | bash; then
     print_success "Claude Code upgraded successfully"
 
     echo ""
     print_status "Updated version:"
-    if command_exists claude; then
+    if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
       local new_version=$(claude --version 2>/dev/null || echo "version check failed")
       echo "  claude: $new_version"
     fi
@@ -302,14 +301,17 @@ upgrade() {
 remove() {
   print_warning "Uninstalling Claude Code..."
 
-  # Load NVM if available
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Remove the claude binary
+  if [[ -f "$HOME/.local/bin/claude" ]]; then
+    rm -f "$HOME/.local/bin/claude"
+    print_success "Claude Code binary removed"
+  fi
 
-  # Uninstall npm package
-  if command_exists npm; then
-    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null
-    print_success "Claude Code package uninstalled"
+  # Check for other potential installation locations
+  if command_exists claude; then
+    local claude_path=$(which claude)
+    print_warning "Claude still found at: $claude_path"
+    print_status "You may need to manually remove it"
   fi
 
   # Prompt for config removal
@@ -325,7 +327,7 @@ remove() {
   # Remove aliases from bashrc
   if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
     cleanup_bashrc "# ${EXT_NAME} - aliases"
-    print_success "Removed Claude Flow aliases from .bashrc"
+    print_success "Removed Claude aliases from .bashrc"
   fi
 
   print_success "Claude Code uninstalled"

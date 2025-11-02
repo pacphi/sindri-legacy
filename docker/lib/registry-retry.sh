@@ -45,7 +45,7 @@ apt_install_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  APT install attempt $attempt of $max_attempts: $packages"
 
-    if $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $packages; then
+    if DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq $packages; then
       echo "✅ APT install successful"
       return 0
     else
