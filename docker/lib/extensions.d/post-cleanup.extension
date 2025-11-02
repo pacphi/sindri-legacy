@@ -123,10 +123,14 @@ configure() {
   # Rust
   if command_exists cargo; then
     print_debug "Cleaning cargo cache..."
-    [[ -d ~/.cargo/registry/cache ]] && (rm -rf ~/.cargo/registry/cache 2>/dev/null) || true
-    [[ -d ~/.cargo/git/checkouts ]] && (rm -rf ~/.cargo/git/checkouts 2>/dev/null) || true
+    if [[ -d ~/.cargo/registry/cache ]]; then
+      rm -rf ~/.cargo/registry/cache 2>/dev/null
+    fi
+    if [[ -d ~/.cargo/git/checkouts ]]; then
+      rm -rf ~/.cargo/git/checkouts 2>/dev/null
+    fi
     if cargo --list 2>/dev/null | grep -q "cache"; then
-      (timeout 30s cargo cache --autoclean 2>/dev/null) || true
+      timeout 30s cargo cache --autoclean 2>/dev/null
     fi
   fi
 
@@ -139,12 +143,16 @@ configure() {
   # JVM (Maven, Gradle)
   if command_exists mvn; then
     print_debug "Cleaning Maven snapshots..."
-    [[ -d ~/.m2/repository ]] && (find ~/.m2/repository -type d -name "*-SNAPSHOT" -exec rm -rf {} + 2>/dev/null) || true
+    if [[ -d ~/.m2/repository ]]; then
+      find ~/.m2/repository -type d -name "*-SNAPSHOT" -exec rm -rf {} + 2>/dev/null
+    fi
   fi
 
   if command_exists gradle; then
     print_debug "Cleaning Gradle cache..."
-    [[ -d ~/.gradle/caches ]] && (find ~/.gradle/caches -type d -name "build-cache-*" -exec rm -rf {} + 2>/dev/null) || true
+    if [[ -d ~/.gradle/caches ]]; then
+      find ~/.gradle/caches -type d -name "build-cache-*" -exec rm -rf {} + 2>/dev/null
+    fi
   fi
 
   # PHP
