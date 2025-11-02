@@ -33,7 +33,7 @@ jobs:
       - name: Verify all extensions have upgrade()
         run: |
           MISSING=0
-          for ext in docker/lib/extensions.d/*.extension; do
+          for ext in docker/lib/extensions.d/*/*.extension; do
             [[ "$(basename "$ext")" == "template.extension" ]] && continue
             if ! grep -q "^upgrade()" "$ext"; then
               echo "✗ Missing upgrade(): $ext"
@@ -51,7 +51,7 @@ jobs:
       - name: Verify all extensions have metadata
         run: |
           MISSING=0
-          for ext in docker/lib/extensions.d/*.extension; do
+          for ext in docker/lib/extensions.d/*/*.extension; do
             [[ "$(basename "$ext")" == "template.extension" ]] && continue
             if ! grep -q "^EXT_INSTALL_METHOD=" "$ext"; then
               echo "✗ Missing EXT_INSTALL_METHOD: $ext"
@@ -71,7 +71,7 @@ jobs:
       - name: Verify all extensions are v2.0.0
         run: |
           OLD_VERSION=0
-          for ext in docker/lib/extensions.d/*.extension; do
+          for ext in docker/lib/extensions.d/*/*.extension; do
             [[ "$(basename "$ext")" == "template.extension" ]] && continue
             VERSION=$(grep "^EXT_VERSION=" "$ext" | cut -d'"' -f2)
             if [[ "$VERSION" != "2.0.0" ]]; then

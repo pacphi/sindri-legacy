@@ -440,30 +440,15 @@ ensure_cleanup_extensions_last() {
 find_extension_file() {
     local ext_name="$1"
 
-    # Try exact match first (new naming: rust.extension)
-    if [[ -f "$EXTENSIONS_BASE/${ext_name}.extension" ]]; then
-        echo "$EXTENSIONS_BASE/${ext_name}.extension"
+    # Directory structure: extensions.d/<name>/<name>.extension
+    if [[ -f "$EXTENSIONS_BASE/${ext_name}/${ext_name}.extension" ]]; then
+        echo "$EXTENSIONS_BASE/${ext_name}/${ext_name}.extension"
         return 0
     fi
 
-    # Try with numeric prefixes (legacy naming: 10-rust.extension)
-    for example_file in "$EXTENSIONS_BASE"/*-"${ext_name}".extension; do
-        if [[ -f "$example_file" ]]; then
-            echo "$example_file"
-            return 0
-        fi
-    done
-
-    # Try pattern match
-    for example_file in "$EXTENSIONS_BASE"/*.extension; do
-        [[ ! -f "$example_file" ]] && continue
-        local name=$(get_extension_name "$(basename "$example_file")")
-        if [[ "$name" == "$ext_name" ]]; then
-            echo "$example_file"
-            return 0
-        fi
-    done
-
+    # Extension not found
+    print_debug "Extension not found: $ext_name"
+    print_debug "Expected location: $EXTENSIONS_BASE/${ext_name}/${ext_name}.extension"
     return 1
 }
 
@@ -563,19 +548,22 @@ list_extensions() {
     # Show available but inactive extensions
     print_status "Available Extensions (not activated):"
     local inactive_found=false
-    for extension_file in "$EXTENSIONS_BASE"/*.extension; do
-        [[ ! -f "$extension_file" ]] && continue
-        found_any=true
+    for extension_dir in "$EXTENSIONS_BASE"/*/; do
+        [[ ! -d "$extension_dir" ]] && continue
+        local name=$(basename "$extension_dir")
 
-        local name=$(get_extension_name "$(basename "$extension_file")")
-        local filename=$(basename "$extension_file")
+        # Check if extension file exists
+        local extension_file="${extension_dir}${name}.extension"
+        [[ ! -f "$extension_file" ]] && continue
+
+        found_any=true
 
         # Skip if in manifest
         if is_in_manifest "$name"; then
             continue
         fi
 
-        echo -e "  ${YELLOW}○${NC} $name ($filename)"
+        echo -e "  ${YELLOW}○${NC} $name (${name}.extension)"
         inactive_found=true
     done
 
@@ -666,6 +654,65 @@ auto_activate_extension() {
     # Extension file exists and is ready to be sourced
     print_success "Extension '$ext_name' ready"
     return 0
+}
+
+# ============================================================================
+# MIGRATION HELPERS (for transitioning to directory structure)
+# ============================================================================
+
+# Migrate extension from flat to directory structure (preserving file names)
+migrate_extension_to_directory() {
+    local ext_name="$1"
+
+    # Check if already migrated
+    if [[ -d "$EXTENSIONS_BASE/${ext_name}" ]]; then
+        print_status "Extension '$ext_name' already in directory structure"
+        return 0
+    fi
+
+    # Find all related files with the extension name prefix
+    local ext_file="$EXTENSIONS_BASE/${ext_name}.extension"
+
+    if [[ ! -f "$ext_file" ]]; then
+        print_error "Extension file not found: $ext_file"
+        return 1
+    fi
+
+    # Create directory
+    mkdir -p "$EXTENSIONS_BASE/${ext_name}"
+
+    # Find and move ALL files that start with the extension name
+    # This handles: .extension, .aliases, .toml, -ci.toml, .*.template, etc.
+    local moved_count=0
+    for file in "$EXTENSIONS_BASE/${ext_name}".* "$EXTENSIONS_BASE/${ext_name}"-*; do
+        if [[ -f "$file" ]]; then
+            local filename=$(basename "$file")
+            mv "$file" "$EXTENSIONS_BASE/${ext_name}/${filename}"
+            ((moved_count++))
+            print_debug "  Moved: $filename"
+        fi
+    done
+
+    if [[ $moved_count -eq 0 ]]; then
+        print_warning "No files found for extension '$ext_name'"
+        return 1
+    fi
+
+    print_success "Migrated '$ext_name' to directory structure ($moved_count files)"
+    return 0
+}
+
+# Migrate all extensions
+migrate_all_extensions() {
+    print_status "Migrating extensions to directory structure..."
+
+    for ext_file in "$EXTENSIONS_BASE"/*.extension; do
+        [[ ! -f "$ext_file" ]] && continue
+        local ext_name=$(basename "$ext_file" .extension)
+        migrate_extension_to_directory "$ext_name"
+    done
+
+    print_success "All extensions migrated"
 }
 
 # Function to install an extension (prerequisites + install + configure)

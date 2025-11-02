@@ -25,7 +25,7 @@ jobs:
 
           failed_scripts=()
 
-          for script in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*.sh; do
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
             # Skip if file doesn't exist (in case no .sh files)
             [[ ! -f "$script" ]] && continue
 
@@ -49,7 +49,7 @@ jobs:
 
           missing_source=()
 
-          for script in docker/lib/extensions.d/*.extension; do
+          for script in docker/lib/extensions.d/*/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             # Check if script sources common.sh
@@ -72,7 +72,7 @@ jobs:
 
           missing_shebang=()
 
-          for script in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*.sh; do
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
             [[ ! -f "$script" ]] && continue
 
             # Check for shebang on first line
@@ -93,7 +93,7 @@ jobs:
         run: |
           echo "Checking for basic error handling patterns..."
 
-          for script in docker/lib/extensions.d/*.extension; do
+          for script in docker/lib/extensions.d/*/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             script_name=$(basename "$script")
@@ -116,7 +116,7 @@ jobs:
           # Skip template and post-cleanup as they may have different requirements
           skip_patterns="template.extension|post-cleanup.extension"
 
-          for script in docker/lib/extensions.d/*.extension; do
+          for script in docker/lib/extensions.d/*/*.extension; do
             [[ ! -f "$script" ]] && continue
 
             script_name=$(basename "$script")

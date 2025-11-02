@@ -86,12 +86,8 @@ check_dependent_extensions() {
         local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         [[ "$ext_name" == "${EXT_NAME:-}" ]] && continue
 
-        # Find the extension file
-        local ext_file="$SCRIPT_DIR/${ext_name}.sh"
-        if [[ ! -f "$ext_file" ]]; then
-            local -a matches=("$SCRIPT_DIR/"*"-${ext_name}.sh")
-            [[ ${#matches[@]} -gt 0 ]] && ext_file="${matches[0]}"
-        fi
+        # Find the extension file (directory structure)
+        local ext_file="$SCRIPT_DIR/${ext_name}/${ext_name}.extension"
         [[ ! -f "$ext_file" ]] && continue
 
         # Check if extension references any of the provided commands
@@ -351,8 +347,10 @@ install_mise_config() {
     # Try to find TOML in multiple locations
     local source_toml=""
     local search_paths=(
-        "${script_dir}/${ext_name}${toml_suffix}.toml"                    # Activated directory
-        "/docker/lib/extensions.d/${ext_name}${toml_suffix}.toml"         # Source directory
+        "${script_dir}/${ext_name}/${ext_name}${toml_suffix}.toml"        # Directory structure
+        "${script_dir}/${ext_name}${toml_suffix}.toml"                    # Activated directory (legacy)
+        "/docker/lib/extensions.d/${ext_name}/${ext_name}${toml_suffix}.toml"  # Source directory structure
+        "/docker/lib/extensions.d/${ext_name}${toml_suffix}.toml"         # Source directory (legacy)
     )
 
     for path in "${search_paths[@]}"; do

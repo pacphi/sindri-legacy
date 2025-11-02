@@ -383,9 +383,23 @@ Use these prefixes for commit messages:
 
 **Extension Template:**
 
+Extensions are organized in directories under `docker/lib/extensions.d/`. Each extension has its own directory containing the extension file and any related configuration files.
+
+**Directory Structure:**
+```
+docker/lib/extensions.d/
+└── extension-name/
+    ├── extension-name.extension      # Main extension script (required)
+    ├── extension-name.aliases        # Shell aliases (optional)
+    ├── extension-name.toml           # mise configuration (optional)
+    └── extension-name-ci.toml        # CI-specific mise config (optional)
+```
+
+**Extension Script Template:**
+
 ```bash
 #!/bin/bash
-# docker/lib/extensions.d/##-extension-name.sh.example
+# docker/lib/extensions.d/extension-name/extension-name.extension
 # Description: Brief description of what this extension does
 # Prerequisites: List any requirements
 # Usage: How to enable and use this extension
