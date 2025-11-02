@@ -353,8 +353,12 @@ status() {
 
   echo ""
   print_status "Installed development gems:"
-  for gem in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
-    command_exists "$gem" && echo "  ✓ $gem"
+  for gem_name in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
+    # Use gem list -i for fast gem existence check (doesn't load the gem)
+    # Add timeout to prevent hanging on network-dependent gems
+    if timeout 2 gem list -i "^${gem_name}$" &>/dev/null; then
+      echo "  ✓ $gem_name"
+    fi
   done
 
   return 0

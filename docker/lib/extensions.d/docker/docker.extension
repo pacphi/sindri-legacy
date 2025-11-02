@@ -75,9 +75,8 @@ install() {
     print_status "Installing Docker Engine..."
 
     # Add Docker's official GPG key and repository
-    print_status "Updating package lists..."
-    sudo apt-get update -qq
-    sudo apt-get install -y ca-certificates curl gnupg
+    print_status "Installing prerequisites..."
+    install_apt_packages ca-certificates curl gnupg
 
     # Add Docker's official GPG key
     print_status "Adding Docker GPG key..."
@@ -95,7 +94,7 @@ install() {
 
       # Install Docker Engine
       print_status "Installing Docker Engine packages (this may take 2-3 minutes)..."
-      if sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+      if install_apt_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
         print_success "Docker Engine installed: $(docker --version)"
       else
         print_error "Failed to install Docker Engine packages"

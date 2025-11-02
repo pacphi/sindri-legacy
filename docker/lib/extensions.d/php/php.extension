@@ -75,7 +75,8 @@ install() {
     sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>/dev/null
   fi
 
-  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  # Update package lists with retry
+  apt_update_retry 3
 
   # Install PHP and essential extensions
   print_status "Installing PHP 8.3 and extensions..."
@@ -91,7 +92,7 @@ install() {
   local failed_packages=()
   for package in "${php_packages[@]}"; do
     print_debug "Installing $package..."
-    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" 2>/dev/null; then
+    if apt_install_retry 3 "$package"; then
       ((installed_count++))
     else
       failed_packages+=("$package")

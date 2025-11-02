@@ -7,10 +7,14 @@ apt_update_retry() {
   local max_attempts=${1:-3}
   local attempt=1
 
+  # Use sudo only if not root
+  local SUDO=""
+  [ "$EUID" -ne 0 ] && SUDO="sudo"
+
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  APT update attempt $attempt of $max_attempts..."
 
-    if sudo apt-get update -qq; then
+    if $SUDO apt-get update -qq; then
       echo "✅ APT update successful"
       return 0
     else
@@ -34,10 +38,14 @@ apt_install_retry() {
   local packages="$*"
   local attempt=1
 
+  # Use sudo only if not root
+  local SUDO=""
+  [ "$EUID" -ne 0 ] && SUDO="sudo"
+
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  APT install attempt $attempt of $max_attempts: $packages"
 
-    if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $packages; then
+    if $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $packages; then
       echo "✅ APT install successful"
       return 0
     else
@@ -46,8 +54,8 @@ apt_install_retry() {
         echo "⚠️  APT install failed, retrying in ${wait_time}s..."
 
         # Try to fix broken packages before retry
-        sudo dpkg --configure -a 2>/dev/null || true
-        sudo apt-get -f install -y -qq 2>/dev/null || true
+        $SUDO dpkg --configure -a 2>/dev/null || true
+        $SUDO apt-get -f install -y -qq 2>/dev/null || true
 
         sleep $wait_time
         attempt=$((attempt + 1))

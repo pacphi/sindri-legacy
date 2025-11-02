@@ -376,6 +376,18 @@ install_mise_config() {
     local dest_toml="$HOME/.config/mise/conf.d/${ext_name}.toml"
     if cp "$source_toml" "$dest_toml"; then
         print_success "Configuration copied to $dest_toml"
+
+        # Expand environment variables in the TOML file
+        print_status "Expanding environment variables..."
+        if command -v envsubst &>/dev/null; then
+            if envsubst < "$dest_toml" > "${dest_toml}.tmp" && mv "${dest_toml}.tmp" "$dest_toml"; then
+                print_debug "Environment variables expanded in configuration"
+            else
+                print_warning "Failed to expand environment variables (continuing with original)"
+            fi
+        else
+            print_warning "envsubst not available - environment variables will not be expanded"
+        fi
     else
         print_error "Failed to copy configuration"
         return 1
@@ -391,6 +403,14 @@ install_mise_config() {
 
         if [ $install_exit_code -eq 0 ]; then
             print_success "Installed successfully"
+
+            # Regenerate shims to ensure commands are accessible
+            print_status "Regenerating shims..."
+            if mise reshim 2>&1 | tee -a "$install_log"; then
+                print_debug "Shims regenerated successfully"
+            else
+                print_warning "Failed to regenerate shims (continuing anyway)"
+            fi
 
             # Verify installation by checking mise ls
             print_status "Verifying installation..."

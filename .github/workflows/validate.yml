@@ -240,14 +240,8 @@ jobs:
         run: |
           echo "Checking markdown files..."
 
-          # Install pnpm
-          npm install -g pnpm
-
-          # Install markdown lint
-          pnpm add -g markdownlint-cli
-
-          # Lint markdown files (ignore line length for now)
-          markdownlint --config .markdownlint.json --ignore node_modules --ignore .git . || echo "Markdown linting completed with warnings"
+          # Lint markdown files using npx (ignore line length for now)
+          npx markdownlint-cli --config .markdownlint.json --ignore node_modules --ignore .git . || echo "Markdown linting completed with warnings"
 
       - name: Check for broken links in README
         run: |

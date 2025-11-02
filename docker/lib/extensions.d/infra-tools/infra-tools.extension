@@ -102,8 +102,8 @@ install() {
           sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
 
         # Update apt and install Terraform
-        sudo apt-get update -qq 2>/dev/null
-        if sudo apt-get install -y terraform 2>/dev/null; then
+        apt_update_retry 3
+        if apt_install_retry 3 terraform; then
           print_success "Terraform installed (latest stable version)"
         else
           print_warning "Failed to install Terraform via apt"
@@ -176,10 +176,10 @@ install() {
   if command_exists ansible; then
     print_warning "Ansible already installed: $(ansible --version | head -1)"
   else
-    sudo apt-get update -qq
-    sudo apt-get install -y software-properties-common 2>/dev/null
+    apt_update_retry 3
+    apt_install_retry 3 software-properties-common
     sudo add-apt-repository --yes --update ppa:ansible/ansible 2>/dev/null
-    if sudo apt-get install -y ansible 2>/dev/null; then
+    if apt_install_retry 3 ansible; then
       print_success "Ansible installed"
     else
       print_warning "Failed to install Ansible"

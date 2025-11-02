@@ -32,24 +32,18 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for Python 3
+  # Check for Python 3 (required for claude-monitor)
   if ! command_exists python3; then
     print_error "python3 is required but not installed"
     print_status "Install the python extension first: extension-manager install python"
     return 1
   fi
 
-  # Check for Node.js/npm (for claude-usage-cli)
-  if ! command_exists node; then
-    print_error "Node.js is required but not installed"
-    print_status "Install with: extension-manager install nodejs"
-    return 1
-  fi
-
-  if ! command_exists npm; then
-    print_error "npm is required but not installed"
-    print_status "Install with: extension-manager install nodejs"
-    return 1
+  # Check for Node.js/npm (optional - for claude-usage-cli)
+  if ! command_exists node || ! command_exists npm; then
+    print_warning "Node.js/npm not found - claude-usage-cli will not be available"
+    print_status "For full monitoring features, install nodejs: extension-manager install nodejs"
+    print_status "Note: Core monitoring (claude-monitor) will still work"
   fi
 
   # Check for curl (for UV installer)

@@ -69,21 +69,62 @@ configure() {
   local sshd_config_d="/etc/ssh/sshd_config.d"
   local env_config_file="$sshd_config_d/99-bash-env.conf"
   local ssh_env_file="/etc/profile.d/00-ssh-environment.sh"
+  local template_dir="$(dirname "${BASH_SOURCE[0]}")"
 
   # Create sshd_config.d directory if it doesn't exist
   if [[ ! -d "$sshd_config_d" ]]; then
     sudo mkdir -p "$sshd_config_d"
   fi
 
-  # Add BASH_ENV configuration for non-interactive SSH sessions
+  # Create the SSH environment initialization script from template
+  if [[ ! -f "$ssh_env_file" ]]; then
+    print_status "Creating SSH environment initialization script..."
+    local profile_template="$template_dir/ssh-environment.profile.template"
+
+    if [[ ! -f "$profile_template" ]]; then
+      print_error "Template not found: $profile_template"
+      return 1
+    fi
+
+    if sudo cp "$profile_template" "$ssh_env_file"; then
+      sudo chmod +x "$ssh_env_file"
+      print_success "Created SSH environment script: $ssh_env_file"
+    else
+      print_error "Failed to create SSH environment script"
+      return 1
+    fi
+  else
+    print_debug "SSH environment script already exists"
+  fi
+
+  # Add BASH_ENV configuration for non-interactive SSH sessions from template
   if [[ ! -f "$env_config_file" ]]; then
-    sudo tee "$env_config_file" > /dev/null << EOF
-# Configure BASH_ENV for non-interactive SSH sessions
-# This allows environment setup for commands executed via SSH
-Match User *
-    SetEnv BASH_ENV=$ssh_env_file
-EOF
-    print_success "Created SSH daemon environment config: $env_config_file"
+    print_status "Creating SSH daemon environment configuration..."
+    local sshd_template="$template_dir/ssh-environment.sshd-config.template"
+
+    if [[ ! -f "$sshd_template" ]]; then
+      print_error "Template not found: $sshd_template"
+      return 1
+    fi
+
+    # Use envsubst to expand variables in template
+    if command -v envsubst &>/dev/null; then
+      export ssh_env_file  # Export for envsubst
+      if envsubst < "$sshd_template" | sudo tee "$env_config_file" > /dev/null; then
+        print_success "Created SSH daemon environment config: $env_config_file"
+      else
+        print_error "Failed to create SSH daemon config"
+        return 1
+      fi
+    else
+      print_warning "envsubst not available, using sed fallback"
+      if sed "s|\$ssh_env_file|$ssh_env_file|g" "$sshd_template" | sudo tee "$env_config_file" > /dev/null; then
+        print_success "Created SSH daemon environment config: $env_config_file"
+      else
+        print_error "Failed to create SSH daemon config"
+        return 1
+      fi
+    fi
   else
     print_debug "SSH daemon environment config already exists"
   fi
