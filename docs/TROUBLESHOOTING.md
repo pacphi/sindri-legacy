@@ -97,7 +97,8 @@ ssh developer@my-app.fly.dev -p 10022
 | System debugging (as root) | `flyctl ssh console -a <app>`                            |
 | Check sshd status          | `flyctl ssh console -a <app> -C "systemctl status sshd"` |
 
-**Key Takeaway:** For regular development, always use standard SSH (port 10022). Only use `flyctl ssh console` as a fallback, and remember to add `--user developer` if running extension or development commands.
+**Key Takeaway:** For regular development, always use standard SSH (port 10022). Only use `flyctl ssh console` as a
+fallback, and remember to add `--user developer` if running extension or development commands.
 
 ---
 
@@ -794,7 +795,7 @@ mise doctor
 
 1. **Shell Integration**:
 
-   ```
+   ```text
    ✓ shell: bash
    ✓ mise hook: installed
    ```
@@ -804,7 +805,7 @@ mise doctor
 
 2. **Configuration Files**:
 
-   ```
+   ```text
    ✓ config: /workspace/projects/active/myapp/.mise.toml
    ✓ config: ~/.config/mise/config.toml
    ```
@@ -814,7 +815,7 @@ mise doctor
 
 3. **Tool Installation**:
 
-   ```
+   ```text
    ✓ node@20.11.0: installed at /home/developer/.local/share/mise/installs/node/20.11.0
    ✗ python@3.12: not installed
    ```
@@ -823,7 +824,8 @@ mise doctor
    - ✗ means tool needs installation
 
 4. **PATH Configuration**:
-   ```
+
+   ```text
    ✓ mise shims in PATH
    ✗ conflicting version managers detected
    ```
@@ -845,6 +847,7 @@ mise doctor
   ```
 
 - **Tool not in PATH**: Verify shims directory:
+
   ```bash
   ls -la $(mise config dir)/shims
   ```

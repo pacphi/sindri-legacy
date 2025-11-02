@@ -26,7 +26,8 @@
 
 ## Extension System
 
-Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a standardized API (v1.0) with explicit dependency management and activation control.
+Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a
+standardized API (v1.0) with explicit dependency management and activation control.
 
 ### Extension API v1.0
 
@@ -170,10 +171,12 @@ extension-manager reorder python 5
 ```
 
 > [!TIP]
-> After activating extensions, run `extension-manager install-all` to install them. Extensions execute in the order listed in `active-extensions.conf`.
-
+> After activating extensions, run `extension-manager install-all` to install them. Extensions execute in the order
+> listed in `active-extensions.conf`.
+>
 > [!NOTE]
-> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and cannot be removed. The `post-cleanup` extension should be installed last for optimal cleanup.
+> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and
+> cannot be removed. The `post-cleanup` extension should be installed last for optimal cleanup.
 
 ### Activation Manifest
 
@@ -998,11 +1001,13 @@ EOF
 
 ### API Keys, Authentication, and LLM Provider Configuration
 
-This section covers secret management patterns, API key configuration for cloud providers and AI tools, and comprehensive guidance for configuring Claude Code to work with alternate LLM providers.
+This section covers secret management patterns, API key configuration for cloud providers and AI tools, and
+comprehensive guidance for configuring Claude Code to work with alternate LLM providers.
 
 #### Fly.io Secrets Management
 
-Fly.io secrets are injected as runtime environment variables into your VM, providing secure storage for sensitive credentials.
+Fly.io secrets are injected as runtime environment variables into your VM, providing secure storage for sensitive
+credentials.
 
 **Basic Commands:**
 
@@ -1030,13 +1035,15 @@ echo $ANTHROPIC_API_KEY
 
 **Best Practices:**
 
-- **Secrets vs fly.toml [env]**: Use `flyctl secrets set` for sensitive data (API keys, passwords). Use `fly.toml` [env] section for non-sensitive configuration (feature flags, endpoints).
+- **Secrets vs fly.toml [env]**: Use `flyctl secrets set` for sensitive data (API keys, passwords). Use `fly.toml`
+  [env] section for non-sensitive configuration (feature flags, endpoints).
 - **Persistence**: Secrets persist across VM restarts and are only accessible at runtime inside the VM.
 - **Deployment**: Set secrets before first deployment or updates will trigger a new deployment.
 
 #### Cloud Provider CLI Authentication
 
-The **cloud-tools.sh.example** extension installs multiple cloud provider CLIs. Here's how to configure authentication for each:
+The **cloud-tools.sh.example** extension installs multiple cloud provider CLIs. Here's how to configure
+authentication for each:
 
 **AWS CLI:**
 
@@ -1215,7 +1222,8 @@ ollama run llama3.2
 
 #### Claude Code LLM Provider Configuration
 
-Claude Code natively supports only Anthropic's Claude models. However, you can configure it to work with alternate LLM providers through environment variables and proxy solutions.
+Claude Code natively supports only Anthropic's Claude models. However, you can configure it to work with alternate LLM
+providers through environment variables and proxy solutions.
 
 ##### Native Anthropic Configuration (Default)
 
@@ -1229,7 +1237,8 @@ flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
 # Get API key: https://console.anthropic.com/
 ```
 
-**Important:** If `ANTHROPIC_API_KEY` is set, Claude Code will use API-based billing instead of your Claude.ai subscription (Pro/Max/Team/Enterprise).
+**Important:** If `ANTHROPIC_API_KEY` is set, Claude Code will use API-based billing instead of your Claude.ai
+subscription (Pro/Max/Team/Enterprise).
 
 ##### OpenAI-Compatible Providers (Direct Method)
 
@@ -1303,7 +1312,8 @@ export ANTHROPIC_API_KEY=fw-...  # Get from https://fireworks.ai
 
 ##### Proxy Solutions for Advanced Use Cases
 
-When providers don't offer Anthropic-compatible APIs, or when you need advanced features like model-specific routing, fallback chains, or cost optimization, use a proxy solution.
+When providers don't offer Anthropic-compatible APIs, or when you need advanced features like model-specific routing,
+fallback chains, or cost optimization, use a proxy solution.
 
 **When to Use Proxies:**
 
@@ -1313,7 +1323,7 @@ When providers don't offer Anthropic-compatible APIs, or when you need advanced 
 - Cost optimization across multiple providers
 - Enterprise features (monitoring, rate limiting, multi-tenancy)
 
-**Option 1: claude-code-proxy (Simple & Fast)**
+### Option 1: claude-code-proxy (Simple & Fast)
 
 A lightweight proxy that translates Claude API requests to OpenAI-compatible APIs.
 
@@ -1353,7 +1363,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:8082 -a <app-name>
 claude-code-proxy &
 ```
 
-**Option 2: LiteLLM Proxy (Enterprise-Grade)**
+### Option 2: LiteLLM Proxy (Enterprise-Grade)
 
 LiteLLM provides a unified API gateway for 100+ LLM providers with advanced features:
 
@@ -1422,7 +1432,7 @@ model_list:
       api_key: os.environ/ANTHROPIC_API_KEY
 ```
 
-**Option 3: Claude Code Router (Multi-Provider Management)**
+### Option 3: Claude Code Router (Multi-Provider Management)
 
 Claude Code Router provides intelligent routing with support for multiple providers:
 
@@ -1453,14 +1463,14 @@ Claude Code Router provides intelligent routing with support for multiple provid
 
 #### Complete Setup Examples
 
-**Example 1: Pure Anthropic (Standard)**
+##### Example 1: Pure Anthropic (Standard)
 
 ```bash
 # Simplest setup - just use Anthropic API
 flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
 ```
 
-**Example 2: Z.ai GLM-4.6 Direct**
+##### Example 2: Z.ai GLM-4.6 Direct
 
 ```bash
 # Use Z.ai's GLM-4.6 model directly
@@ -1468,7 +1478,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=https://api.z.ai/api/paas/v4 -a <app-name>
 flyctl secrets set ANTHROPIC_API_KEY=your-z-ai-key -a <app-name>
 ```
 
-**Example 3: Z.ai via OpenRouter (Easiest)**
+##### Example 3: Z.ai via OpenRouter (Easiest)
 
 ```bash
 # Access GLM-4.6 plus 400+ other models
@@ -1476,7 +1486,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1 -a <app-name>
 flyctl secrets set ANTHROPIC_API_KEY=sk-or-... -a <app-name>
 ```
 
-**Example 4: Cost-Optimized (DeepSeek + Gemini)**
+##### Example 4: Cost-Optimized (DeepSeek + Gemini)
 
 ```bash
 # Set up claude-code-proxy with cheap providers
@@ -1491,7 +1501,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:8082 -a <app-name>
 # claude-code-proxy &
 ```
 
-**Example 5: Enterprise Multi-Cloud (LiteLLM)**
+##### Example 5: Enterprise Multi-Cloud (LiteLLM)
 
 ```bash
 # Set all provider keys
@@ -1510,11 +1520,14 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:4000 -a <app-name>
 
 1. **Never Commit Secrets**: Add API keys to `.gitignore`. Use `.env.example` templates without actual keys.
 
-2. **Use Fly.io Secrets for Production**: Secrets are encrypted at rest and only accessible inside the VM at runtime.
+2. **Use Fly.io Secrets for Production**: Secrets are encrypted at rest and only accessible inside the VM at
+   runtime.
 
-3. **Rotate Secrets Regularly**: Establish a rotation schedule, especially after team changes or suspected compromise.
+3. **Rotate Secrets Regularly**: Establish a rotation schedule, especially after team changes or suspected
+   compromise.
 
-4. **Principle of Least Privilege**: Use read-only or limited-scope API keys when possible. For cloud providers, create service accounts with minimal permissions.
+4. **Principle of Least Privilege**: Use read-only or limited-scope API keys when possible. For cloud providers,
+   create service accounts with minimal permissions.
 
 5. **Separate Environments**: Use different API keys for development, staging, and production.
 
@@ -1536,9 +1549,11 @@ OPENROUTER_API_KEY=sk-or-actual_secret_key
 
 #### Cost Optimization Strategies
 
-1. **Use Cheaper Models for Simple Tasks**: Route haiku/fast-tier requests to cheaper providers like DeepSeek ($1/M) or Gemini Flash (free tier).
+1. **Use Cheaper Models for Simple Tasks**: Route haiku/fast-tier requests to cheaper providers like DeepSeek
+   ($1/M) or Gemini Flash (free tier).
 
-2. **Local Models for Development**: Use Ollama with Llama 3.2 or CodeLlama during development to avoid API costs.
+2. **Local Models for Development**: Use Ollama with Llama 3.2 or CodeLlama during development to avoid API
+   costs.
 
 3. **Provider Comparison** (per 1M tokens, approximate):
    - **DeepSeek**: $1

@@ -46,7 +46,8 @@ Run once after connecting:
 ```
 
 This installs Node.js and Claude Code.
-Sindri's integrated tools (Claude Flow, Agentic Flow, and curated development tools) are available when you create or clone projects.
+Sindri's integrated tools (Claude Flow, Agentic Flow, and curated development tools) are available when you create or
+clone projects.
 
 ## Start Using Claude
 

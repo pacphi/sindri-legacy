@@ -63,7 +63,8 @@ adding features, improving documentation, or sharing extensions, your contributi
    pnpm run format:check     # Check formatting
    ```
 
-   > **Note**: Sindri uses pnpm for package management. The `package.json` file contains scripts for linting and formatting documentation.
+   > **Note**: Sindri uses pnpm for package management. The `package.json` file contains scripts for linting and
+   > formatting documentation.
 
 3. **Set Up Development VM**
 
@@ -105,7 +106,8 @@ adding features, improving documentation, or sharing extensions, your contributi
 
 ### mise Tool Management Workflow
 
-Sindri uses mise for polyglot tool version management. Understanding mise basics will help you work effectively with Sindri extensions.
+Sindri uses mise for polyglot tool version management. Understanding mise basics will help you work effectively with
+Sindri extensions.
 
 **Common mise Commands:**
 
@@ -401,11 +403,12 @@ Use these prefixes for commit messages:
 
 **Extension Template:**
 
-Extensions are organized in directories under `docker/lib/extensions.d/`. Each extension has its own directory containing the extension file and any related configuration files.
+Extensions are organized in directories under `docker/lib/extensions.d/`. Each extension has its own directory containing
+the extension file and any related configuration files.
 
 **Directory Structure:**
 
-```
+```bash
 docker/lib/extensions.d/
 └── extension-name/
     ├── extension-name.extension      # Main extension script (required)
@@ -469,7 +472,8 @@ USAGE
 
 ### Creating mise-Powered Extensions
 
-Sindri uses **mise** for modern tool version management. When creating extensions that install development tools, consider using mise for simplified tool management.
+Sindri uses **mise** for modern tool version management. When creating extensions that install development tools,
+consider using mise for simplified tool management.
 
 **Benefits of mise-powered extensions:**
 
@@ -625,6 +629,7 @@ function remove() {
    ```
 
 4. **Group related tools:**
+
    ```toml
    # Create separate TOML files for each extension
    # /workspace/config/mise/nodejs.toml
@@ -667,6 +672,7 @@ To add a new tool to an existing mise-managed extension:
    ```
 
 5. **Verify installation:**
+
    ```bash
    mise ls --current | grep new-tool-name
    new-tool-name --version
@@ -741,6 +747,7 @@ extension-manager install tool-name  # Should succeed without errors
    ```
 
 3. **Multiple versions:**
+
    ```toml
    [tools]
    "nodejs" = ["18", "20", "22"]  # Install multiple versions

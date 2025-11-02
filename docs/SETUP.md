@@ -145,7 +145,8 @@ flyctl ssh console -a <app-name> --user developer
 - Emergency access needed
 - System-level debugging required
 
-**Important:** The `--user developer` flag is critical when running extension commands via flyctl, otherwise extensions install to root's home directory.
+**Important:** The `--user developer` flag is critical when running extension commands via flyctl, otherwise extensions
+install to root's home directory.
 
 See [SSH Connection Methods](TROUBLESHOOTING.md#understanding-ssh-connection-methods) for complete details.
 

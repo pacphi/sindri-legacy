@@ -48,7 +48,8 @@ Thanks for the inspiration [Marcus Patman](https://github.com/marcuspat)!
 ### 🔧 Extension System v1.0
 
 - **Manifest-Based Activation**: Control which tools install via `active-extensions.conf`
-- **Standardized API**: All extensions implement 6 required functions (prerequisites, install, configure, validate, status, remove)
+- **Standardized API**: All extensions implement 6 required functions (prerequisites, install, configure, validate,
+  status, remove)
 - **CLI Management**: Use `extension-manager` for activating, installing, and managing extensions
 - **Dependency Management**: Explicit prerequisite checking before installation
 - **Idempotent Operations**: Safe to re-run installations

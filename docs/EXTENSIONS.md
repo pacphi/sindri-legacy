@@ -21,7 +21,8 @@
 
 ## Overview
 
-Sindri uses a manifest-based extension system to manage development tools and environments. Extensions provide language runtimes, development tools, infrastructure utilities, and AI coding assistants.
+Sindri uses a manifest-based extension system to manage development tools and environments. Extensions provide language
+runtimes, development tools, infrastructure utilities, and AI coding assistants.
 
 The extension system supports two approaches:
 
@@ -1239,7 +1240,7 @@ Extensions are executed in the order listed in `/workspace/scripts/extensions.d/
 
 ### Example Manifest
 
-```
+```conf
 # Core extensions (always first)
 workspace-structure
 mise-config
@@ -1272,7 +1273,7 @@ monitoring
 
 2. **Core first**: Protected extensions are automatically installed first
 
-   ```
+   ```conf
    # Protected extensions (required, cannot be removed):
    workspace-structure  # Creates directory structure
    mise-config         # Enables mise for other extensions
@@ -1285,7 +1286,7 @@ monitoring
 
 3. **Group by category**: Organize related extensions together
 
-   ```
+   ```conf
    # Languages
    python
    golang
@@ -1299,7 +1300,7 @@ monitoring
 
 4. **Comment liberally**: Document why extensions are included
 
-   ```
+   ```conf
    # Required for CI/CD pipelines
    docker
    infra-tools
@@ -1314,7 +1315,8 @@ monitoring
 
 ### What Are Protected Extensions?
 
-Protected extensions are **core system components** that cannot be removed. They are automatically installed on first container startup.
+Protected extensions are **core system components** that cannot be removed. They are automatically installed on first
+container startup.
 
 **Protected extensions:**
 

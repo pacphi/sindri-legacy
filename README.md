@@ -6,7 +6,8 @@
 [![Extension Tests](https://github.com/pacphi/sindri/actions/workflows/extension-tests.yml/badge.svg)](https://github.com/pacphi/sindri/actions/workflows/extension-tests.yml)
 [![Changelog](https://img.shields.io/badge/changelog-latest-blue)](CHANGELOG.md)
 
-A complete AI-powered cloud development forge running on Fly.io infrastructure with zero local installation, auto-suspend VMs, and persistent storage.
+A complete AI-powered cloud development forge running on Fly.io infrastructure with zero local installation,
+auto-suspend VMs, and persistent storage.
 
 ```text
 
@@ -23,13 +24,16 @@ A complete AI-powered cloud development forge running on Fly.io infrastructure w
 
 ## About the Name
 
-**Sindri** (Old Norse: "spark") was a legendary dwarf blacksmith in Norse mythology, renowned as one of the greatest craftsmen who ever lived. Together with his brother Brokkr, Sindri forged three of the most powerful artifacts in Norse mythology:
+**Sindri** (Old Norse: "spark") was a legendary dwarf blacksmith in Norse mythology, renowned as one of the greatest
+craftsmen who ever lived. Together with his brother Brokkr, Sindri forged three of the most powerful artifacts in
+Norse mythology:
 
 - **Mjölnir** - Thor's legendary hammer
 - **Draupnir** - Odin's self-multiplying golden ring
 - **Gullinbursti** - Freyr's radiant golden boar
 
-Like its mythological namesake, Sindri forges powerful development environments from raw materials—transforming cloud infrastructure, AI tools, and developer workflows into a legendary platform for building software.
+Like its mythological namesake, Sindri forges powerful development environments from raw materials—transforming cloud
+infrastructure, AI tools, and developer workflows into a legendary platform for building software.
 
 ## ⚡ Quick Start
 

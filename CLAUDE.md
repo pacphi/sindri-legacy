@@ -163,7 +163,7 @@ Extensions are executed in the order listed in `/workspace/scripts/extensions.d/
 
 Example manifest:
 
-```
+```bash
 # Protected extensions (required for system functionality):
 workspace-structure
 mise-config
@@ -257,9 +257,12 @@ extension-manager --interactive
 
 ## mise Tool Manager
 
-Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes. mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, and their associated tools, replacing multiple version managers (NVM, pyenv, rustup, etc.) with one tool.
+Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes.
+mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, and their associated tools,
+replacing multiple version managers (NVM, pyenv, rustup, etc.) with one tool.
 
-**Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed. It must be installed before any mise-powered extensions.
+**Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed.
+It must be installed before any mise-powered extensions.
 
 ### mise-Managed Extensions
 

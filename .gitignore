@@ -16,7 +16,6 @@ certs/
 
 # Anthropic API Keys and Claude credentials
 .anthropic
-.claude/
 claude-credentials*
 anthropic-key*
 api-keys*

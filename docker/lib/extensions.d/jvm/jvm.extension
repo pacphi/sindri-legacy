@@ -11,7 +11,7 @@
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 # ============================================================================
 # METADATA

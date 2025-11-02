@@ -4,7 +4,8 @@ This guide explains how to create and publish new releases for Sindri.
 
 ## Overview
 
-Sindri uses **automated releases** triggered by Git tags. The entire release workflow is defined in `.github/workflows/release.yml` and follows semantic versioning principles.
+Sindri uses **automated releases** triggered by Git tags. The entire release workflow is defined in
+`.github/workflows/release.yml` and follows semantic versioning principles.
 
 When you push a version tag, GitHub Actions automatically:
 
@@ -140,7 +141,7 @@ curl -fsSL https://github.com/pacphi/sindri/releases/download/v1.2.3/install.sh 
 
 Tags must follow this pattern:
 
-```
+```text
 v[MAJOR].[MINOR].[PATCH](-[PRERELEASE])?
 ```
 
@@ -165,7 +166,7 @@ The automation generates changelogs from commit messages. For best results, use 
 
 ### Commit Message Format
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -236,19 +237,19 @@ For both stable and pre-releases:
 
 Three files are automatically created and attached:
 
-**install.sh**
+#### install.sh
 
 - Quick installation script
 - Downloads specific version
 - Validates prerequisites
 - Provides next steps
 
-**fly.toml.example**
+#### fly.toml.example
 
 - Example Fly.io configuration
 - Based on current fly.toml
 
-**QUICK_REFERENCE.md**
+#### QUICK_REFERENCE.md
 
 - Common commands
 - Setup instructions
@@ -288,6 +289,7 @@ If a release has issues:
 1. **Delete the release and tag** (see above)
 2. **Fix the issues** in your code
 3. **Create a new patch version** with the fixes:
+
    ```bash
    git tag v1.2.4
    git push origin v1.2.4
@@ -415,6 +417,7 @@ If the release workflow fails:
 2. Review the failed job logs
 3. Fix the issue
 4. Delete the tag and recreate:
+
    ```bash
    git tag -d v1.2.3
    git push origin :refs/tags/v1.2.3
@@ -467,6 +470,7 @@ Only stable releases (without pre-release suffix) are marked as "latest":
    ```
 
 3. **Review Recent Commits**
+
    ```bash
    git log $(git describe --tags --abbrev=0)..HEAD --oneline
    ```

@@ -392,7 +392,7 @@ EXT_CATEGORY="utility"  # utility, language, infrastructure
 
 ```bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 # Initialize extension (loads common.sh and sets up environment)
 extension_init

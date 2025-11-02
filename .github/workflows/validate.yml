@@ -150,7 +150,7 @@ jobs:
           echo "Validating extension TOML files..."
           pip install toml
 
-          for toml in docker/lib/extensions.d/*.toml; do
+          for toml in docker/lib/extensions.d/*/*.toml; do
             echo "Validating $toml..."
             python3 -c "import toml; toml.load(open('$toml'))" || exit 1
           done
@@ -164,7 +164,7 @@ jobs:
           mise_extensions=("nodejs" "python" "rust" "golang" "nodejs-devtools")
 
           for ext in "${mise_extensions[@]}"; do
-            if [[ ! -f "docker/lib/extensions.d/${ext}.toml" ]]; then
+            if [[ ! -f "docker/lib/extensions.d/${ext}/${ext}.toml" ]]; then
               echo "❌ Missing TOML for mise-powered extension: $ext"
               exit 1
             fi

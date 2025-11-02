@@ -18,9 +18,12 @@
 
 ## Overview
 
-The extension testing workflow [extension-tests](../.github/workflows/extension-tests.yml) provides automated validation and functional testing for all extensions in the `docker/lib/extensions.d/` directory.
+The extension testing workflow [extension-tests](../.github/workflows/extension-tests.yml) provides automated validation
+and functional testing for all extensions in the `docker/lib/extensions.d/` directory.
 
-This comprehensive testing ensures that users can confidently activate and use any extension through the `extension-manager` command without encountering issues. Each extension implements the **Extension API** (see [EXTENSIONS.md](EXTENSIONS.md#extension-api-specification)) with 6-7 required functions.
+This comprehensive testing ensures that users can confidently activate and use any extension through the
+`extension-manager` command without encountering issues. Each extension implements the **Extension API** (see
+[EXTENSIONS.md](EXTENSIONS.md#extension-api-specification)) with 6-7 required functions.
 
 ### Testing Philosophy
 
@@ -88,6 +91,7 @@ When the container starts, entrypoint.sh executes in sequence:
    - Production mode: Uses CI template as default or existing manifest
 
 3. **Auto-Install Protected Extensions** (lines 176-190)
+
    ```bash
    if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
        sudo -u developer HOME=/workspace/developer bash -c \
@@ -121,7 +125,7 @@ When the container starts, entrypoint.sh executes in sequence:
 
 #### Manifest Flow Diagram
 
-```
+```text
 Docker Build
     │
     ├─→ active-extensions.ci.conf (template)
@@ -543,7 +547,7 @@ gh workflow run extension-tests.yml \
 | `remove()`         | ✅     | extension-api-tests                         | 100%     |
 | `upgrade()` (v2.0) | ✅     | extension-api-tests                         | 100%     |
 
-**Overall API Coverage: 100% (7/7 functions including v2.0)**
+#### Overall API Coverage: 100% (7/7 functions including v2.0)
 
 ### Feature Coverage
 
@@ -558,7 +562,7 @@ gh workflow run extension-tests.yml \
 | Error Handling                   | ✅     | dependency-chain-tests     | 75%      |
 | Idempotency                      | ✅     | per-extension-tests        | 100%     |
 
-**Overall Feature Coverage: ~97%**
+#### Overall Feature Coverage: ~97%
 
 ### Extension Coverage
 
@@ -730,25 +734,25 @@ bash extension-manager.sh deactivate r
 
 ### 5. Verify Passes All Checks
 
-**Job 1: Extension Manager Validation**
+#### Job 1: Extension Manager Validation
 
 - [ ] Extension shows in `extension-manager list`
 - [ ] Name extraction works correctly
 
-**Job 2: Extension Syntax Validation**
+#### Job 2: Extension Syntax Validation
 
 - [ ] Shellcheck validation passes
 - [ ] All required API functions defined
 - [ ] Proper shebang and sourcing
 
-**Job 3: Per-Extension Tests**
+#### Job 3: Per-Extension Tests
 
 - [ ] Installation completes within timeout
 - [ ] All commands available after installation
 - [ ] Key functionality test passes
 - [ ] Idempotent (safe to run multiple times)
 
-**Job 4: Extension API Tests** (if in sample)
+#### Job 4: Extension API Tests (if in sample)
 
 - [ ] validate() returns 0
 - [ ] status() outputs correct format
@@ -756,7 +760,7 @@ bash extension-manager.sh deactivate r
 - [ ] deactivate() removes from manifest
 - [ ] upgrade() works (if API v2.0)
 
-**Job 5-8: Protected/Cleanup/Manifest/Dependencies**
+#### Job 5-8: Protected/Cleanup/Manifest/Dependencies
 
 - [ ] Not a protected extension (unless adding new core)
 - [ ] Doesn't interfere with cleanup ordering
@@ -827,7 +831,7 @@ The extension testing system continuously evolves:
 
 #### Execution Flow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │  1. Extension Manager Validation (Quick Checks)             │
 │     ↓ Validates extension-manager.sh script                 │

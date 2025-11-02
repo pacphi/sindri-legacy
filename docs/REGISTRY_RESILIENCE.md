@@ -1,6 +1,7 @@
 # Registry Resilience Improvements
 
-This document describes comprehensive improvements to make Sindri's CI/CD pipeline and extension system more resilient to sporadic registry failures (Docker registry, APT mirrors, npm registry, PyPI, etc.).
+This document describes comprehensive improvements to make Sindri's CI/CD pipeline and extension system more resilient
+to sporadic registry failures (Docker registry, APT mirrors, npm registry, PyPI, etc.).
 
 ## Table of Contents
 

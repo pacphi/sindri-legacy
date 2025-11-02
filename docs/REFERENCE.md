@@ -369,7 +369,8 @@ flyctl secrets unset API_KEY -a <app-name>
 
 ### Extension Management
 
-Sindri uses **Extension API v1.0** with manifest-based activation. Extensions are managed through the `extension-manager` command and controlled via the `active-extensions.conf` manifest.
+Sindri uses **Extension API v1.0** with manifest-based activation. Extensions are managed through the
+`extension-manager` command and controlled via the `active-extensions.conf` manifest.
 
 **List available extensions:**
 
@@ -496,7 +497,8 @@ For detailed extension development, see the [Extension System README](../docker/
 
 ## mise Commands
 
-**mise** (https://mise.jdx.dev) is a modern polyglot tool version manager that provides unified management for language runtimes and development tools. Sindri uses mise to standardize tool installation across extensions.
+**mise** (https://mise.jdx.dev) is a modern polyglot tool version manager that provides unified management for language
+runtimes and development tools. Sindri uses mise to standardize tool installation across extensions.
 
 ### Core Commands
 
