@@ -1,19 +1,31 @@
 # Extension System Testing
 
-This document describes the comprehensive testing system for VM extensions.
+## Table of Contents
+
+- [Overview](#overview)
+- [CI Environment Setup](#ci-environment-setup)
+- [Test Coverage](#test-coverage)
+- [Test Fixtures](#test-fixtures)
+- [Workflow Triggers](#workflow-triggers)
+- [Test Coverage Metrics](#test-coverage-metrics)
+- [Resource Requirements](#resource-requirements)
+- [Interpreting Results](#interpreting-results)
+- [Adding New Extensions](#adding-new-extensions)
+- [Best Practices](#best-practices)
+- [Continuous Improvement](#continuous-improvement)
+
+---
 
 ## Overview
 
-The extension testing workflow [extension-tests](../.github/workflows/extension-tests.yml) provides automated validation and functional testing for all extensions in the `docker/lib/extensions.d/` directory. Extensions follow the **Extension API v1.0** specification with manifest-based activation via `active-extensions.conf`.
+The extension testing workflow [extension-tests](../.github/workflows/extension-tests.yml) provides automated validation and functional testing for all extensions in the `docker/lib/extensions.d/` directory.
 
-This comprehensive testing ensures that users can confidently activate and use any extension through the
-`extension-manager` command without encountering issues. Each extension implements 6 required API functions:
-`prerequisites()`, `install()`, `configure()`, `validate()`, `status()`, and `remove()`.
+This comprehensive testing ensures that users can confidently activate and use any extension through the `extension-manager` command without encountering issues. Each extension implements the **Extension API** (see [EXTENSIONS.md](EXTENSIONS.md#extension-api-specification)) with 6-7 required functions.
 
 ### Testing Philosophy
 
 The test suite is designed to:
-1. **Validate All API Functions** - Test all 6 Extension API functions for compliance
+1. **Validate All API Functions** - Test all Extension API functions for compliance
 2. **Enforce System Policies** - Verify protected extensions cannot be removed
 3. **Test Edge Cases** - Cleanup ordering, dependency chains, manifest operations
 4. **Ensure Reliability** - Idempotency, error handling, and conflict detection
@@ -23,9 +35,11 @@ The test suite is designed to:
 
 - **Total Test Jobs**: 10
 - **Extensions Tested**: 24 out of 25 (96%)
-- **API Functions Coverage**: 100% (6/6)
+- **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0)
 - **Feature Coverage**: 97%
 - **Test Fixtures**: 4 manifest test files
+
+---
 
 ## CI Environment Setup
 
@@ -172,13 +186,15 @@ flyctl logs --app <app-name> | grep "Installing protected extensions"
 3. Verify manifest was created: `flyctl ssh console -C "cat /workspace/scripts/extensions.d/active-extensions.conf"`
 4. Manually trigger: `flyctl ssh console -C "extension-manager install-all"`
 
+---
+
 ## Test Coverage
 
 The extension testing workflow includes **10 comprehensive test jobs** covering all aspects of the Extension API:
 
 ### 1. Extension Manager Validation
 
-Tests the core extension management system (**Extension API v1.0**):
+Tests the core extension management system (**Extension API v1.0/v2.0**):
 
 - **Script Syntax**: Validates `extension-manager.sh` with shellcheck
 - **List Command**: Verifies extension listing functionality via `extension-manager list`
@@ -197,13 +213,15 @@ Validates all extension scripts for code quality:
 - **Shebang Verification**: Ensures all scripts have `#!/bin/bash`
 - **Error Handling**: Checks for use of print functions and error handling
 - **Best Practices**: Validates adherence to extension development guidelines
-- **API Compliance**: Verifies all 6 API functions are defined
+- **API Compliance**: Verifies all required API functions are defined
 
 **When It Runs**: On every push/PR affecting extension files
 
 ### 3. Per-Extension Tests (Matrix)
 
-Comprehensive functional testing for each extension individually using the Extension API v1.0:
+Comprehensive functional testing for each extension individually using the Extension API.
+
+For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 
 #### Tested Extensions (24 Total)
 
@@ -260,7 +278,9 @@ For each extension using `extension-manager`:
 
 ### 4. Extension API Tests (CRITICAL)
 
-Tests all 6 Extension API functions for compliance:
+Tests all Extension API functions for compliance.
+
+For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 
 #### Functions Tested
 
@@ -268,6 +288,7 @@ Tests all 6 Extension API functions for compliance:
 - **status()**: Confirms output includes Extension name and Status fields
 - **uninstall()**: Tests that remove() function is called and cleans up properly
 - **deactivate()**: Verifies extension is removed from manifest
+- **upgrade()** (v2.0): Tests upgrade functionality for API v2.0 extensions
 
 #### Test Matrix
 
@@ -283,7 +304,9 @@ Representative sample of 6 extensions tested for full API compliance:
 
 ### 5. Protected Extensions Tests (CRITICAL)
 
-Tests enforcement of protected extension policies:
+Tests enforcement of protected extension policies.
+
+For details on protected extensions, see [EXTENSIONS.md - Protected Extensions](EXTENSIONS.md#protected-extensions).
 
 #### Protection Tests
 
@@ -397,6 +420,8 @@ Generates comprehensive test report summary:
 - Links to detailed logs
 - GitHub Actions summary
 
+---
+
 ## Test Fixtures
 
 To avoid complex heredoc escaping in GitHub Actions workflows, test fixtures are used for manifest testing:
@@ -437,6 +462,8 @@ Located in `.github/workflows/test-fixtures/`:
       # Run tests...
     '"
 ```
+
+---
 
 ## Workflow Triggers
 
@@ -482,6 +509,8 @@ gh workflow run extension-tests.yml \
   -f skip_cleanup=true
 ```
 
+---
+
 ## Test Coverage Metrics
 
 ### Extension API Coverage
@@ -494,8 +523,9 @@ gh workflow run extension-tests.yml \
 | `validate()` | ✅ | extension-api-tests | 100% |
 | `status()` | ✅ | per-extension-tests, extension-api-tests | 100% |
 | `remove()` | ✅ | extension-api-tests | 100% |
+| `upgrade()` (v2.0) | ✅ | extension-api-tests | 100% |
 
-**Overall API Coverage: 100% (6/6 functions)**
+**Overall API Coverage: 100% (7/7 functions including v2.0)**
 
 ### Feature Coverage
 
@@ -518,6 +548,8 @@ gh workflow run extension-tests.yml \
 - **Extensions Tested**: 24
 - **Coverage**: 96%
 - **Untested**: template (intentionally excluded)
+
+---
 
 ## Resource Requirements
 
@@ -542,7 +574,7 @@ Different test jobs use different VM sizes:
 - Automatic cleanup prevents lingering resources
 - Use `skip_cleanup=true` only for debugging
 
-## Test Environments
+### Test Environments
 
 All tests use:
 
@@ -550,6 +582,8 @@ All tests use:
 - **Fly.io Region**: `sjc` (US West)
 - **Deployment Strategy**: `immediate` (skip health checks)
 - **Volume Encryption**: Disabled for faster setup
+
+---
 
 ## Interpreting Results
 
@@ -583,9 +617,13 @@ A test passes when:
 4. **Test Locally**: Activate extension on local test VM
 5. **Enable Debug Mode**: Set `DEBUG=true` in extension script
 
+---
+
 ## Adding New Extensions
 
-When adding a new extension, ensure it will pass all 10 test jobs:
+When adding a new extension, ensure it will pass all 10 test jobs.
+
+For complete extension development guide, see [EXTENSIONS.md - Creating Extensions](EXTENSIONS.md#creating-extensions).
 
 ### 1. Create Extension File
 
@@ -597,7 +635,7 @@ cd docker/lib/extensions.d
 # Example: creating extension for R programming language
 cp ../../../docs/templates/template.extension r.extension
 
-# Implement all 6 required API functions
+# Implement all required API functions
 vim r.extension
 ```
 
@@ -608,6 +646,9 @@ vim r.extension
 - `validate()` - Run smoke tests
 - `status()` - Check installation state
 - `remove()` - Uninstall and cleanup
+- `upgrade()` - Upgrade tools (API v2.0)
+
+See [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification) for details.
 
 ### 2. Add to Test Matrix
 
@@ -675,7 +716,7 @@ bash extension-manager.sh deactivate r
 
 **Job 2: Extension Syntax Validation**
 - [ ] Shellcheck validation passes
-- [ ] All 6 API functions defined
+- [ ] All required API functions defined
 - [ ] Proper shebang and sourcing
 
 **Job 3: Per-Extension Tests**
@@ -689,12 +730,15 @@ bash extension-manager.sh deactivate r
 - [ ] status() outputs correct format
 - [ ] uninstall() calls remove() correctly
 - [ ] deactivate() removes from manifest
+- [ ] upgrade() works (if API v2.0)
 
 **Job 5-8: Protected/Cleanup/Manifest/Dependencies**
 - [ ] Not a protected extension (unless adding new core)
 - [ ] Doesn't interfere with cleanup ordering
 - [ ] Works with manifest comment preservation
 - [ ] Dependencies correctly declared and installed
+
+---
 
 ## Best Practices
 
@@ -706,6 +750,9 @@ bash extension-manager.sh deactivate r
 4. **Test Idempotency**: Extension should be safe to run multiple times
 5. **Document Dependencies**: Note any required extensions
 6. **Set Reasonable Timeouts**: Consider installation time
+7. **Implement upgrade()**: Support API v2.0 for upgrade functionality
+
+See [EXTENSIONS.md - Development Guidelines](EXTENSIONS.md#development-guidelines) for complete guidelines.
 
 ### For Extension Users
 
@@ -714,6 +761,8 @@ bash extension-manager.sh deactivate r
 3. **Check Combinations**: Review combination tests for your stack
 4. **Monitor Resources**: Extensions increase VM resource usage
 5. **Validate Installation**: Run validation scripts after activation
+
+---
 
 ## Continuous Improvement
 
@@ -738,6 +787,7 @@ The extension testing system continuously evolves:
 - [x] **Test Fixtures** - Clean, maintainable test data approach
 - [x] **Expanded Matrix** - 24 extensions tested (96% coverage)
 - [x] **Error Handling** - Prerequisites failure testing added
+- [x] **API v2.0 Testing** - Upgrade functionality tested
 
 ### Planned Enhancements
 
@@ -748,9 +798,9 @@ The extension testing system continuously evolves:
 - [ ] Installation time optimization tracking
 - [ ] Automated conflict detection across all combinations
 
-## Test Job Workflow
+### Test Job Workflow
 
-### Execution Flow
+#### Execution Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -781,13 +831,13 @@ The extension testing system continuously evolves:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Critical Path
+#### Critical Path
 
 **Must Pass Before Merge:**
 - Job 1: Extension Manager Validation
 - Job 2: Extension Syntax Validation
-- Job 5: Protected Extensions Tests (new code)
-- Job 6: Cleanup Extensions Tests (new code)
+- Job 5: Protected Extensions Tests
+- Job 6: Cleanup Extensions Tests
 
 **Recommended Before Merge:**
 - Job 3: Per-Extension Tests (for modified extensions)
@@ -797,6 +847,8 @@ The extension testing system continuously evolves:
 
 **Optional (Manual Trigger):**
 - Job 9: Extension Combinations (comprehensive stack testing)
+
+---
 
 ## Support
 
@@ -808,12 +860,15 @@ For issues with extension testing:
 4. **Open Issue**: Report problems with test workflow
 5. **Contribute**: Submit PRs to improve testing
 
+---
+
 ## Related Documentation
 
-- [Extension Development Guide](CUSTOMIZATION.md#extension-system)
-- [Extension System README](../docker/lib/extensions.d/README.md)
-- [Extension API v1.0 Specification](../docker/lib/extensions.d/README.md#extension-api-v10)
-- [Extension Manager Script](../docker/lib/extension-manager.sh)
-- [Integration Testing Workflow](../.github/workflows/integration.yml)
-- [Validation Testing Workflow](../.github/workflows/validate.yml)
-- [Extension Tests Workflow](../.github/workflows/extension-tests.yml)
+- **Extension Development**: [EXTENSIONS.md](EXTENSIONS.md) - Complete extension system documentation
+- **Extension API**: [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification)
+- **Creating Extensions**: [EXTENSIONS.md - Creating Extensions](EXTENSIONS.md#creating-extensions)
+- **Protected Extensions**: [EXTENSIONS.md - Protected Extensions](EXTENSIONS.md#protected-extensions)
+- **Extension Manager Script**: `docker/lib/extension-manager.sh`
+- **Integration Testing Workflow**: `.github/workflows/integration.yml`
+- **Validation Testing Workflow**: `.github/workflows/validate.yml`
+- **Extension Tests Workflow**: `.github/workflows/extension-tests.yml`

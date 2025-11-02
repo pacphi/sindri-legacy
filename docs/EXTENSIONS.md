@@ -1,5 +1,24 @@
 # Extension System Documentation
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Extension Management Commands](#extension-management-commands)
+- [Available Extensions](#available-extensions)
+- [mise Integration Guide](#mise-integration-guide)
+- [Troubleshooting](#troubleshooting)
+- [Extension API Specification](#extension-api-specification)
+- [Creating Extensions](#creating-extensions)
+- [Upgrading Extensions to API v2.0](#upgrading-extensions-to-api-v20)
+- [TOML Configuration Reference](#toml-configuration-reference)
+- [Extension Manifest](#extension-manifest)
+- [Protected Extensions](#protected-extensions)
+- [Development Guidelines](#development-guidelines)
+- [Advanced Topics](#advanced-topics)
+
+---
+
 ## Overview
 
 Sindri uses a manifest-based extension system to manage development tools and environments. Extensions provide language runtimes, development tools, infrastructure utilities, and AI coding assistants.
@@ -8,18 +27,51 @@ The extension system supports two approaches:
 - **Traditional extensions**: Using language-specific version managers (NVM, rbenv, SDKMAN, etc.)
 - **mise-powered extensions**: Using mise for unified tool management with declarative TOML configuration
 
-## Extension API v1.0
+### Extension API Versions
 
-All extensions implement six standard functions:
+- **API v1.0**: Core functionality (prerequisites, install, configure, validate, status, remove)
+- **API v2.0**: Adds standardized upgrade support with `upgrade()` function and installation metadata
 
-| Function | Purpose | Required |
-|----------|---------|----------|
-| `prerequisites()` | Check system requirements before installation | Yes |
-| `install()` | Install packages and tools | Yes |
-| `configure()` | Post-install configuration and setup | Yes |
-| `validate()` | Run smoke tests to verify installation | Yes |
-| `status()` | Check installation state and display metadata | Yes |
-| `remove()` | Uninstall and cleanup | Yes |
+All extensions implement the Extension API, providing consistent installation, validation, and upgrade experiences.
+
+---
+
+## Quick Start
+
+### Installing Extensions
+
+```bash
+# Interactive setup (recommended for first-time)
+extension-manager --interactive
+
+# Install specific extension
+extension-manager install nodejs
+
+# Install all active extensions from manifest
+extension-manager install-all
+```
+
+### Common Operations
+
+```bash
+# List available extensions
+extension-manager list
+
+# Check extension status
+extension-manager status nodejs
+
+# Validate installation
+extension-manager validate nodejs
+
+# Upgrade extension (API v2.0)
+extension-manager upgrade nodejs
+
+# Upgrade all extensions
+extension-manager upgrade-all --dry-run  # Preview
+extension-manager upgrade-all            # Execute
+```
+
+---
 
 ## Extension Management Commands
 
@@ -57,12 +109,32 @@ extension-manager uninstall <name>
 extension-manager reorder <name> <position>
 ```
 
+### Upgrade Operations (API v2.0)
+
+```bash
+# Upgrade single extension
+extension-manager upgrade <name>
+
+# Preview upgrades (dry-run)
+extension-manager upgrade-all --dry-run
+
+# Upgrade all extensions
+extension-manager upgrade-all
+
+# Check for available updates
+extension-manager check-updates
+
+# View upgrade history
+extension-manager upgrade-history
+extension-manager upgrade-history <name> 20  # Last 20 entries
+
+# Rollback extension
+extension-manager rollback <name>
+```
+
 ### Advanced Operations
 
 ```bash
-# Upgrade all mise-managed tools
-extension-manager upgrade-all
-
 # Export status as JSON
 extension-manager status-all --json
 
@@ -73,65 +145,19 @@ extension-manager --version
 extension-manager install <name> --verbose
 ```
 
+---
+
 ## Available Extensions
 
 ### Core Environment (Protected)
 
-These extensions are **protected** and cannot be removed. They are automatically installed first.
+These extensions are **protected** and cannot be removed. They are automatically installed on first container startup.
 
 | Extension | Description | Tool Manager | Version |
 |-----------|-------------|--------------|---------|
 | `workspace-structure` | Base directory structure | N/A | 1.0.0 |
-| `mise-config` | Unified tool version manager | N/A | 1.0.0 |
+| `mise-config` | Unified tool version manager | N/A | 2.0.0 |
 | `ssh-environment` | SSH wrappers for non-interactive sessions | N/A | 1.0.0 |
-
-#### Protected Extension Auto-Installation
-
-Protected extensions are **automatically installed** on first container startup to ensure the development environment is functional. This process is transparent and happens in the background.
-
-**How it works:**
-
-1. **Container Starts** (`entrypoint.sh`)
-   - Detects if this is the first boot by checking `/workspace/scripts/lib`
-   - Copies extension library from Docker image to persistent volume
-
-2. **Manifest Setup**
-   - In **CI mode** (`CI_MODE=true`): Uses `active-extensions.ci.conf` template
-   - In **production mode**: Uses same template or existing manifest
-   - Template pre-includes: `workspace-structure`, `mise-config`, `ssh-environment`
-
-3. **Auto-Installation Triggered**
-   - Checks if `mise` command is available (indicator of installation status)
-   - If not found: Runs `extension-manager install-all` as developer user
-   - Installs all protected extensions listed in manifest
-   - Output visible in container startup logs
-
-4. **Idempotency**
-   - On subsequent restarts: Skips installation (mise already exists)
-   - Volume persistence means protected extensions install only once
-   - Manual reinstall available: `extension-manager uninstall <name>` then restart
-
-**Why this approach?**
-
-- ✅ Guarantees foundational tools (mise, workspace dirs, SSH config) are always available
-- ✅ Works in both CI/CD and production environments
-- ✅ Respects persistent volumes (doesn't reinstall unnecessarily)
-- ✅ Provides clear feedback in logs for debugging
-
-**Verification:**
-
-```bash
-# Check if protected extensions are installed
-extension-manager list
-
-# Should show:
-#   1. ✓ workspace-structure [PROTECTED]
-#   2. ✓ mise-config [PROTECTED]
-#   3. ✓ ssh-environment [PROTECTED]
-
-# Verify mise is available (from mise-config extension)
-mise --version
-```
 
 ### Foundational Languages
 
@@ -139,48 +165,50 @@ While not protected, these are highly recommended as many tools depend on them.
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
-| `nodejs` | Node.js LTS and npm | mise | 1.0.0 | mise-config |
-| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 1.0.0 | mise-config |
+| `nodejs` | Node.js LTS and npm | mise | 3.0.0 | mise-config |
+| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 2.0.0 | mise-config |
 
 ### Claude AI Tools
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
 | `claude-config` | Claude Code CLI with developer configuration | npm | 1.0.0 | nodejs |
-| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 1.0.0 | nodejs, mise-config |
+| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0 | nodejs, mise-config |
 
 ### Additional Language Runtimes
 
 | Extension | Description | Tool Manager | Version | Dependencies |
 |-----------|-------------|--------------|---------|--------------|
-| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 1.0.0 | mise-config |
-| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 1.0.0 | mise-config |
-| `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 1.0.0 | N/A |
-| `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 1.0.0 | N/A |
-| `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 1.0.0 | N/A |
-| `dotnet` | .NET SDK 9.0/8.0 with ASP.NET Core | apt (Microsoft) | 1.0.0 | N/A |
+| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 2.0.0 | mise-config |
+| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 2.0.0 | mise-config |
+| `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 2.0.0 | N/A |
+| `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 2.0.0 | N/A |
+| `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 2.0.0 | N/A |
+| `dotnet` | .NET SDK 9.0/8.0 with ASP.NET Core | apt (Microsoft) | 2.0.0 | N/A |
 
 ### Infrastructure & DevOps
 
 | Extension | Description | Tool Manager | Version |
 |-----------|-------------|--------------|---------|
-| `docker` | Docker Engine with compose, dive, ctop | apt | 1.0.0 |
-| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel | Mixed | 1.0.0 |
-| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs | Official installers | 1.0.0 |
-| `ai-tools` | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed | 1.0.0 |
+| `docker` | Docker Engine with compose, dive, ctop | apt + binary | 2.0.0 |
+| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel | Mixed | 2.0.0 |
+| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs | Official installers | 2.0.0 |
+| `ai-tools` | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed | 2.0.0 |
 
 ### Monitoring & Utilities
 
 | Extension | Description | Tool Manager | Version |
 |-----------|-------------|--------------|---------|
-| `monitoring` | System monitoring tools (htop, glances, btop, etc.) | apt | 1.0.0 |
-| `tmux-workspace` | Tmux session management | apt | 1.0.0 |
-| `playwright` | Browser automation testing | npm | 1.0.0 |
-| `agent-manager` | Claude Code agent management | Custom | 1.0.0 |
-| `context-loader` | Context system for Claude | Custom | 1.0.0 |
+| `monitoring` | System monitoring tools (htop, glances, btop, etc.) | apt | 2.0.0 |
+| `tmux-workspace` | Tmux session management | apt | 2.0.0 |
+| `playwright` | Browser automation testing | npm | 2.0.0 |
+| `agent-manager` | Claude Code agent management | Custom | 2.0.0 |
+| `context-loader` | Context system for Claude | Custom | 2.0.0 |
 | `github-cli` | GitHub CLI authentication and workflows | Pre-installed | 1.0.0 |
 
-## mise-Powered Extensions
+---
+
+## mise Integration Guide
 
 ### What is mise?
 
@@ -199,351 +227,58 @@ While not protected, these are highly recommended as many tools depend on them.
 4. **Unified Workflow**: Single tool for all language runtimes and CLI utilities
 5. **Better Developer Experience**: Automatic activation, version switching, and updates
 
-### mise-Powered Extension Pattern
+### mise-Powered Extensions
 
-Extensions that use mise follow this pattern:
+The following extensions use mise for tool installation and version management (all require `mise-config`):
 
-1. **Prerequisite check**: Verify mise is installed (from `mise-config` extension)
-2. **TOML selection**: Choose configuration based on `CI_MODE` environment variable
-3. **Configuration copy**: Copy TOML to `~/.config/mise/conf.d/<extension>.toml`
-4. **Tool installation**: Run `mise install` to install all defined tools
-5. **Validation**: Verify tools are available and managed by mise
+- **nodejs**: Node.js LTS via mise (replaces NVM)
+- **python**: Python 3.13 + pipx tools via mise
+- **rust**: Rust stable + cargo tools via mise
+- **golang**: Go 1.24 + go tools via mise
+- **nodejs-devtools**: npm global tools via mise
 
-### Creating mise-Powered Extensions
-
-#### Step 1: Create Extension Script
+### Common mise Commands
 
 ```bash
-#!/bin/bash
-# myextension.extension - Description
-# Extension API v1.0
+# List all installed tools and versions
+mise ls
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+# List versions of a specific tool
+mise ls node
+mise ls python
 
-# ============================================================================
-# METADATA
-# ============================================================================
+# Install or switch tool versions
+mise use node@20          # Switch to Node.js 20
+mise use python@3.11      # Switch to Python 3.11
 
-EXT_NAME="myextension"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="My tool via mise"
-EXT_CATEGORY="language"
+# Update all tools to latest versions
+mise upgrade
 
-extension_init
+# Check for configuration issues
+mise doctor
 
-# ============================================================================
-# PREREQUISITES
-# ============================================================================
+# View current environment
+mise env
 
-prerequisites() {
-  print_status "Checking prerequisites for ${EXT_NAME}..."
-
-  # Require mise
-  if ! command_exists mise; then
-    print_error "mise is required but not installed"
-    print_status "Install with: extension-manager install mise-config"
-    return 1
-  fi
-
-  print_success "All prerequisites met"
-  return 0
-}
-
-# ============================================================================
-# INSTALL
-# ============================================================================
-
-install() {
-  print_status "Installing ${EXT_NAME} via mise..."
-
-  # Determine TOML file based on CI_MODE
-  local ext_dir="$SCRIPT_DIR"
-  local toml_source
-  local toml_dest="$HOME/.config/mise/conf.d/${EXT_NAME}.toml"
-
-  if [[ "${CI_MODE:-false}" == "true" ]] && [[ -f "$ext_dir/${EXT_NAME}-ci.toml" ]]; then
-    toml_source="$ext_dir/${EXT_NAME}-ci.toml"
-    print_status "Using CI configuration"
-  else
-    toml_source="$ext_dir/${EXT_NAME}.toml"
-    print_status "Using development configuration"
-  fi
-
-  # Validate and copy TOML
-  if [[ ! -f "$toml_source" ]]; then
-    print_error "Configuration not found: $toml_source"
-    return 1
-  fi
-
-  mkdir -p "$HOME/.config/mise/conf.d"
-  cp "$toml_source" "$toml_dest"
-  print_success "Configuration copied to $toml_dest"
-
-  # Install tools
-  if mise install; then
-    print_success "Tools installed successfully"
-  else
-    print_error "mise install failed"
-    return 1
-  fi
-
-  return 0
-}
-
-# ============================================================================
-# CONFIGURE
-# ============================================================================
-
-configure() {
-  print_status "Configuring ${EXT_NAME}..."
-
-  # Add any post-installation configuration here
-  # (shell aliases, environment variables, etc.)
-
-  print_success "Configuration complete"
-  return 0
-}
-
-# ============================================================================
-# VALIDATE
-# ============================================================================
-
-validate() {
-  print_status "Validating ${EXT_NAME} installation..."
-
-  # Activate mise environment
-  eval "$(mise activate bash)"
-
-  # Check if mise manages the tool
-  if mise ls mytool &>/dev/null; then
-    print_success "Tool managed by mise"
-  else
-    print_error "Tool not found in mise"
-    return 1
-  fi
-
-  # Test tool functionality
-  if mytool --version &>/dev/null; then
-    print_success "Tool is functional"
-  else
-    print_error "Tool command failed"
-    return 1
-  fi
-
-  return 0
-}
-
-# ============================================================================
-# STATUS
-# ============================================================================
-
-status() {
-  extension_status_header
-
-  # Check mise management
-  if command_exists mise; then
-    eval "$(mise activate bash)"
-    if mise ls mytool &>/dev/null; then
-      local version
-      version=$(mise current mytool 2>/dev/null || echo "unknown")
-      print_success "Installed via mise (version: $version)"
-    else
-      print_warning "Not managed by mise"
-    fi
-  fi
-
-  # Show tool version
-  if command_exists mytool; then
-    local tool_version
-    tool_version=$(mytool --version 2>/dev/null | head -1)
-    print_status "Tool version: $tool_version"
-  else
-    print_error "Tool not installed"
-  fi
-}
-
-# ============================================================================
-# REMOVE
-# ============================================================================
-
-remove() {
-  print_status "Removing ${EXT_NAME}..."
-
-  # Remove mise TOML configuration
-  local toml_path="$HOME/.config/mise/conf.d/${EXT_NAME}.toml"
-  if [[ -f "$toml_path" ]]; then
-    rm -f "$toml_path"
-    print_success "Removed mise configuration"
-  fi
-
-  # Uninstall tool via mise
-  if command_exists mise; then
-    eval "$(mise activate bash)"
-    if mise ls mytool &>/dev/null; then
-      mise uninstall mytool
-      print_success "Uninstalled tool via mise"
-    fi
-  fi
-
-  return 0
-}
+# Install tools from mise.toml
+mise install
 ```
 
-#### Step 2: Create TOML Configuration Files
+### Per-Project Tool Versions
 
-**Development configuration** (`myextension.toml`):
-
-```toml
-# myextension.toml - Full development environment
-
-[tools]
-# Define tools to install
-mytool = "latest"
-
-# Additional tools via backends
-"npm:some-npm-tool" = "latest"
-"pipx:some-python-tool" = "latest"
-"cargo:some-rust-tool" = "latest"
-
-[env]
-# Environment variables
-MY_TOOL_ENV = "development"
-_.file = ".env"
-
-[settings]
-experimental = true
-verbose = false
-```
-
-**CI configuration** (`myextension-ci.toml`):
-
-```toml
-# myextension-ci.toml - Minimal CI environment
-
-[tools]
-# Only essential tools for CI
-mytool = "latest"
-
-[env]
-MY_TOOL_ENV = "ci"
-
-[settings]
-experimental = true
-verbose = false
-```
-
-#### Step 3: Register Extension
-
-Add to `/workspace/scripts/extensions.d/active-extensions.conf`:
-
-```
-# Core extensions
-workspace-structure
-mise-config
-ssh-environment
-
-# Add your extension
-myextension
-```
-
-### TOML Configuration Reference
-
-#### Tools Section
-
-Define tools to be managed by mise:
+Create a `mise.toml` file in your project root to specify tool versions:
 
 ```toml
 [tools]
-# Language runtimes
-node = "lts"              # Node.js LTS
-python = "3.13"           # Python 3.13
-rust = "stable"           # Rust stable
-go = "1.24"              # Go 1.24
+node = "20"
+python = "3.11"
+rust = "1.75"
 
-# npm-based tools (requires Node.js)
-"npm:typescript" = "latest"
-"npm:eslint" = "latest"
-"npm:prettier" = "latest"
-
-# pipx-based tools (requires Python)
-"pipx:poetry" = "latest"
-"pipx:black" = "latest"
-"pipx:mypy" = "latest"
-
-# cargo-based tools (requires Rust)
-"cargo:ripgrep" = "latest"
-"cargo:fd-find" = "latest"
-"cargo:exa" = "latest"
-
-# go-based tools (requires Go)
-"go:golang.org/x/tools/gopls@latest" = "latest"
-
-# ubi-based tools (GitHub releases)
-"ubi:derailed/k9s" = "latest"
-
-# Direct mise tools
-terraform = "latest"
-kubectl = "latest"
-helm = "latest"
-```
-
-#### Environment Variables Section
-
-```toml
 [env]
-# Load from .env file (if exists)
-_.file = ".env"
-
-# Custom environment variables
 NODE_ENV = "development"
-PYTHONUNBUFFERED = "1"
-RUST_BACKTRACE = "1"
-GO111MODULE = "on"
-
-# Path modifications
-PATH = ["${HOME}/.local/bin", "${HOME}/go/bin"]
 ```
 
-#### Tasks Section
-
-Define custom tasks/scripts:
-
-```toml
-[tasks.test]
-description = "Run tests"
-run = "npm test"
-
-[tasks.build]
-description = "Build project"
-run = "npm run build"
-
-[tasks.dev]
-description = "Start development server"
-run = "npm run dev"
-```
-
-Run tasks with: `mise run <task>`
-
-#### Settings Section
-
-```toml
-[settings]
-# Enable experimental features
-experimental = true
-
-# Logging verbosity
-verbose = false
-
-# Skip confirmation prompts
-yes = false
-
-# Number of parallel jobs (0 = CPU cores)
-jobs = 4
-
-# Tools to disable
-disable_tools = []
-```
+mise automatically switches to the specified versions when you enter the directory.
 
 ### CI Mode and TOML Selection
 
@@ -565,417 +300,7 @@ export CI_MODE="true"
 ./scripts/vm-setup.sh --app-name test-vm
 ```
 
-**Extension behavior:**
-
-```bash
-# Development: Uses nodejs.toml (full environment)
-extension-manager install nodejs
-
-# CI: Uses nodejs-ci.toml (minimal environment)
-CI_MODE=true extension-manager install nodejs
-```
-
-### mise Command Reference
-
-Common mise commands for managing tools:
-
-```bash
-# List installed tools
-mise ls
-
-# List available versions
-mise ls-remote <tool>
-
-# Install specific version
-mise use <tool>@<version>
-
-# Install all tools from configuration
-mise install
-
-# Update all tools
-mise upgrade
-
-# Show current versions
-mise current <tool>
-
-# Check mise configuration
-mise config
-
-# Diagnose issues
-mise doctor
-
-# Search for tools
-mise search <query>
-
-# Run defined tasks
-mise run <task>
-
-# Activate mise in shell
-eval "$(mise activate bash)"
-```
-
-### mise Environment Variables
-
-Configure mise behavior with environment variables:
-
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `MISE_EXPERIMENTAL` | Enable experimental features | `false` |
-| `MISE_VERBOSE` | Enable verbose output | `false` |
-| `MISE_YES` | Skip confirmation prompts | `false` |
-| `MISE_JOBS` | Parallel installation jobs | CPU cores |
-| `MISE_DATA_DIR` | Data directory | `~/.local/share/mise` |
-| `MISE_CONFIG_DIR` | Config directory | `~/.config/mise` |
-| `MISE_CACHE_DIR` | Cache directory | `~/.cache/mise` |
-
-## Extension Activation Manifest
-
-Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
-
-### Example Manifest
-
-```
-# Core extensions (always first)
-workspace-structure
-mise-config
-nodejs
-ssh-environment
-
-# Language runtimes
-python
-golang
-rust
-
-# Infrastructure tools
-docker
-infra-tools
-
-# Development tools
-nodejs-devtools
-claude-config
-
-# Monitoring
-monitoring
-```
-
-### Manifest Best Practices
-
-1. **Order matters**: List dependencies before dependents
-   - `mise-config` must come before mise-powered extensions
-   - `nodejs` must come before `nodejs-devtools`
-   - `nodejs` must come before `claude-config`
-
-2. **Core first**: Protected extensions are automatically installed first
-   ```
-   # Protected extensions (required, cannot be removed):
-   workspace-structure  # Creates directory structure
-   mise-config         # Enables mise for other extensions
-   ssh-environment     # Essential for CI/CD and remote access
-
-   # Foundational languages (recommended):
-   nodejs              # Required by many tools
-   python              # Required by monitoring tools
-   ```
-
-3. **Group by category**: Organize related extensions together
-   ```
-   # Languages
-   python
-   golang
-   rust
-
-   # Infrastructure
-   docker
-   infra-tools
-   cloud-tools
-   ```
-
-4. **Comment liberally**: Document why extensions are included
-   ```
-   # Required for CI/CD pipelines
-   docker
-   infra-tools
-
-   # Optional: AI development tools
-   # ai-tools
-   ```
-
-## Extension Development Guidelines
-
-### Shared Helper Functions
-
-The `extensions-common.sh` library provides reusable functions to eliminate code duplication across extensions. Always use these helpers instead of reimplementing common patterns.
-
-#### Environment Helpers
-
-```bash
-# Check if running in CI mode
-if is_ci_mode; then
-  print_status "Using minimal CI configuration"
-fi
-
-# Activate mise environment in current shell
-activate_mise_environment
-```
-
-#### Prerequisite Checks
-
-```bash
-# Check if mise is installed (required for mise-powered extensions)
-check_mise_prerequisite || return 1
-
-# Check available disk space (default 600MB, can override)
-check_disk_space 1000  # Require 1GB
-```
-
-#### Status Helpers
-
-```bash
-# Print standard extension header (replaces manual echo statements)
-print_extension_header
-# Outputs:
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Extension: nodejs v3.0.0
-# Description: Node.js LTS via mise
-# Category: language
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-#### Validation Helpers
-
-```bash
-# Validate multiple commands with version checks
-declare -A checks=(
-  [node]="--version"
-  [npm]="-v"
-  [npx]="--version"
-)
-validate_commands checks
-# Outputs success/error for each command with version info
-```
-
-#### mise Helpers
-
-```bash
-# Install mise configuration (handles CI vs dev TOML selection)
-install_mise_config "nodejs" || return 1
-# - Selects nodejs-ci.toml if CI_MODE=true, otherwise nodejs.toml
-# - Copies to ~/.config/mise/conf.d/nodejs.toml
-# - Runs mise install
-
-# Remove mise configuration during uninstall
-remove_mise_config "nodejs"
-# - Removes ~/.config/mise/conf.d/nodejs.toml
-# - Shows reminder about mise prune
-```
-
-#### Git Helpers
-
-```bash
-# Setup git aliases for extension commands
-setup_git_aliases \
-  "py-test:!pytest" \
-  "py-lint:!ruff check" \
-  "py-format:!black ."
-
-# Remove git aliases during uninstall
-cleanup_git_aliases "py-test" "py-lint" "py-format"
-```
-
-#### Cleanup Helpers
-
-```bash
-# Remove extension entries from .bashrc
-cleanup_bashrc "# nodejs - added by extension"
-
-# Standardized confirmation prompt
-if prompt_confirmation "Remove configuration directory?"; then
-  rm -rf "$config_dir"
-fi
-
-# Check and display dependent extensions
-show_dependent_extensions_warning "node" "npm"
-# Outputs:
-# [WARNING] The following active extensions depend on this extension and may stop working:
-#   - nodejs-devtools
-#   - claude-config
-```
-
-#### Extension Initialization
-
-```bash
-# Replace manual common.sh sourcing with single call
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
-
-# Initialize extension (loads all common utilities)
-extension_init
-```
-
-#### Main Execution Wrapper
-
-```bash
-# Replace manual case statement with helper
-extension_main "$@"
-
-# Equivalent to:
-# if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-#   command="${1:-status}"
-#   case "$command" in
-#     prerequisites|install|configure|validate|status|remove)
-#       if "$command"; then exit 0; else exit 1; fi
-#       ;;
-#     *)
-#       echo "Usage: $0 {prerequisites|install|configure|validate|status|remove}"
-#       exit 1
-#       ;;
-#   esac
-# fi
-```
-
-#### Benefits of Using Helper Functions
-
-1. **Consistency**: All extensions behave the same way
-2. **Maintainability**: Bug fixes in one place benefit all extensions
-3. **Readability**: Less boilerplate, clearer intent
-4. **Testing**: Shared functions have centralized tests
-5. **Features**: Get new capabilities automatically (e.g., dependency checking)
-
-#### Example: Minimal Extension Using Helpers
-
-```bash
-#!/bin/bash
-# myextension.extension - My custom extension
-# Extension API v1.0
-
-EXT_NAME="myextension"
-EXT_VERSION="1.0.0"
-EXT_DESCRIPTION="My custom development tool"
-EXT_CATEGORY="utility"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
-extension_init
-
-prerequisites() {
-  print_status "Checking prerequisites for ${EXT_NAME}..."
-  check_mise_prerequisite || return 1
-  check_disk_space 500
-  print_success "All prerequisites met"
-  return 0
-}
-
-install() {
-  print_status "Installing ${EXT_NAME}..."
-  install_mise_config "${EXT_NAME}" || return 1
-  return 0
-}
-
-configure() {
-  print_status "Configuring ${EXT_NAME}..."
-  setup_git_aliases "my-cmd:!mytool command"
-  print_success "Configuration complete"
-  return 0
-}
-
-validate() {
-  print_status "Validating ${EXT_NAME}..."
-  activate_mise_environment
-  declare -A checks=([mytool]="--version")
-  validate_commands checks
-}
-
-status() {
-  print_extension_header
-  if command_exists mytool; then
-    print_success "Installed: $(mytool --version)"
-    return 0
-  else
-    print_warning "Not installed"
-    return 1
-  fi
-}
-
-remove() {
-  print_status "Removing ${EXT_NAME}..."
-  show_dependent_extensions_warning "mytool"
-  remove_mise_config "${EXT_NAME}"
-  cleanup_git_aliases "my-cmd"
-  cleanup_bashrc "# ${EXT_NAME} - added by extension"
-  print_success "Removed successfully"
-  return 0
-}
-
-extension_main "$@"
-```
-
-### File Naming Conventions
-
-| File Type | Pattern | Example |
-|-----------|---------|---------|
-| Extension script | `<name>.extension` | `nodejs.extension` |
-| Development TOML | `<name>.toml` | `nodejs.toml` |
-| CI TOML | `<name>-ci.toml` | `nodejs-ci.toml` |
-| Legacy script | `<nn>-<name>.sh.example` | `20-nodejs.sh.example` |
-
-### Version Numbering
-
-Follow semantic versioning:
-- **Major** (X.0.0): Breaking changes, different tool manager
-  - Example: v2.x → v3.x (NVM → mise for nodejs)
-- **Minor** (x.Y.0): New tools, features, configuration options
-  - Example: v3.0 → v3.1 (added new npm tools)
-- **Patch** (x.y.Z): Bug fixes, documentation updates
-  - Example: v3.1.0 → v3.1.1 (fixed TOML syntax)
-
-### Extension Categories
-
-Use standard categories for consistency:
-
-| Category | Purpose | Examples |
-|----------|---------|----------|
-| `language` | Language runtimes | nodejs, python, rust, golang |
-| `devtools` | Development utilities | nodejs-devtools, monitoring |
-| `infrastructure` | Infrastructure tools | docker, infra-tools, cloud-tools |
-| `ai` | AI coding assistants | claude-config, ai-tools, agent-manager |
-| `core` | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
-| `utility` | General utilities | tmux-workspace, playwright |
-
-### Error Handling
-
-Extensions should handle errors gracefully:
-
-```bash
-# Check prerequisites before proceeding
-prerequisites() {
-  if ! command_exists required_tool; then
-    print_error "required_tool not found"
-    print_status "Install with: apt-get install required_tool"
-    return 1
-  fi
-}
-
-# Validate after installation
-validate() {
-  if ! mytool --version &>/dev/null; then
-    print_error "Tool installation failed"
-    print_status "Check logs at: /var/log/extension-manager.log"
-    return 1
-  fi
-}
-```
-
-### Logging and Output
-
-Use consistent output functions:
-
-```bash
-print_status "Starting installation..."    # Informational
-print_debug "Debug info"                   # Verbose mode only
-print_success "Installation complete"      # Success
-print_warning "Low disk space detected"    # Warning
-print_error "Installation failed"          # Error
-```
+---
 
 ## Troubleshooting
 
@@ -1093,82 +418,986 @@ mise ls
 3. **Project documentation**: `/workspace/docs/`
 4. **Logs**: `/var/log/extension-manager.log`
 
-## Migration from Traditional to mise
+---
 
-### Upgrade Path
+## Extension API Specification
 
-Extensions can be migrated from traditional tool managers to mise:
+### API v1.0 Functions
 
-1. **Install mise-config**: `extension-manager install mise-config`
-2. **Uninstall traditional extension**: `extension-manager uninstall <name>`
-3. **Install mise-powered version**: `extension-manager install <name>`
-4. **Validate migration**: `extension-manager validate <name>`
+All extensions must implement these six standard functions:
 
-### Coexistence Period
+| Function | Purpose | Required |
+|----------|---------|----------|
+| `prerequisites()` | Check system requirements before installation | Yes |
+| `install()` | Install packages and tools | Yes |
+| `configure()` | Post-install configuration and setup | Yes |
+| `validate()` | Run smoke tests to verify installation | Yes |
+| `status()` | Check installation state and display metadata | Yes |
+| `remove()` | Uninstall and cleanup | Yes |
 
-Traditional and mise extensions can coexist:
+### API v2.0 Additions
+
+API v2.0 adds standardized upgrade support:
+
+| Function | Purpose | Required |
+|----------|---------|----------|
+| `upgrade()` | Upgrade installed tools and packages | Yes (v2.0) |
+
+### Required Metadata Fields
+
+#### API v1.0 Metadata
 
 ```bash
-# Example: Ruby still uses rbenv, Node.js uses mise
-workspace-structure
-mise-config
-nodejs        # v3.x (mise-powered)
-ruby          # v1.x (rbenv-based)
-python        # v2.x (mise-powered)
+EXT_NAME="myextension"
+EXT_VERSION="1.0.0"
+EXT_DESCRIPTION="My tool via mise"
+EXT_CATEGORY="language"
 ```
 
-### Breaking Changes
+#### API v2.0 Metadata
 
-When upgrading to mise-powered versions:
-
-| Extension | Traditional | mise-Powered | Breaking Change |
-|-----------|-------------|--------------|-----------------|
-| nodejs | v2.x (NVM) | v3.x (mise) | NVM commands no longer available |
-| python | v1.x (apt) | v2.x (mise) | System Python not used |
-| rust | v1.x (rustup) | v2.x (mise) | rustup not installed |
-| golang | v1.x (manual) | v2.x (mise) | Manual installation replaced |
-
-## Performance Optimization
-
-### mise Installation Performance
-
-mise is optimized for speed:
-
-- **Parallel downloads**: Install multiple tools concurrently
-- **Binary caching**: Reuse downloaded binaries
-- **Incremental updates**: Only update changed tools
-
-### CI Mode Optimizations
-
-Use CI TOML files for faster CI builds:
-
-```toml
-# nodejs-ci.toml - Minimal for testing
-[tools]
-node = "lts"  # Only Node.js, no extra tools
+```bash
+EXT_NAME="myextension"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="My tool via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"          # New in v2.0
+EXT_UPGRADE_STRATEGY="automatic"   # New in v2.0
 ```
 
-vs.
+### Installation Methods (API v2.0)
+
+Valid values for `EXT_INSTALL_METHOD`:
+
+- `mise` - Tools managed by mise (Node.js, Python, Rust, Go, etc.)
+- `apt` - APT package manager (Docker, PHP, .NET, monitoring tools)
+- `binary` - Direct binary downloads (GitHub releases, CDN, etc.)
+- `git` - Git clone + manual build (rbenv, Ollama, etc.)
+- `native` - Pre-installed in Docker image (GitHub CLI, system tools)
+- `mixed` - Multiple methods (Docker: APT + binaries)
+- `manual` - Custom installation requiring manual intervention
+
+### Upgrade Strategies (API v2.0)
+
+Valid values for `EXT_UPGRADE_STRATEGY`:
+
+- `automatic` - Upgrade to latest automatically without confirmation
+- `manual` - Require explicit user confirmation before upgrading
+- `pinned` - Never upgrade (version locked for compatibility)
+- `security-only` - Only apply security patches, skip feature updates
+
+### Return Codes
+
+- `0` - Success
+- `1` - Failure/Error
+- `2` - Manual action required (API v2.0 upgrade only)
+
+### Extension Categories
+
+Use standard categories for consistency:
+
+| Category | Purpose | Examples |
+|----------|---------|----------|
+| `language` | Language runtimes | nodejs, python, rust, golang |
+| `devtools` | Development utilities | nodejs-devtools, monitoring |
+| `infrastructure` | Infrastructure tools | docker, infra-tools, cloud-tools |
+| `ai` | AI coding assistants | claude-config, ai-tools, agent-manager |
+| `core` | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
+| `utility` | General utilities | tmux-workspace, playwright |
+
+---
+
+## Creating Extensions
+
+### File Naming Conventions
+
+| File Type | Pattern | Example |
+|-----------|---------|---------|
+| Extension script | `<name>.extension` | `nodejs.extension` |
+| Development TOML | `<name>.toml` | `nodejs.toml` |
+| CI TOML | `<name>-ci.toml` | `nodejs-ci.toml` |
+
+### Extension Template (API v2.0)
+
+```bash
+#!/bin/bash
+# myextension.extension - My custom extension
+# Extension API v2.0
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="myextension"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="My tool via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Require mise
+  check_mise_prerequisite || return 1
+  check_disk_space 500
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing ${EXT_NAME}..."
+
+  # Install mise configuration (handles CI vs dev TOML selection)
+  install_mise_config "${EXT_NAME}" || return 1
+
+  print_success "Installation complete"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring ${EXT_NAME}..."
+
+  # Setup git aliases if needed
+  setup_git_aliases "my-cmd:!mytool command"
+
+  print_success "Configuration complete"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating ${EXT_NAME}..."
+
+  activate_mise_environment
+
+  # Validate commands with version checks
+  declare -A checks=([mytool]="--version")
+  validate_commands checks
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  if command_exists mytool; then
+    print_success "Installed: $(mytool --version)"
+    return 0
+  else
+    print_warning "Not installed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_status "Removing ${EXT_NAME}..."
+
+  show_dependent_extensions_warning "mytool"
+  remove_mise_config "${EXT_NAME}"
+  cleanup_git_aliases "my-cmd"
+  cleanup_bashrc "# ${EXT_NAME} - added by extension"
+
+  print_success "Removed successfully"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  if ! command_exists mise; then
+    print_error "mise not installed"
+    return 1
+  fi
+
+  activate_mise_environment
+
+  # Show current version
+  print_status "Current version:"
+  mise current mytool 2>/dev/null || true
+  echo ""
+
+  # Upgrade via mise
+  if upgrade_mise_tools "${EXT_NAME}"; then
+    print_success "Tools upgraded successfully"
+
+    echo ""
+    print_status "Updated version:"
+    mise current mytool
+
+    return 0
+  else
+    print_error "Upgrade failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+extension_main "$@"
+```
+
+### Available Helper Functions
+
+All helper functions are in `extensions-common.sh`:
+
+#### Environment Helpers
+
+```bash
+is_ci_mode                      # Check if running in CI mode
+activate_mise_environment       # Activate mise in current shell
+```
+
+#### Prerequisite Checks
+
+```bash
+check_mise_prerequisite         # Verify mise is installed
+check_disk_space 1000          # Check available disk space (MB)
+```
+
+#### Status Helpers
+
+```bash
+print_extension_header         # Print standard extension header
+validate_commands checks       # Validate multiple commands with version checks
+```
+
+#### mise Helpers
+
+```bash
+install_mise_config "nodejs"   # Install mise configuration (handles CI vs dev TOML)
+remove_mise_config "nodejs"    # Remove mise configuration
+upgrade_mise_tools "nodejs"    # Upgrade all mise-managed tools
+```
+
+#### Git Helpers
+
+```bash
+setup_git_aliases "alias:!command" ...     # Setup git aliases
+cleanup_git_aliases "alias1" "alias2" ...  # Remove git aliases
+```
+
+#### Cleanup Helpers
+
+```bash
+cleanup_bashrc "pattern"                   # Remove entries from .bashrc
+prompt_confirmation "question"             # Show confirmation prompt
+show_dependent_extensions_warning "cmd"    # Check dependent extensions
+```
+
+#### Upgrade Helpers (API v2.0)
+
+```bash
+supports_upgrade                           # Check if upgrade() exists
+is_dry_run                                 # Check if DRY_RUN=true
+dry_run_prefix                             # Get "[DRY-RUN] " prefix
+upgrade_apt_packages "pkg1" "pkg2" ...     # Upgrade APT packages
+upgrade_github_binary "repo" "bin" "path"  # Upgrade GitHub release binary
+upgrade_git_repo "/path" "rebuild-cmd"     # Pull and rebuild git repo
+check_native_update "tool" "--version"     # Check native tool version
+version_gt "v2.0.0" "v1.9.0"              # Compare versions
+```
+
+#### Extension Initialization
+
+```bash
+extension_init                 # Initialize extension (loads all utilities)
+extension_main "$@"           # Main execution wrapper
+```
+
+### TOML Configuration Files
+
+#### Development Configuration
+
+**File**: `myextension.toml`
 
 ```toml
-# nodejs.toml - Full development
+# myextension.toml - Full development environment
+
 [tools]
-node = "lts"
+# Define tools to install
+mytool = "latest"
+
+# Additional tools via backends
+"npm:some-npm-tool" = "latest"
+"pipx:some-python-tool" = "latest"
+"cargo:some-rust-tool" = "latest"
+
+[env]
+# Environment variables
+MY_TOOL_ENV = "development"
+_.file = ".env"
+
+[settings]
+experimental = true
+verbose = false
+```
+
+#### CI Configuration
+
+**File**: `myextension-ci.toml`
+
+```toml
+# myextension-ci.toml - Minimal CI environment
+
+[tools]
+# Only essential tools for CI
+mytool = "latest"
+
+[env]
+MY_TOOL_ENV = "ci"
+
+[settings]
+experimental = true
+verbose = false
+```
+
+### Error Handling
+
+Extensions should handle errors gracefully:
+
+```bash
+# Check prerequisites before proceeding
+prerequisites() {
+  if ! command_exists required_tool; then
+    print_error "required_tool not found"
+    print_status "Install with: apt-get install required_tool"
+    return 1
+  fi
+}
+
+# Validate after installation
+validate() {
+  if ! mytool --version &>/dev/null; then
+    print_error "Tool installation failed"
+    print_status "Check logs at: /var/log/extension-manager.log"
+    return 1
+  fi
+}
+```
+
+### Logging and Output
+
+Use consistent output functions:
+
+```bash
+print_status "Starting installation..."    # Informational
+print_debug "Debug info"                   # Verbose mode only
+print_success "Installation complete"      # Success
+print_warning "Low disk space detected"    # Warning
+print_error "Installation failed"          # Error
+```
+
+---
+
+## Upgrading Extensions to API v2.0
+
+### Why Upgrade?
+
+Extension API v2.0 adds standardized upgrade support:
+
+- Consistent upgrade experience across all extensions
+- Automated upgrade via `extension-manager upgrade-all`
+- Dry-run capability for testing
+- Upgrade history tracking
+- Rollback support
+
+### Migration Checklist
+
+#### Step 1: Add Metadata Fields
+
+Add `EXT_INSTALL_METHOD` and `EXT_UPGRADE_STRATEGY` after `EXT_CATEGORY`:
+
+```bash
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"          # Choose: mise, apt, binary, git, native, mixed, manual
+EXT_UPGRADE_STRATEGY="automatic"   # Choose: automatic, manual, pinned, security-only
+```
+
+#### Step 2: Implement upgrade() Function
+
+Add `upgrade()` function after `remove()`:
+
+```bash
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Use appropriate helper based on installation method
+    case "${EXT_INSTALL_METHOD}" in
+        mise)
+            upgrade_mise_tools "${EXT_NAME}"
+            ;;
+        apt)
+            upgrade_apt_packages "package1" "package2"
+            ;;
+        binary)
+            upgrade_github_binary "repo/name" "binary" "/path"
+            ;;
+        git)
+            upgrade_git_repo "/path/to/repo" "rebuild-cmd"
+            ;;
+        native)
+            check_native_update "tool-name" "--version"
+            return $?
+            ;;
+        mixed)
+            # Custom logic combining multiple methods
+            ;;
+    esac
+}
+```
+
+#### Step 3: Bump Version
+
+Update to major version 2.0.0:
+
+```bash
+EXT_VERSION="2.0.0"  # Major bump for API v2.0
+```
+
+#### Step 4: Test
+
+```bash
+# Install extension
+extension-manager install myextension
+
+# Test dry-run upgrade
+extension-manager upgrade myextension --dry-run
+
+# Test actual upgrade
+extension-manager upgrade myextension
+
+# Validate
+extension-manager validate myextension
+```
+
+### Upgrade Patterns by Installation Method
+
+#### Pattern 1: mise-Managed Tools
+
+```bash
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    if ! command_exists mise; then
+        print_error "mise not installed"
+        return 1
+    fi
+
+    activate_mise_environment
+
+    # Show current version
+    print_status "Current version:"
+    mise current nodejs 2>/dev/null || true
+    echo ""
+
+    # Upgrade via mise
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Tools upgraded successfully"
+
+        echo ""
+        print_status "Updated version:"
+        mise current nodejs
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+```
+
+#### Pattern 2: APT Packages
+
+```bash
+EXT_INSTALL_METHOD="apt"
+EXT_UPGRADE_STRATEGY="automatic"
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # List packages to upgrade
+    local packages=(
+        "docker-ce"
+        "docker-ce-cli"
+        "containerd.io"
+    )
+
+    if upgrade_apt_packages "${packages[@]}"; then
+        print_success "Packages upgraded successfully"
+        return 0
+    else
+        print_error "APT upgrade failed"
+        return 1
+    fi
+}
+```
+
+#### Pattern 3: GitHub Binary Releases
+
+```bash
+EXT_INSTALL_METHOD="binary"
+EXT_UPGRADE_STRATEGY="automatic"
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Upgrade mise binary
+    if upgrade_github_binary \
+        "jdx/mise" \
+        "mise" \
+        "/usr/local/bin/mise" \
+        "--version"; then
+        print_success "Binary upgraded successfully"
+        return 0
+    else
+        print_error "Binary upgrade failed"
+        return 1
+    fi
+}
+```
+
+#### Pattern 4: Git Repositories
+
+```bash
+EXT_INSTALL_METHOD="git"
+EXT_UPGRADE_STRATEGY="automatic"
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    local repo_path="$HOME/.rbenv"
+    local rebuild_cmd="cd $repo_path && src/configure && make -C src"
+
+    if upgrade_git_repo "$repo_path" "$rebuild_cmd"; then
+        print_success "Repository upgraded and rebuilt"
+        return 0
+    else
+        print_error "Git upgrade failed"
+        return 1
+    fi
+}
+```
+
+#### Pattern 5: Native Tools (Pre-installed)
+
+```bash
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
+
+upgrade() {
+    print_status "Checking ${EXT_NAME}..."
+
+    # Check version but can't upgrade (requires Docker rebuild)
+    check_native_update "gh" "version"
+    return $?  # Returns 2 (manual action required)
+}
+```
+
+#### Pattern 6: Mixed Installation
+
+```bash
+EXT_INSTALL_METHOD="mixed"
+EXT_UPGRADE_STRATEGY="automatic"
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    local upgrade_failed=0
+
+    # Upgrade APT packages
+    print_status "Upgrading APT packages..."
+    if ! upgrade_apt_packages "docker-ce" "docker-ce-cli" "containerd.io"; then
+        print_error "APT upgrade failed"
+        upgrade_failed=1
+    fi
+
+    # Upgrade binaries
+    print_status "Upgrading binaries..."
+    if ! upgrade_github_binary "docker/compose" "docker-compose" "/usr/local/bin/docker-compose"; then
+        print_error "Binary upgrade failed"
+        upgrade_failed=1
+    fi
+
+    if [[ $upgrade_failed -eq 0 ]]; then
+        print_success "${EXT_NAME} upgraded successfully"
+        return 0
+    else
+        print_error "${EXT_NAME} upgrade partially failed"
+        return 1
+    fi
+}
+```
+
+### Dry-Run Support
+
+All upgrades must respect dry-run mode:
+
+```bash
+upgrade() {
+    if is_dry_run; then
+        print_status "Would upgrade: package-name"
+        return 0
+    fi
+
+    # Actual upgrade logic
+}
+```
+
+### Testing Requirements
+
+#### Unit Testing
+
+```bash
+# Test upgrade() function directly
+./extension-name.extension upgrade
+
+# Test with dry-run
+DRY_RUN=true ./extension-name.extension upgrade
+```
+
+#### Integration Testing
+
+```bash
+# Via extension-manager
+extension-manager upgrade extension-name
+
+# Validate after upgrade
+extension-manager validate extension-name
+```
+
+### Expected Behavior
+
+1. **Prerequisites check**: Verify dependencies before upgrading
+2. **Version display**: Show current version before upgrade
+3. **Progress feedback**: Provide status updates during upgrade
+4. **Error handling**: Return appropriate exit codes
+5. **Version verification**: Show new version after upgrade
+6. **Idempotent**: Running multiple times should be safe
+
+### Backward Compatibility
+
+Extensions without `upgrade()` function:
+- Will not break existing functionality
+- Cannot be upgraded via `extension-manager upgrade`
+- Will be skipped by `extension-manager upgrade-all`
+- Should be migrated to v2.0 when possible
+
+---
+
+## TOML Configuration Reference
+
+### Tools Section
+
+Define tools to be managed by mise:
+
+```toml
+[tools]
+# Language runtimes
+node = "lts"              # Node.js LTS
+python = "3.13"           # Python 3.13
+rust = "stable"           # Rust stable
+go = "1.24"              # Go 1.24
+
+# npm-based tools (requires Node.js)
 "npm:typescript" = "latest"
 "npm:eslint" = "latest"
 "npm:prettier" = "latest"
-"npm:nodemon" = "latest"
+
+# pipx-based tools (requires Python)
+"pipx:poetry" = "latest"
+"pipx:black" = "latest"
+"pipx:mypy" = "latest"
+
+# cargo-based tools (requires Rust)
+"cargo:ripgrep" = "latest"
+"cargo:fd-find" = "latest"
+"cargo:exa" = "latest"
+
+# go-based tools (requires Go)
+"go:golang.org/x/tools/gopls@latest" = "latest"
+
+# ubi-based tools (GitHub releases)
+"ubi:derailed/k9s" = "latest"
+
+# Direct mise tools
+terraform = "latest"
+kubectl = "latest"
+helm = "latest"
 ```
 
-**Result**: 60-70% faster installation in CI
+### Environment Variables Section
 
-### Extension Installation Order
+```toml
+[env]
+# Load from .env file (if exists)
+_.file = ".env"
 
-Order extensions by installation time:
+# Custom environment variables
+NODE_ENV = "development"
+PYTHONUNBUFFERED = "1"
+RUST_BACKTRACE = "1"
+GO111MODULE = "on"
 
-1. **Fast** (< 1 min): workspace-structure, ssh-environment, mise-config
-2. **Medium** (1-3 min): nodejs, python, golang
-3. **Slow** (> 3 min): rust, docker, jvm
+# Path modifications
+PATH = ["${HOME}/.local/bin", "${HOME}/go/bin"]
+```
+
+### Tasks Section
+
+Define custom tasks/scripts:
+
+```toml
+[tasks.test]
+description = "Run tests"
+run = "npm test"
+
+[tasks.build]
+description = "Build project"
+run = "npm run build"
+
+[tasks.dev]
+description = "Start development server"
+run = "npm run dev"
+```
+
+Run tasks with: `mise run <task>`
+
+### Settings Section
+
+```toml
+[settings]
+# Enable experimental features
+experimental = true
+
+# Logging verbosity
+verbose = false
+
+# Skip confirmation prompts
+yes = false
+
+# Number of parallel jobs (0 = CPU cores)
+jobs = 4
+
+# Tools to disable
+disable_tools = []
+```
+
+---
+
+## Extension Manifest
+
+Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
+
+### Example Manifest
+
+```
+# Core extensions (always first)
+workspace-structure
+mise-config
+nodejs
+ssh-environment
+
+# Language runtimes
+python
+golang
+rust
+
+# Infrastructure tools
+docker
+infra-tools
+
+# Development tools
+nodejs-devtools
+claude-config
+
+# Monitoring
+monitoring
+```
+
+### Manifest Best Practices
+
+1. **Order matters**: List dependencies before dependents
+   - `mise-config` must come before mise-powered extensions
+   - `nodejs` must come before `nodejs-devtools`
+   - `nodejs` must come before `claude-config`
+
+2. **Core first**: Protected extensions are automatically installed first
+   ```
+   # Protected extensions (required, cannot be removed):
+   workspace-structure  # Creates directory structure
+   mise-config         # Enables mise for other extensions
+   ssh-environment     # Essential for CI/CD and remote access
+
+   # Foundational languages (recommended):
+   nodejs              # Required by many tools
+   python              # Required by monitoring tools
+   ```
+
+3. **Group by category**: Organize related extensions together
+   ```
+   # Languages
+   python
+   golang
+   rust
+
+   # Infrastructure
+   docker
+   infra-tools
+   cloud-tools
+   ```
+
+4. **Comment liberally**: Document why extensions are included
+   ```
+   # Required for CI/CD pipelines
+   docker
+   infra-tools
+
+   # Optional: AI development tools
+   # ai-tools
+   ```
+
+---
+
+## Protected Extensions
+
+### What Are Protected Extensions?
+
+Protected extensions are **core system components** that cannot be removed. They are automatically installed on first container startup.
+
+**Protected extensions:**
+- `workspace-structure` - Base directory structure
+- `mise-config` - Unified tool version manager
+- `ssh-environment` - SSH configuration for non-interactive sessions
+
+### Auto-Installation Architecture
+
+#### How it Works
+
+1. **Container Starts** (`entrypoint.sh`)
+   - Detects if this is the first boot by checking `/workspace/scripts/lib`
+   - Copies extension library from Docker image to persistent volume
+
+2. **Manifest Setup**
+   - In **CI mode** (`CI_MODE=true`): Uses `active-extensions.ci.conf` template
+   - In **production mode**: Uses same template or existing manifest
+   - Template pre-includes: `workspace-structure`, `mise-config`, `ssh-environment`
+
+3. **Auto-Installation Triggered**
+   - Checks if `mise` command is available (indicator of installation status)
+   - If not found: Runs `extension-manager install-all` as developer user
+   - Installs all protected extensions listed in manifest
+   - Output visible in container startup logs
+
+4. **Idempotency**
+   - On subsequent restarts: Skips installation (mise already exists)
+   - Volume persistence means protected extensions install only once
+   - Manual reinstall available: `extension-manager uninstall <name>` then restart
+
+### Why This Approach?
+
+- ✅ Guarantees foundational tools (mise, workspace dirs, SSH config) are always available
+- ✅ Works in both CI/CD and production environments
+- ✅ Respects persistent volumes (doesn't reinstall unnecessarily)
+- ✅ Provides clear feedback in logs for debugging
+
+### Verification
+
+```bash
+# Check if protected extensions are installed
+extension-manager list
+
+# Should show:
+#   1. ✓ workspace-structure [PROTECTED]
+#   2. ✓ mise-config [PROTECTED]
+#   3. ✓ ssh-environment [PROTECTED]
+
+# Verify mise is available (from mise-config extension)
+mise --version
+```
+
+### Protection Enforcement
+
+- **Cannot be deactivated**: Attempting to deactivate shows error
+- **Cannot be uninstalled**: Attempting to uninstall shows error
+- **Auto-repair**: Missing protected extensions are auto-added to manifest
+- **Visual markers**: Show `[PROTECTED]` in list output
+
+---
+
+## Development Guidelines
+
+### Version Numbering
+
+Follow semantic versioning:
+- **Major** (X.0.0): Breaking changes, different tool manager, API version change
+  - Example: v2.x → v3.x (NVM → mise for nodejs)
+  - Example: v1.x → v2.x (API v1.0 → API v2.0)
+- **Minor** (x.Y.0): New tools, features, configuration options
+  - Example: v3.0 → v3.1 (added new npm tools)
+- **Patch** (x.y.Z): Bug fixes, documentation updates
+  - Example: v3.1.0 → v3.1.1 (fixed TOML syntax)
+
+### Best Practices
+
+1. **Always Check Existence**: Use `command_exists` before installing
+2. **Handle Errors Gracefully**: Don't exit on minor failures
+3. **Use Print Functions**: `print_status`, `print_success`, `print_error`
+4. **Test Idempotency**: Extension should be safe to run multiple times
+5. **Document Dependencies**: Note any required extensions
+6. **Set Reasonable Timeouts**: Consider installation time
+7. **Use Helper Functions**: Leverage `extensions-common.sh` for consistency
+8. **Support Dry-Run**: Always check `is_dry_run` in upgrade()
+
+### Helper Function Benefits
+
+1. **Consistency**: All extensions behave the same way
+2. **Maintainability**: Bug fixes in one place benefit all extensions
+3. **Readability**: Less boilerplate, clearer intent
+4. **Testing**: Shared functions have centralized tests
+5. **Features**: Get new capabilities automatically (e.g., dependency checking)
+
+---
 
 ## Advanced Topics
 
@@ -1239,55 +1468,89 @@ run = "npm run deploy"
 
 Run with: `mise run setup`
 
-## Extension API v2.0 - Upgrade Support
+### Performance Optimization
 
-All extensions now support the `upgrade()` function, enabling seamless upgrades across all installation methods.
+#### mise Installation Performance
 
-### Upgrading Extensions
+mise is optimized for speed:
 
-```bash
-# Upgrade single extension
-extension-manager upgrade nodejs
+- **Parallel downloads**: Install multiple tools concurrently
+- **Binary caching**: Reuse downloaded binaries
+- **Incremental updates**: Only update changed tools
 
-# Preview upgrades (dry-run)
-extension-manager upgrade-all --dry-run
+#### CI Mode Optimizations
 
-# Upgrade all extensions
-extension-manager upgrade-all
+Use CI TOML files for faster CI builds:
 
-# Check for available updates
-extension-manager check-updates
-
-# View upgrade history
-extension-manager upgrade-history
-
-# Rollback extension
-extension-manager rollback nodejs
+```toml
+# nodejs-ci.toml - Minimal for testing
+[tools]
+node = "lts"  # Only Node.js, no extra tools
 ```
 
-### Installation Methods
+vs.
 
-Extensions declare their installation method:
+```toml
+# nodejs.toml - Full development
+[tools]
+node = "lts"
+"npm:typescript" = "latest"
+"npm:eslint" = "latest"
+"npm:prettier" = "latest"
+"npm:nodemon" = "latest"
+```
 
-- **mise**: Tools managed by mise (Node.js, Python, Rust, Go, etc.)
-- **apt**: APT package manager (Docker, monitoring, PHP, .NET, etc.)
-- **binary**: Direct binary downloads (GitHub releases)
-- **git**: Git clone + manual build (rbenv, etc.)
-- **native**: Pre-installed in Docker image (GitHub CLI, etc.)
-- **mixed**: Multiple methods (Docker uses APT + binary)
+**Result**: 60-70% faster installation in CI
 
-### Upgrade Strategies
+#### Extension Installation Order
 
-- **automatic**: Upgrade to latest automatically
-- **manual**: Require explicit confirmation
-- **pinned**: Never upgrade (version locked)
-- **security-only**: Only security updates
+Order extensions by installation time:
 
-For developers creating extensions, see [Extension API v2.0 Specification](EXTENSION_API_V2.md).
+1. **Fast** (< 1 min): workspace-structure, ssh-environment, mise-config
+2. **Medium** (1-3 min): nodejs, python, golang
+3. **Slow** (> 3 min): rust, docker, jvm
+
+### Migration from Traditional to mise
+
+#### Upgrade Path
+
+Extensions can be migrated from traditional tool managers to mise:
+
+1. **Install mise-config**: `extension-manager install mise-config`
+2. **Uninstall traditional extension**: `extension-manager uninstall <name>`
+3. **Install mise-powered version**: `extension-manager install <name>`
+4. **Validate migration**: `extension-manager validate <name>`
+
+#### Coexistence Period
+
+Traditional and mise extensions can coexist:
+
+```bash
+# Example: Ruby still uses rbenv, Node.js uses mise
+workspace-structure
+mise-config
+nodejs        # v3.x (mise-powered)
+ruby          # v2.x (rbenv-based)
+python        # v2.x (mise-powered)
+```
+
+#### Breaking Changes
+
+When upgrading to mise-powered versions:
+
+| Extension | Traditional | mise-Powered | Breaking Change |
+|-----------|-------------|--------------|-----------------|
+| nodejs | v2.x (NVM) | v3.x (mise) | NVM commands no longer available |
+| python | v1.x (apt) | v2.x (mise) | System Python not used |
+| rust | v1.x (rustup) | v2.x (mise) | rustup not installed |
+| golang | v1.x (manual) | v2.x (mise) | Manual installation replaced |
+
+---
 
 ## References
 
-- **Extension API**: Extension API v1.0 specification
+- **Extension API**: Extension API v1.0 and v2.0 specifications (this document)
+- **Extension Testing**: [EXTENSION_TESTING.md](EXTENSION_TESTING.md)
 - **mise documentation**: https://mise.jdx.dev
 - **Tool backends**: https://mise.jdx.dev/dev-tools/backends.html
 - **TOML configuration**: https://mise.jdx.dev/configuration.html
