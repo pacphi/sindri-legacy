@@ -4,26 +4,26 @@ on:
   workflow_call:
     inputs:
       test_app_prefix:
-        description: 'Test app prefix'
+        description: "Test app prefix"
         required: false
-        default: 'ext-test'
+        default: "ext-test"
         type: string
       region:
-        description: 'Fly.io region'
+        description: "Fly.io region"
         required: false
-        default: 'sjc'
+        default: "sjc"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup for debugging'
+        description: "Skip cleanup for debugging"
         required: false
         default: false
         type: boolean
       manager_validation_result:
-        description: 'Result of extension-manager-validation job'
+        description: "Result of extension-manager-validation job"
         required: true
         type: string
       syntax_validation_result:
-        description: 'Result of extension-syntax-validation job'
+        description: "Result of extension-syntax-validation job"
         required: true
         type: string
     secrets:

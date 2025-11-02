@@ -1,33 +1,33 @@
-name: 'Test Volume Persistence'
-description: 'Tests volume persistence across machine restarts'
+name: "Test Volume Persistence"
+description: "Tests volume persistence across machine restarts"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   test-path:
-    description: 'Path for test file on volume'
+    description: "Path for test file on volume"
     required: false
-    default: '/workspace'
+    default: "/workspace"
   max-verification-attempts:
-    description: 'Maximum attempts to verify file after restart'
+    description: "Maximum attempts to verify file after restart"
     required: false
-    default: '3'
+    default: "3"
   max-ready-attempts:
-    description: 'Maximum attempts to wait for machine ready'
+    description: "Maximum attempts to wait for machine ready"
     required: false
-    default: '5'
+    default: "5"
 
 outputs:
   status:
-    description: 'Test status (success or failure)'
+    description: "Test status (success or failure)"
     value: ${{ steps.test.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Test volume persistence across restart
       id: test

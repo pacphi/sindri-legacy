@@ -4,29 +4,29 @@ on:
   workflow_call:
     inputs:
       extension_name:
-        description: 'Test specific extension (optional)'
+        description: "Test specific extension (optional)"
         required: false
-        default: ''
+        default: ""
         type: string
       skip_cleanup:
-        description: 'Skip cleanup for debugging'
+        description: "Skip cleanup for debugging"
         required: false
         default: false
         type: boolean
       skip_idempotency:
-        description: 'Skip idempotency tests'
+        description: "Skip idempotency tests"
         required: false
         default: false
         type: boolean
       test_app_prefix:
-        description: 'Test app prefix'
+        description: "Test app prefix"
         required: false
-        default: 'ext-test'
+        default: "ext-test"
         type: string
       region:
-        description: 'Fly.io region'
+        description: "Fly.io region"
         required: false
-        default: 'sjc'
+        default: "sjc"
         type: string
     secrets:
       FLYIO_AUTH_TOKEN:
@@ -46,35 +46,89 @@ jobs:
       matrix:
         extension:
           # Core extensions (always needed)
-          - { name: 'workspace-structure', commands: 'mkdir,ls', key_tool: 'mkdir', timeout: '10m' }
-          - { name: 'ssh-environment', commands: 'ssh,sshd', key_tool: 'ssh', timeout: '15m' }
-          - { name: 'mise-config', commands: 'mise', key_tool: 'mise', timeout: '10m', uses_mise: 'true' }
+          - { name: "workspace-structure", commands: "mkdir,ls", key_tool: "mkdir", timeout: "10m" }
+          - { name: "ssh-environment", commands: "ssh,sshd", key_tool: "ssh", timeout: "15m" }
+          - { name: "mise-config", commands: "mise", key_tool: "mise", timeout: "10m", uses_mise: "true" }
           # mise-powered language extensions (faster with mise)
-          - { name: 'nodejs', commands: 'node,npm', key_tool: 'node', timeout: '15m', depends_on: 'mise-config', uses_mise: 'true' }
-          - { name: 'python', commands: 'python3,pip3', key_tool: 'python3', timeout: '15m', depends_on: 'mise-config', uses_mise: 'true' }
-          - { name: 'rust', commands: 'rustc,cargo', key_tool: 'rustc', timeout: '20m', depends_on: 'mise-config', uses_mise: 'true' }
-          - { name: 'golang', commands: 'go', key_tool: 'go', timeout: '20m', depends_on: 'mise-config', uses_mise: 'true' }
-          - { name: 'nodejs-devtools', commands: 'tsc,eslint,prettier', key_tool: 'tsc', timeout: '15m', depends_on: 'mise-config,nodejs', uses_mise: 'true' }
+          - {
+              name: "nodejs",
+              commands: "node,npm",
+              key_tool: "node",
+              timeout: "15m",
+              depends_on: "mise-config",
+              uses_mise: "true",
+            }
+          - {
+              name: "python",
+              commands: "python3,pip3",
+              key_tool: "python3",
+              timeout: "15m",
+              depends_on: "mise-config",
+              uses_mise: "true",
+            }
+          - {
+              name: "rust",
+              commands: "rustc,cargo",
+              key_tool: "rustc",
+              timeout: "20m",
+              depends_on: "mise-config",
+              uses_mise: "true",
+            }
+          - {
+              name: "golang",
+              commands: "go",
+              key_tool: "go",
+              timeout: "20m",
+              depends_on: "mise-config",
+              uses_mise: "true",
+            }
+          - {
+              name: "nodejs-devtools",
+              commands: "tsc,eslint,prettier",
+              key_tool: "tsc",
+              timeout: "15m",
+              depends_on: "mise-config,nodejs",
+              uses_mise: "true",
+            }
           # Claude AI extensions
-          - { name: 'claude-config', commands: 'claude', key_tool: 'claude', timeout: '15m', depends_on: 'nodejs' }
+          - { name: "claude-config", commands: "claude", key_tool: "claude", timeout: "15m", depends_on: "nodejs" }
           # Traditional extensions (unchanged)
-          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m', status_timeout: 5 }
-          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m' }
-          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m' }
-          - { name: 'dotnet', commands: 'dotnet', key_tool: 'dotnet', timeout: '30m' }
+          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 5 }
+          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }
+          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m" }
+          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m" }
           # Infrastructure
-          - { name: 'docker', commands: 'docker', key_tool: 'docker', timeout: '30m' }
-          - { name: 'infra-tools', commands: 'terraform,ansible', key_tool: 'terraform', timeout: '30m', status_timeout: 5 }
-          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m', status_timeout: 5 }
-          - { name: 'ai-tools', commands: 'codex,gemini', key_tool: 'codex', timeout: '30m', depends_on: 'nodejs' }
+          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
+          - {
+              name: "infra-tools",
+              commands: "terraform,ansible",
+              key_tool: "terraform",
+              timeout: "30m",
+              status_timeout: 5,
+            }
+          - { name: "cloud-tools", commands: "aws", key_tool: "aws", timeout: "30m", status_timeout: 5 }
+          - { name: "ai-tools", commands: "codex,gemini", key_tool: "codex", timeout: "30m", depends_on: "nodejs" }
           # Utilities
-          - { name: 'playwright', commands: 'playwright', key_tool: 'playwright', timeout: '25m', depends_on: 'nodejs', key_test_timeout: 5 }
-          - { name: 'monitoring', commands: 'claude-monitor,uv', key_tool: 'claude-monitor', timeout: '20m', depends_on: 'python,nodejs' }
-          - { name: 'tmux-workspace', commands: 'tmux', key_tool: 'tmux', timeout: '15m', key_test_timeout: 5 }
-          - { name: 'agent-manager', commands: 'agent-manager', key_tool: 'agent-manager', timeout: '15m' }
-          - { name: 'context-loader', commands: 'context-load', key_tool: 'echo', timeout: '10m' }
-          - { name: 'github-cli', commands: 'gh', key_tool: 'gh', timeout: '15m' }
-          - { name: 'post-cleanup', commands: 'echo', key_tool: 'echo', timeout: '10m', run_last: 'true' }
+          - {
+              name: "playwright",
+              commands: "playwright",
+              key_tool: "playwright",
+              timeout: "25m",
+              depends_on: "nodejs",
+              key_test_timeout: 5,
+            }
+          - {
+              name: "monitoring",
+              commands: "claude-monitor,uv",
+              key_tool: "claude-monitor",
+              timeout: "20m",
+              depends_on: "python,nodejs",
+            }
+          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5 }
+          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m" }
+          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m" }
+          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m" }
+          - { name: "post-cleanup", commands: "echo", key_tool: "echo", timeout: "10m", run_last: "true" }
 
     steps:
       - name: Checkout repository
@@ -120,7 +174,7 @@ jobs:
         with:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
-          timeout-seconds: '300'
+          timeout-seconds: "300"
 
       # Keep these steps as they're extension-specific
       - name: Verify CI extension manifest

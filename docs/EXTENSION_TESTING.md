@@ -25,6 +25,7 @@ This comprehensive testing ensures that users can confidently activate and use a
 ### Testing Philosophy
 
 The test suite is designed to:
+
 1. **Validate All API Functions** - Test all Extension API functions for compliance
 2. **Enforce System Policies** - Verify protected extensions cannot be removed
 3. **Test Edge Cases** - Cleanup ordering, dependency chains, manifest operations
@@ -52,6 +53,7 @@ The CI testing environment uses a two-phase approach to set up extensions:
 **File**: `docker/lib/extensions.d/active-extensions.ci.conf`
 
 This pre-configured template is built into the Docker image and contains:
+
 - All protected extensions (workspace-structure, mise-config, ssh-environment)
 - Comprehensive documentation and comments
 - Proper execution order (protected extensions first)
@@ -65,19 +67,23 @@ This pre-configured template is built into the Docker image and contains:
 When the container starts, entrypoint.sh executes in sequence:
 
 1. **Copy Library to Persistent Volume** (lines 52-55)
+
    ```bash
    if [ ! -d "/workspace/scripts/lib" ]; then
        cp -r /docker/lib /workspace/scripts/
    ```
+
    - Only runs on first boot (volume empty)
    - Copies extension library and manager from Docker image
 
 2. **Select Appropriate Manifest** (lines 57-89)
+
    ```bash
    if [ "$CI_MODE" = "true" ]; then
        cp /docker/lib/extensions.d/active-extensions.ci.conf \
           /workspace/scripts/extensions.d/active-extensions.conf
    ```
+
    - CI mode: Uses CI template (pre-configured with protected extensions)
    - Production mode: Uses CI template as default or existing manifest
 
@@ -87,6 +93,7 @@ When the container starts, entrypoint.sh executes in sequence:
        sudo -u developer HOME=/workspace/developer bash -c \
            'cd /workspace/scripts/lib && extension-manager install-all'
    ```
+
    - Detects if extensions already installed (checks for `mise` command)
    - If not installed: Runs `extension-manager install-all`
    - Reads manifest created in Phase 2
@@ -96,14 +103,17 @@ When the container starts, entrypoint.sh executes in sequence:
 #### Why Two Phases?
 
 **The Problem Solved:**
+
 - Initial attempt only copied manifest → Extensions listed but never installed
 - Tests failed with "mise not found" because mise-config never executed
 
 **The Solution:**
+
 1. **Template (Phase 1)**: Defines WHAT to install (declarative)
 2. **Installation (Phase 2)**: Actually installs it (imperative)
 
 **Benefits:**
+
 - ✅ Idempotent: Only installs on first boot (checks `mise` presence)
 - ✅ Transparent: Installation logs visible in container startup output
 - ✅ Flexible: Works for both CI and production deployments
@@ -147,6 +157,7 @@ Container Ready
 **Workflow Verification Steps** (integration.yml, extension-tests.yml):
 
 After deployment, workflows verify:
+
 ```bash
 # 1. Manifest exists and has protected extensions
 grep -q "^workspace-structure$" /workspace/scripts/extensions.d/active-extensions.conf
@@ -159,12 +170,14 @@ ls /workspace/projects   # Proves workspace-structure ran
 ```
 
 **Key Difference from Production:**
+
 - **CI**: Fresh volume every test → Always runs installation on first boot
 - **Production**: Persistent volume → Installation runs once, then skipped
 
 #### Debugging Extension Installation
 
 **Check if auto-installation ran:**
+
 ```bash
 # View container startup logs
 flyctl logs --app <app-name> | grep "Installing protected extensions"
@@ -181,6 +194,7 @@ flyctl logs --app <app-name> | grep "Installing protected extensions"
 ```
 
 **If mise not found:**
+
 1. Check entrypoint logs for installation errors
 2. Verify CI_MODE secret is set: `flyctl secrets list --app <name>`
 3. Verify manifest was created: `flyctl ssh console -C "cat /workspace/scripts/extensions.d/active-extensions.conf"`
@@ -225,38 +239,38 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 
 #### Tested Extensions (24 Total)
 
-| Extension | Key Tools | Dependencies | Test Focus |
-|-----------|-----------|--------------|------------|
-| **Core (Protected)** ||||
-| workspace-structure | mkdir, ls | - | Directory creation |
-| mise-config | mise | - | Tool version manager |
-| ssh-environment | ssh, sshd | - | SSH daemon config |
-| **Languages (mise-powered)** ||||
-| nodejs | node, npm | mise-config | Runtime, package manager |
-| python | python3, pip3 | mise-config | Execution, packages |
-| rust | rustc, cargo | mise-config | Compilation, cargo |
-| golang | go | mise-config | Compilation, modules |
-| nodejs-devtools | tsc, eslint | mise-config, nodejs | TypeScript, linting |
-| **Languages (Traditional)** ||||
-| ruby | ruby, gem, bundle | - | Ruby execution, Rails |
-| php | php, composer | - | PHP, Symfony |
-| jvm | java, sdk | - | SDKMAN, Java |
-| dotnet | dotnet | - | .NET SDK, ASP.NET |
-| **Claude AI** ||||
-| claude-config | claude | nodejs | CLI authentication |
-| **Infrastructure** ||||
-| docker | docker, compose | - | Container runtime |
-| infra-tools | terraform, ansible | - | IaC tools |
-| cloud-tools | aws | - | Cloud CLIs |
-| ai-tools | codex, gemini | nodejs | AI assistants |
-| **Utilities** ||||
-| playwright | playwright | nodejs | Browser automation |
-| monitoring | claude-monitor | python, nodejs | Usage tracking |
-| tmux-workspace | tmux | - | Session management |
-| agent-manager | agent-manager | - | Agent management |
-| context-loader | context-load | - | Context utilities |
-| github-cli | gh | - | GitHub CLI |
-| post-cleanup | echo | - | Post-install cleanup |
+| Extension                    | Key Tools          | Dependencies        | Test Focus               |
+| ---------------------------- | ------------------ | ------------------- | ------------------------ |
+| **Core (Protected)**         |                    |                     |                          |
+| workspace-structure          | mkdir, ls          | -                   | Directory creation       |
+| mise-config                  | mise               | -                   | Tool version manager     |
+| ssh-environment              | ssh, sshd          | -                   | SSH daemon config        |
+| **Languages (mise-powered)** |                    |                     |                          |
+| nodejs                       | node, npm          | mise-config         | Runtime, package manager |
+| python                       | python3, pip3      | mise-config         | Execution, packages      |
+| rust                         | rustc, cargo       | mise-config         | Compilation, cargo       |
+| golang                       | go                 | mise-config         | Compilation, modules     |
+| nodejs-devtools              | tsc, eslint        | mise-config, nodejs | TypeScript, linting      |
+| **Languages (Traditional)**  |                    |                     |                          |
+| ruby                         | ruby, gem, bundle  | -                   | Ruby execution, Rails    |
+| php                          | php, composer      | -                   | PHP, Symfony             |
+| jvm                          | java, sdk          | -                   | SDKMAN, Java             |
+| dotnet                       | dotnet             | -                   | .NET SDK, ASP.NET        |
+| **Claude AI**                |                    |                     |                          |
+| claude-config                | claude             | nodejs              | CLI authentication       |
+| **Infrastructure**           |                    |                     |                          |
+| docker                       | docker, compose    | -                   | Container runtime        |
+| infra-tools                  | terraform, ansible | -                   | IaC tools                |
+| cloud-tools                  | aws                | -                   | Cloud CLIs               |
+| ai-tools                     | codex, gemini      | nodejs              | AI assistants            |
+| **Utilities**                |                    |                     |                          |
+| playwright                   | playwright         | nodejs              | Browser automation       |
+| monitoring                   | claude-monitor     | python, nodejs      | Usage tracking           |
+| tmux-workspace               | tmux               | -                   | Session management       |
+| agent-manager                | agent-manager      | -                   | Agent management         |
+| context-loader               | context-load       | -                   | Context utilities        |
+| github-cli                   | gh                 | -                   | GitHub CLI               |
+| post-cleanup                 | echo               | -                   | Post-install cleanup     |
 
 #### Test Steps
 
@@ -273,6 +287,7 @@ For each extension using `extension-manager`:
 9. **Resource Cleanup**: Destroy test VM and volumes
 
 **When It Runs**:
+
 - On push/PR affecting extension files
 - On workflow dispatch (all or specific extension)
 
@@ -293,6 +308,7 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 #### Test Matrix
 
 Representative sample of 6 extensions tested for full API compliance:
+
 - nodejs (mise-powered language)
 - python (mise-powered language)
 - rust (mise-powered language)
@@ -356,6 +372,7 @@ Tests manifest file operations and integrity:
   - Uses test fixture with multiple comment types
 
 **Test Fixtures Used**:
+
 - `.github/workflows/test-fixtures/manifest-reorder-test.conf`
 - `.github/workflows/test-fixtures/manifest-with-comments.conf`
 
@@ -408,6 +425,7 @@ Each combination activates multiple extensions in `active-extensions.conf`:
 - Dependencies are properly resolved
 
 **When It Runs**:
+
 - Manual workflow dispatch
 - Commit messages containing `[test-combinations]`
 
@@ -430,12 +448,12 @@ To avoid complex heredoc escaping in GitHub Actions workflows, test fixtures are
 
 Located in `.github/workflows/test-fixtures/`:
 
-| Fixture File | Purpose | Used By |
-|--------------|---------|---------|
-| `manifest-cleanup-middle.conf` | post-cleanup in middle of manifest | cleanup-extensions-tests |
-| `manifest-reorder-test.conf` | 6 extensions for reorder testing | manifest-operations-tests |
-| `manifest-with-comments.conf` | Manifest with various comment types | manifest-operations-tests |
-| `manifest-only-top-level.conf` | Single top-level extension for dependency testing | dependency-chain-tests |
+| Fixture File                   | Purpose                                           | Used By                   |
+| ------------------------------ | ------------------------------------------------- | ------------------------- |
+| `manifest-cleanup-middle.conf` | post-cleanup in middle of manifest                | cleanup-extensions-tests  |
+| `manifest-reorder-test.conf`   | 6 extensions for reorder testing                  | manifest-operations-tests |
+| `manifest-with-comments.conf`  | Manifest with various comment types               | manifest-operations-tests |
+| `manifest-only-top-level.conf` | Single top-level extension for dependency testing | dependency-chain-tests    |
 
 ### Benefits of Test Fixtures
 
@@ -472,27 +490,27 @@ Located in `.github/workflows/test-fixtures/`:
 ```yaml
 # On push to main/develop affecting extensions
 push:
-  branches: [ main, develop ]
+  branches: [main, develop]
   paths:
     # Deployment configuration
-    - 'fly.toml'
-    - 'Dockerfile'
+    - "fly.toml"
+    - "Dockerfile"
     # CI scripts
-    - 'scripts/prepare-fly-config.sh'
-    - 'scripts/lib/fly-common.sh'
+    - "scripts/prepare-fly-config.sh"
+    - "scripts/lib/fly-common.sh"
     # Extension system
-    - 'docker/lib/extensions.d/**'
-    - 'docker/lib/extension-manager.sh'
-    - 'docker/lib/common.sh'
-    - 'docker/lib/extensions-common.sh'
+    - "docker/lib/extensions.d/**"
+    - "docker/lib/extension-manager.sh"
+    - "docker/lib/common.sh"
+    - "docker/lib/extensions-common.sh"
     # Workflow itself
-    - '.github/workflows/extension-tests.yml'
+    - ".github/workflows/extension-tests.yml"
     # Test fixtures
-    - '.github/workflows/test-fixtures/**'
+    - ".github/workflows/test-fixtures/**"
 
 # On pull requests
 pull_request:
-  branches: [ main, develop ]
+  branches: [main, develop]
   paths: [same as above]
 ```
 
@@ -515,30 +533,30 @@ gh workflow run extension-tests.yml \
 
 ### Extension API Coverage
 
-| API Function | Tested | Test Job | Coverage |
-|--------------|--------|----------|----------|
-| `prerequisites()` | ✅ | per-extension-tests, dependency-chain-tests | 100% |
-| `install()` | ✅ | per-extension-tests, extension-api-tests | 100% |
-| `configure()` | ✅ | per-extension-tests | 100% |
-| `validate()` | ✅ | extension-api-tests | 100% |
-| `status()` | ✅ | per-extension-tests, extension-api-tests | 100% |
-| `remove()` | ✅ | extension-api-tests | 100% |
-| `upgrade()` (v2.0) | ✅ | extension-api-tests | 100% |
+| API Function       | Tested | Test Job                                    | Coverage |
+| ------------------ | ------ | ------------------------------------------- | -------- |
+| `prerequisites()`  | ✅     | per-extension-tests, dependency-chain-tests | 100%     |
+| `install()`        | ✅     | per-extension-tests, extension-api-tests    | 100%     |
+| `configure()`      | ✅     | per-extension-tests                         | 100%     |
+| `validate()`       | ✅     | extension-api-tests                         | 100%     |
+| `status()`         | ✅     | per-extension-tests, extension-api-tests    | 100%     |
+| `remove()`         | ✅     | extension-api-tests                         | 100%     |
+| `upgrade()` (v2.0) | ✅     | extension-api-tests                         | 100%     |
 
 **Overall API Coverage: 100% (7/7 functions including v2.0)**
 
 ### Feature Coverage
 
-| Feature | Tested | Test Job | Coverage |
-|---------|--------|----------|----------|
-| Protected Extensions Enforcement | ✅ | protected-extensions-tests | 100% |
-| Cleanup Extensions Ordering | ✅ | cleanup-extensions-tests | 100% |
-| Manifest Auto-Repair | ✅ | protected-extensions-tests | 100% |
-| Dependency Resolution | ✅ | dependency-chain-tests | 100% |
-| Manifest Comment Preservation | ✅ | manifest-operations-tests | 100% |
-| Extension Reordering | ✅ | manifest-operations-tests | 100% |
-| Error Handling | ✅ | dependency-chain-tests | 75% |
-| Idempotency | ✅ | per-extension-tests | 100% |
+| Feature                          | Tested | Test Job                   | Coverage |
+| -------------------------------- | ------ | -------------------------- | -------- |
+| Protected Extensions Enforcement | ✅     | protected-extensions-tests | 100%     |
+| Cleanup Extensions Ordering      | ✅     | cleanup-extensions-tests   | 100%     |
+| Manifest Auto-Repair             | ✅     | protected-extensions-tests | 100%     |
+| Dependency Resolution            | ✅     | dependency-chain-tests     | 100%     |
+| Manifest Comment Preservation    | ✅     | manifest-operations-tests  | 100%     |
+| Extension Reordering             | ✅     | manifest-operations-tests  | 100%     |
+| Error Handling                   | ✅     | dependency-chain-tests     | 75%      |
+| Idempotency                      | ✅     | per-extension-tests        | 100%     |
 
 **Overall Feature Coverage: ~97%**
 
@@ -557,15 +575,15 @@ gh workflow run extension-tests.yml \
 
 Different test jobs use different VM sizes:
 
-| Test Type | Memory | CPUs | Disk | Timeout |
-|-----------|--------|------|------|---------|
-| Per-Extension | 8GB | 4 | 20GB | 60 min |
-| Extension API Tests | 4GB | 2 | 20GB | 45 min |
-| Protected Extensions | 2GB | 1 | 10GB | 40 min |
-| Cleanup Extensions | 2GB | 1 | 10GB | 35 min |
-| Manifest Operations | 2GB | 1 | 10GB | 35 min |
-| Dependency Chain | 4GB | 2 | 15GB | 50 min |
-| Combinations | 16GB | 4 | 20GB | 90 min |
+| Test Type            | Memory | CPUs | Disk | Timeout |
+| -------------------- | ------ | ---- | ---- | ------- |
+| Per-Extension        | 8GB    | 4    | 20GB | 60 min  |
+| Extension API Tests  | 4GB    | 2    | 20GB | 45 min  |
+| Protected Extensions | 2GB    | 1    | 10GB | 40 min  |
+| Cleanup Extensions   | 2GB    | 1    | 10GB | 35 min  |
+| Manifest Operations  | 2GB    | 1    | 10GB | 35 min  |
+| Dependency Chain     | 4GB    | 2    | 15GB | 50 min  |
+| Combinations         | 16GB   | 4    | 20GB | 90 min  |
 
 ### Cost Considerations
 
@@ -599,15 +617,15 @@ A test passes when:
 
 ### Common Failures
 
-| Failure Type | Likely Cause | Resolution |
-|--------------|--------------|------------|
-| Configuration timeout | Extension takes too long | Increase timeout in matrix |
-| Command not found | Installation incomplete | Check installation steps in extension |
-| Idempotency failure | No existence check | Add `command_exists` checks |
-| Conflict detected | Duplicate installations | Review extension interactions |
-| Prerequisites failed | Missing dependency | Add dependency to `depends_on` field |
+| Failure Type              | Likely Cause                    | Resolution                                                      |
+| ------------------------- | ------------------------------- | --------------------------------------------------------------- |
+| Configuration timeout     | Extension takes too long        | Increase timeout in matrix                                      |
+| Command not found         | Installation incomplete         | Check installation steps in extension                           |
+| Idempotency failure       | No existence check              | Add `command_exists` checks                                     |
+| Conflict detected         | Duplicate installations         | Review extension interactions                                   |
+| Prerequisites failed      | Missing dependency              | Add dependency to `depends_on` field                            |
 | Protected extension error | Trying to remove core extension | Cannot remove workspace-structure, mise-config, ssh-environment |
-| Dependency chain broken | mise-config not installed | Ensure mise-config in manifest before mise-powered extensions |
+| Dependency chain broken   | mise-config not installed       | Ensure mise-config in manifest before mise-powered extensions   |
 
 ### Debugging Failed Tests
 
@@ -640,6 +658,7 @@ vim r.extension
 ```
 
 **Required API Functions:**
+
 - `prerequisites()` - Check system requirements
 - `install()` - Install packages and tools
 - `configure()` - Post-install configuration
@@ -658,10 +677,11 @@ Update `.github/workflows/extension-tests.yml`:
 matrix:
   extension:
     # ... existing extensions ...
-    - { name: 'r', commands: 'R,Rscript', key_tool: 'R', timeout: '20m', depends_on: 'mise-config', uses_mise: 'true' }
+    - { name: "r", commands: "R,Rscript", key_tool: "R", timeout: "20m", depends_on: "mise-config", uses_mise: "true" }
 ```
 
 **Matrix Fields:**
+
 - `name`: Extension name (matches .extension filename)
 - `commands`: Comma-separated list of commands to verify
 - `key_tool`: Primary command for functionality testing
@@ -711,21 +731,25 @@ bash extension-manager.sh deactivate r
 ### 5. Verify Passes All Checks
 
 **Job 1: Extension Manager Validation**
+
 - [ ] Extension shows in `extension-manager list`
 - [ ] Name extraction works correctly
 
 **Job 2: Extension Syntax Validation**
+
 - [ ] Shellcheck validation passes
 - [ ] All required API functions defined
 - [ ] Proper shebang and sourcing
 
 **Job 3: Per-Extension Tests**
+
 - [ ] Installation completes within timeout
 - [ ] All commands available after installation
 - [ ] Key functionality test passes
 - [ ] Idempotent (safe to run multiple times)
 
 **Job 4: Extension API Tests** (if in sample)
+
 - [ ] validate() returns 0
 - [ ] status() outputs correct format
 - [ ] uninstall() calls remove() correctly
@@ -733,6 +757,7 @@ bash extension-manager.sh deactivate r
 - [ ] upgrade() works (if API v2.0)
 
 **Job 5-8: Protected/Cleanup/Manifest/Dependencies**
+
 - [ ] Not a protected extension (unless adding new core)
 - [ ] Doesn't interfere with cleanup ordering
 - [ ] Works with manifest comment preservation
@@ -834,18 +859,21 @@ The extension testing system continuously evolves:
 #### Critical Path
 
 **Must Pass Before Merge:**
+
 - Job 1: Extension Manager Validation
 - Job 2: Extension Syntax Validation
 - Job 5: Protected Extensions Tests
 - Job 6: Cleanup Extensions Tests
 
 **Recommended Before Merge:**
+
 - Job 3: Per-Extension Tests (for modified extensions)
 - Job 4: Extension API Tests (validates API compliance)
 - Job 7: Manifest Operations Tests (manifest integrity)
 - Job 8: Dependency Chain Tests (dependency resolution)
 
 **Optional (Manual Trigger):**
+
 - Job 9: Extension Combinations (comprehensive stack testing)
 
 ---

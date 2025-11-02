@@ -4,17 +4,17 @@ on:
   workflow_call:
     inputs:
       test_app_prefix:
-        description: 'Test app prefix'
+        description: "Test app prefix"
         required: false
-        default: 'ext-test'
+        default: "ext-test"
         type: string
       region:
-        description: 'Fly.io region'
+        description: "Fly.io region"
         required: false
-        default: 'sjc'
+        default: "sjc"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup for debugging'
+        description: "Skip cleanup for debugging"
         required: false
         default: false
         type: boolean
@@ -40,12 +40,12 @@ jobs:
         uses: ./.github/actions/setup-fly-test-env
         with:
           app-prefix: ${{ inputs.test_app_prefix }}
-          extension-name: 'manifest'
+          extension-name: "manifest"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
-          vm-memory: '2048'
-          vm-cpu-kind: 'shared'
-          vm-cpu-count: '1'
-          volume-size: '10'
+          vm-memory: "2048"
+          vm-cpu-kind: "shared"
+          vm-cpu-count: "1"
+          volume-size: "10"
 
       # Using composite action for deployment
       - name: Deploy test environment
@@ -54,7 +54,7 @@ jobs:
           app-name: ${{ steps.setup.outputs.app-name }}
           region: ${{ inputs.region }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
-          deploy-timeout: '600'
+          deploy-timeout: "600"
 
       # Using composite action for waiting
       - name: Wait for deployment
@@ -62,8 +62,8 @@ jobs:
         with:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
-          timeout-seconds: '420'
-          expected-status: 'started'
+          timeout-seconds: "420"
+          expected-status: "started"
 
       - name: Copy test fixtures to VM
         env:

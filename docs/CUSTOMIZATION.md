@@ -372,6 +372,7 @@ Check system requirements before installation.
 **Returns**: `0` if all prerequisites met, `1` otherwise
 
 **Common checks**:
+
 - System packages (build-essential, curl, etc.)
 - Commands available in PATH
 - Disk space and memory
@@ -406,6 +407,7 @@ Install packages and tools.
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Download and install packages
 - Compile from source if needed
 - Verify installation success
@@ -442,6 +444,7 @@ Post-installation configuration.
 **Returns**: `0` on success, `1` on failure
 
 **Tasks**:
+
 - Add to PATH
 - Create SSH wrappers (for non-interactive sessions)
 - Setup shell aliases
@@ -480,6 +483,7 @@ Run smoke tests to verify installation.
 **Returns**: `0` if validation passes, `1` otherwise
 
 **Tests**:
+
 - Command availability
 - Version checks
 - Basic functionality
@@ -518,6 +522,7 @@ Check installation state and report status.
 **Returns**: `0` if installed, `1` otherwise
 
 **Reports**:
+
 - Installation status
 - Version information
 - Configuration state
@@ -553,6 +558,7 @@ Uninstall and cleanup.
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Uninstall packages
 - Remove configuration files
 - Clean up caches
@@ -1401,12 +1407,12 @@ claude
 model_list:
   - model_name: claude-sonnet-4
     litellm_params:
-      model: deepseek/deepseek-chat  # $1/M tokens
+      model: deepseek/deepseek-chat # $1/M tokens
       api_key: os.environ/DEEPSEEK_API_KEY
 
   - model_name: claude-haiku-3
     litellm_params:
-      model: gemini/gemini-2.0-flash  # Free tier
+      model: gemini/gemini-2.0-flash # Free tier
       api_key: os.environ/GOOGLE_GEMINI_API_KEY
 
   # Fallback to Anthropic for complex tasks
@@ -1658,14 +1664,14 @@ claude-code-proxy &
 ```json
 // /workspace/projects/active/my-app/.vscode/settings.json
 {
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-        "source.fixAll.eslint": true
-    },
-    "typescript.preferences.importModuleSpecifier": "relative",
-    "files.associations": {
-        "*.css": "postcss"
-    }
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "files.associations": {
+    "*.css": "postcss"
+  }
 }
 ```
 
@@ -1674,12 +1680,12 @@ claude-code-proxy &
 ```json
 // ~/.vscode-server/data/Machine/settings.json
 {
-    "terminal.integrated.shell.linux": "/bin/bash",
-    "remote.SSH.remotePlatform": {
-        "my-sindri-dev.fly.dev": "linux"
-    },
-    "workbench.colorTheme": "Dark+ (default dark)",
-    "editor.minimap.enabled": false
+  "terminal.integrated.shell.linux": "/bin/bash",
+  "remote.SSH.remotePlatform": {
+    "my-sindri-dev.fly.dev": "linux"
+  },
+  "workbench.colorTheme": "Dark+ (default dark)",
+  "editor.minimap.enabled": false
 }
 ```
 
@@ -1690,19 +1696,19 @@ claude-code-proxy &
 ```json
 // /workspace/developer/.claude/settings.json
 {
-    "hooks": {
-        "user-prompt-submit": "prettier --write .",
-        "tool-use-start": "git add -A",
-        "tool-use-end": "npm run lint --fix"
-    },
-    "outputStyles": {
-        "default": {
-            "codeBlock": {
-                "showLineNumbers": true,
-                "theme": "github-dark"
-            }
-        }
+  "hooks": {
+    "user-prompt-submit": "prettier --write .",
+    "tool-use-start": "git add -A",
+    "tool-use-end": "npm run lint --fix"
+  },
+  "outputStyles": {
+    "default": {
+      "codeBlock": {
+        "showLineNumbers": true,
+        "theme": "github-dark"
+      }
     }
+  }
 }
 ```
 

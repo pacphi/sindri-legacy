@@ -1,51 +1,51 @@
-name: 'Setup Fly.io Test Environment'
-description: 'Prepares environment for Fly.io extension testing (checkout, Fly CLI, SSH keys, app naming)'
+name: "Setup Fly.io Test Environment"
+description: "Prepares environment for Fly.io extension testing (checkout, Fly CLI, SSH keys, app naming)"
 
 inputs:
   app-prefix:
     description: 'Prefix for test app name (e.g., "ext-test")'
     required: true
   extension-name:
-    description: 'Extension name for app naming (will be sanitized)'
+    description: "Extension name for app naming (will be sanitized)"
     required: false
-    default: 'generic'
+    default: "generic"
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   vm-memory:
-    description: 'VM memory in MB'
+    description: "VM memory in MB"
     required: false
-    default: '8192'
+    default: "8192"
   vm-cpu-kind:
-    description: 'CPU kind (performance or shared)'
+    description: "CPU kind (performance or shared)"
     required: false
-    default: 'performance'
+    default: "performance"
   vm-cpu-count:
-    description: 'Number of CPUs'
+    description: "Number of CPUs"
     required: false
-    default: '4'
+    default: "4"
   volume-name:
-    description: 'Volume name'
+    description: "Volume name"
     required: false
-    default: 'test_data'
+    default: "test_data"
   volume-size:
-    description: 'Volume size in GB'
+    description: "Volume size in GB"
     required: false
-    default: '20'
+    default: "20"
 
 outputs:
   app-name:
-    description: 'Generated app name for testing'
+    description: "Generated app name for testing"
     value: ${{ steps.generate-app-name.outputs.app_name }}
   ssh-key-path:
-    description: 'Path to generated SSH private key'
-    value: 'test_key'
+    description: "Path to generated SSH private key"
+    value: "test_key"
   ssh-pubkey-path:
-    description: 'Path to generated SSH public key'
-    value: 'test_key.pub'
+    description: "Path to generated SSH public key"
+    value: "test_key.pub"
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Checkout code
       uses: actions/checkout@v5

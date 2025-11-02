@@ -1,41 +1,41 @@
-name: 'Test Machine Lifecycle'
-description: 'Tests machine stop/start lifecycle with proper state polling'
+name: "Test Machine Lifecycle"
+description: "Tests machine stop/start lifecycle with proper state polling"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   stop-timeout:
-    description: 'Maximum time to wait for machine to stop (seconds)'
+    description: "Maximum time to wait for machine to stop (seconds)"
     required: false
-    default: '60'
+    default: "60"
   start-timeout:
-    description: 'Maximum time to wait for machine to start (seconds)'
+    description: "Maximum time to wait for machine to start (seconds)"
     required: false
-    default: '120'
+    default: "120"
   max-stop-attempts:
-    description: 'Maximum polling attempts for stop verification'
+    description: "Maximum polling attempts for stop verification"
     required: false
-    default: '12'
+    default: "12"
   max-start-attempts:
-    description: 'Maximum polling attempts for start verification'
+    description: "Maximum polling attempts for start verification"
     required: false
-    default: '8'
+    default: "8"
   poll-interval:
-    description: 'Polling interval in seconds'
+    description: "Polling interval in seconds"
     required: false
-    default: '5'
+    default: "5"
 
 outputs:
   status:
-    description: 'Test status (success or failure)'
+    description: "Test status (success or failure)"
     value: ${{ steps.test.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Test machine stop/start lifecycle
       id: test

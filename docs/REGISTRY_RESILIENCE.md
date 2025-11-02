@@ -39,6 +39,7 @@ Implement comprehensive retry logic with exponential backoff at multiple layers:
 **Location**: `docker/lib/registry-retry.sh`
 
 **Features**:
+
 - APT update/install retry with package repair
 - NPM install retry with cache clearing
 - PIP install retry with cache purging
@@ -46,6 +47,7 @@ Implement comprehensive retry logic with exponential backoff at multiple layers:
 - Automatic cleanup of failed partial installations
 
 **Functions**:
+
 ```bash
 apt_update_retry <max_attempts>
 apt_install_retry <max_attempts> <packages...>
@@ -66,6 +68,7 @@ curl_retry <max_attempts> <curl_args...>
 **Location**: `.github/workflows/integration-resilient.yml`
 
 **Features**:
+
 - Comprehensive retry utilities for Flyctl operations
 - SSH command retry with exponential backoff
 - Machine readiness checks with timeout
@@ -73,6 +76,7 @@ curl_retry <max_attempts> <curl_args...>
 - Detailed logging for debugging failures
 
 **Key Functions**:
+
 ```bash
 retry_with_backoff <max_attempts> <initial_delay> <max_delay> <command...>
 flyctl_deploy_retry <app_name>
@@ -85,6 +89,7 @@ wait_for_machine_ready <app_name>
 ### APT Operations
 
 **Before** (no retry):
+
 ```bash
 install() {
   sudo apt-get update -qq
@@ -93,6 +98,7 @@ install() {
 ```
 
 **After** (with retry):
+
 ```bash
 install() {
   # Automatically available after extension_init
@@ -102,6 +108,7 @@ install() {
 ```
 
 **Benefits**:
+
 - 3 retry attempts with exponential backoff (5s, 10s, 15s)
 - Automatic `dpkg --configure -a` on failure
 - Automatic `apt-get -f install` to fix broken dependencies
@@ -109,6 +116,7 @@ install() {
 ### NPM Operations
 
 **Before** (no retry):
+
 ```bash
 install() {
   npm install -g typescript eslint prettier
@@ -116,6 +124,7 @@ install() {
 ```
 
 **After** (with retry):
+
 ```bash
 install() {
   npm_install_retry 3 -g typescript eslint prettier
@@ -123,6 +132,7 @@ install() {
 ```
 
 **Benefits**:
+
 - 3 retry attempts with exponential backoff
 - Automatic `npm cache clean --force` between retries
 - Preserves all npm flags and arguments
@@ -130,6 +140,7 @@ install() {
 ### PIP Operations
 
 **Before** (no retry):
+
 ```bash
 install() {
   pip3 install requests numpy pandas
@@ -137,6 +148,7 @@ install() {
 ```
 
 **After** (with retry):
+
 ```bash
 install() {
   pip_install_retry 3 requests numpy pandas
@@ -144,6 +156,7 @@ install() {
 ```
 
 **Benefits**:
+
 - 3 retry attempts with exponential backoff
 - Automatic `pip3 cache purge` between retries
 - Quiet mode supported (`--quiet` flag preserved)
@@ -151,6 +164,7 @@ install() {
 ### Download Operations
 
 **wget with retry**:
+
 ```bash
 install() {
   # Download with 3 retries, 30s timeout per attempt
@@ -159,6 +173,7 @@ install() {
 ```
 
 **curl with retry**:
+
 ```bash
 install() {
   # HTTP request with 3 retries, preserves all curl flags
@@ -167,6 +182,7 @@ install() {
 ```
 
 **Benefits**:
+
 - Configurable retry count
 - 30-second timeout per attempt
 - Exponential backoff between retries
@@ -176,6 +192,7 @@ install() {
 ### Deployment Retry
 
 **Implementation**:
+
 ```yaml
 - name: Deploy with retry
   run: |
@@ -184,6 +201,7 @@ install() {
 ```
 
 **Features**:
+
 - 4 retry attempts (increased from 3)
 - 180-second timeout per deployment
 - Automatic log inspection for registry issues
@@ -192,6 +210,7 @@ install() {
 ### SSH Command Retry
 
 **Implementation**:
+
 ```yaml
 - name: Execute command with retry
   run: |
@@ -200,6 +219,7 @@ install() {
 ```
 
 **Features**:
+
 - 5 retry attempts
 - 30-second timeout per attempt
 - Exponential backoff: 3s, 6s, 9s, 12s, 15s
@@ -207,6 +227,7 @@ install() {
 ### Machine Readiness Check
 
 **Implementation**:
+
 ```yaml
 - name: Wait for machine ready
   run: |
@@ -215,6 +236,7 @@ install() {
 ```
 
 **Features**:
+
 - 30 retry attempts (60 seconds total)
 - Checks both machine status and SSH responsiveness
 - 2-second polling interval
@@ -223,6 +245,7 @@ install() {
 ### Extension Installation Retry
 
 **Implementation**:
+
 ```yaml
 - name: Install extension with retry
   run: |
@@ -233,6 +256,7 @@ install() {
 ```
 
 **Features**:
+
 - 3 retry attempts
 - 10-60 second backoff range
 - Works with any extension
@@ -244,6 +268,7 @@ install() {
 **File**: `docker/lib/extensions.d/python.sh.example`
 
 **Before**:
+
 ```bash
 install() {
   print_status "Installing Python development environment..."
@@ -256,6 +281,7 @@ install() {
 ```
 
 **After**:
+
 ```bash
 install() {
   print_status "Installing Python development environment..."
@@ -273,6 +299,7 @@ install() {
 **File**: `docker/lib/extensions.d/nodejs.sh.example`
 
 **Before**:
+
 ```bash
 install() {
   # Install NVM
@@ -284,6 +311,7 @@ install() {
 ```
 
 **After**:
+
 ```bash
 install() {
   # Install NVM with retry
@@ -299,6 +327,7 @@ install() {
 **File**: `docker/lib/extensions.d/rust.sh.example`
 
 **Before**:
+
 ```bash
 install() {
   # Install Rust toolchain
@@ -310,6 +339,7 @@ install() {
 ```
 
 **After**:
+
 ```bash
 install() {
   # Install Rust toolchain with retry
@@ -323,6 +353,7 @@ install() {
 ### Example 4: Resilient Workflow Job
 
 **Complete job example**:
+
 ```yaml
 test-extension:
   runs-on: ubuntu-latest
@@ -360,12 +391,14 @@ test-extension:
 ### Integration Testing in CI
 
 **Current approach**:
+
 - `.github/workflows/integration-resilient.yml` serves as comprehensive integration test
 - Tests all retry scenarios: deployment, SSH, extensions, machine operations
 - Generates unique app names to avoid conflicts
 - Automatic cleanup on completion
 
 **Running manually**:
+
 ```bash
 # Trigger workflow manually
 gh workflow run integration-resilient.yml
@@ -377,6 +410,7 @@ gh run watch
 ### Extension Testing
 
 **Test extensions individually**:
+
 ```bash
 # Deploy test VM
 flyctl deploy --app test-extension-retry
@@ -444,12 +478,14 @@ Track the following to measure improvement:
 ### Logging
 
 **Current logging**:
+
 - Retry attempts logged with attempt number: `▶️  Attempt 1 of 3...`
 - Success logged: `✅ Command succeeded`
 - Failures logged with exit codes: `❌ Command failed (exit: 1)`
 - Registry issues detected: `🔍 Detected potential registry issue`
 
 **Enhanced logging** (future):
+
 - Aggregate retry statistics to workflow summary
 - Track which registries cause most failures
 - Alert on consistent failures (not resolved by retry)
@@ -461,11 +497,13 @@ Track the following to measure improvement:
 **Symptom**: Commands still failing without retry attempts
 
 **Check**:
+
 1. Verify `extension_init` called at start of extension
 2. Confirm `registry-retry.sh` exists and is executable
 3. Check that function is being called correctly
 
 **Debug**:
+
 ```bash
 # Test retry function directly
 source docker/lib/registry-retry.sh
@@ -477,6 +515,7 @@ DEBUG=true apt_update_retry 3
 **Symptom**: Installation taking too long due to retries
 
 **Solution**:
+
 - Reduce max_delay parameter: `retry_with_backoff 3 5 30` instead of `3 5 60`
 - Reduce max_attempts for fast-failing scenarios
 - Add timeout wrappers: `timeout 60 retry_with_backoff ...`
@@ -486,12 +525,14 @@ DEBUG=true apt_update_retry 3
 **Symptom**: All retries fail, indicating persistent issue
 
 **Investigation**:
+
 1. Check if registry is actually down (not transient)
 2. Verify network connectivity from Fly.io region
 3. Check if package name/version is correct
 4. Review full error logs for authentication or permission issues
 
 **Mitigation**:
+
 - Use alternative registries (APT mirrors, npm mirrors)
 - Implement fallback package sources
 - Add pre-flight connectivity checks

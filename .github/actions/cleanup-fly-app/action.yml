@@ -1,28 +1,28 @@
-name: 'Cleanup Fly.io Test App'
-description: 'Destroys Fly.io machines, volumes, and app to clean up test resources'
+name: "Cleanup Fly.io Test App"
+description: "Destroys Fly.io machines, volumes, and app to clean up test resources"
 
 inputs:
   app-name:
-    description: 'Fly.io app name to cleanup'
+    description: "Fly.io app name to cleanup"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   cleanup-ssh-keys:
-    description: 'Whether to cleanup SSH key files'
+    description: "Whether to cleanup SSH key files"
     required: false
-    default: 'true'
+    default: "true"
   ssh-key-path:
-    description: 'Path to SSH private key'
+    description: "Path to SSH private key"
     required: false
-    default: 'test_key'
+    default: "test_key"
   ssh-pubkey-path:
-    description: 'Path to SSH public key'
+    description: "Path to SSH public key"
     required: false
-    default: 'test_key.pub'
+    default: "test_key.pub"
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Stop and destroy machines
       shell: bash

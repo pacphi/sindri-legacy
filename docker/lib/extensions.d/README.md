@@ -634,6 +634,7 @@ configure() {
 ### 7. Clean Configuration
 
 Add comments when modifying .bashrc:
+
 ```bash
 echo "" >> "$HOME/.bashrc"
 echo "# ${EXT_NAME} - description" >> "$HOME/.bashrc"

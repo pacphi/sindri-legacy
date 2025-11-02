@@ -15,15 +15,18 @@ This directory contains extracted test scripts for GitHub Actions workflows, eli
 ## Common Utilities (`common/`)
 
 ### retry-utils.sh
+
 Comprehensive retry logic with exponential backoff for CI operations.
 
 **Functions**:
+
 - `retry_with_backoff(max_attempts, initial_delay, max_delay, command...)` - Generic retry with backoff
 - `flyctl_deploy_retry(app_name)` - Flyctl deployment with retry (4 attempts)
 - `ssh_command_retry(app_name, command)` - SSH command execution with retry (5 attempts)
 - `wait_for_machine_ready(app_name)` - Machine readiness check (90 attempts / 180s)
 
 **Usage**:
+
 ```bash
 source .github/scripts/common/retry-utils.sh
 retry_with_backoff 3 5 30 some-flaky-command
@@ -32,14 +35,17 @@ retry_with_backoff 3 5 30 some-flaky-command
 ## Integration Test Scripts (`integration/`)
 
 ### verify-manifest.sh
+
 Verifies CI extension manifest was created and contains all protected extensions.
 
 **Checks**:
+
 - Manifest file exists at `/workspace/scripts/extensions.d/active-extensions.conf`
 - All protected extensions present: workspace-structure, mise-config, ssh-environment
 - Displays active extensions for debugging
 
 **Usage**:
+
 ```bash
 # Copy to VM and execute
 flyctl ssh sftp shell --app $app <<'EOF'
@@ -50,32 +56,40 @@ flyctl ssh console --app $app --user developer -C "/bin/bash -lc 'bash /tmp/veri
 ```
 
 ### setup-manifest.sh
+
 Sets up extension manifest from CI template for testing.
 
 **Actions**:
+
 - Copies `active-extensions.ci.conf` to `active-extensions.conf` if not exists
 - Displays protected extensions in manifest
 
 ### verify-protected.sh
+
 Verifies protected extensions are installed and functional.
 
 **Checks**:
+
 - mise command available and working
 - /workspace directory exists with correct structure
 
 ### test-basic-workflow.sh
+
 Tests basic extension manager workflow (list, install, status).
 
 **Tests**:
+
 - Extension listing functionality
 - Extension installation with auto-activation
 - Manifest updates
 - Status command
 
 ### test-extension-system.sh
+
 Comprehensive extension system test including mise-managed extension installation.
 
 **Tests**:
+
 - Extension manager availability
 - nodejs extension installation (mise-powered)
 - Extension validation via mise
@@ -84,34 +98,42 @@ Comprehensive extension system test including mise-managed extension installatio
 ## Extension Test Scripts (`extension-tests/`)
 
 ### verify-manifest.sh
+
 Similar to integration/verify-manifest.sh but with fallback logic for test environments.
 
 **Additional Features**:
+
 - Creates manifest from CI template if missing
 - Auto-repairs missing protected extensions
 
 ### add-extension.sh
+
 Handles adding an extension to manifest with dependency resolution.
 
 **Usage**: `add-extension.sh <extension-name> [dependencies...]`
 
 **Features**:
+
 - Processes dependency list
 - Skips protected extensions (already in CI conf)
 - Adds extension to manifest
 
 ### test-protected.sh
+
 Tests protected extension enforcement (cannot deactivate/uninstall).
 
 **Tests**:
+
 - Deactivation prevention with correct error messages
 - Uninstall prevention with correct error messages
 - Uses PIPESTATUS to capture exit codes correctly
 
 ### test-dependency.sh
+
 Tests dependency chain resolution and error handling.
 
 **Tests**:
+
 - Missing dependency detection (temporarily disables mise)
 - Appropriate error messages
 - Prerequisite checking functionality
@@ -129,11 +151,13 @@ Tests dependency chain resolution and error handling.
 ### Shell Types
 
 All scripts should be executed with **login shells** (`/bin/bash -lc`) when:
+
 - Running as developer user
 - Needing access to mise-managed tools
 - Requiring .bashrc sourcing
 
 **Example**:
+
 ```bash
 # CORRECT - uses login shell
 flyctl ssh console --app $app --user developer -C "/bin/bash -lc 'bash /tmp/script.sh'"

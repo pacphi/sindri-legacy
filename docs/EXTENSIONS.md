@@ -24,6 +24,7 @@
 Sindri uses a manifest-based extension system to manage development tools and environments. Extensions provide language runtimes, development tools, infrastructure utilities, and AI coding assistants.
 
 The extension system supports two approaches:
+
 - **Traditional extensions**: Using language-specific version managers (NVM, rbenv, SDKMAN, etc.)
 - **mise-powered extensions**: Using mise for unified tool management with declarative TOML configuration
 
@@ -153,58 +154,58 @@ extension-manager install <name> --verbose
 
 These extensions are **protected** and cannot be removed. They are automatically installed on first container startup.
 
-| Extension | Description | Tool Manager | Version |
-|-----------|-------------|--------------|---------|
-| `workspace-structure` | Base directory structure | N/A | 1.0.0 |
-| `mise-config` | Unified tool version manager | N/A | 2.0.0 |
-| `ssh-environment` | SSH wrappers for non-interactive sessions | N/A | 1.0.0 |
+| Extension             | Description                               | Tool Manager | Version |
+| --------------------- | ----------------------------------------- | ------------ | ------- |
+| `workspace-structure` | Base directory structure                  | N/A          | 1.0.0   |
+| `mise-config`         | Unified tool version manager              | N/A          | 2.0.0   |
+| `ssh-environment`     | SSH wrappers for non-interactive sessions | N/A          | 1.0.0   |
 
 ### Foundational Languages
 
 While not protected, these are highly recommended as many tools depend on them.
 
-| Extension | Description | Tool Manager | Version | Dependencies |
-|-----------|-------------|--------------|---------|--------------|
-| `nodejs` | Node.js LTS and npm | mise | 3.0.0 | mise-config |
-| `python` | Python 3.13 with pip, venv, uv, pipx tools | mise | 2.0.0 | mise-config |
+| Extension | Description                                | Tool Manager | Version | Dependencies |
+| --------- | ------------------------------------------ | ------------ | ------- | ------------ |
+| `nodejs`  | Node.js LTS and npm                        | mise         | 3.0.0   | mise-config  |
+| `python`  | Python 3.13 with pip, venv, uv, pipx tools | mise         | 2.0.0   | mise-config  |
 
 ### Claude AI Tools
 
-| Extension | Description | Tool Manager | Version | Dependencies |
-|-----------|-------------|--------------|---------|--------------|
-| `claude-config` | Claude Code CLI with developer configuration | npm | 1.0.0 | nodejs |
-| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0 | nodejs, mise-config |
+| Extension         | Description                                   | Tool Manager       | Version | Dependencies        |
+| ----------------- | --------------------------------------------- | ------------------ | ------- | ------------------- |
+| `claude-config`   | Claude Code CLI with developer configuration  | npm                | 1.0.0   | nodejs              |
+| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0   | nodejs, mise-config |
 
 ### Additional Language Runtimes
 
-| Extension | Description | Tool Manager | Version | Dependencies |
-|-----------|-------------|--------------|---------|--------------|
-| `rust` | Rust toolchain with cargo, clippy, rustfmt | mise | 2.0.0 | mise-config |
-| `golang` | Go 1.24 with gopls, delve, golangci-lint | mise | 2.0.0 | mise-config |
-| `ruby` | Ruby 3.4/3.3 with rbenv, Rails, Bundler | rbenv | 2.0.0 | N/A |
-| `php` | PHP 8.3 with Composer, Symfony CLI | apt (Ondrej PPA) | 2.0.0 | N/A |
-| `jvm` | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN | 2.0.0 | N/A |
-| `dotnet` | .NET SDK 9.0/8.0 with ASP.NET Core | apt (Microsoft) | 2.0.0 | N/A |
+| Extension | Description                                    | Tool Manager     | Version | Dependencies |
+| --------- | ---------------------------------------------- | ---------------- | ------- | ------------ |
+| `rust`    | Rust toolchain with cargo, clippy, rustfmt     | mise             | 2.0.0   | mise-config  |
+| `golang`  | Go 1.24 with gopls, delve, golangci-lint       | mise             | 2.0.0   | mise-config  |
+| `ruby`    | Ruby 3.4/3.3 with rbenv, Rails, Bundler        | rbenv            | 2.0.0   | N/A          |
+| `php`     | PHP 8.3 with Composer, Symfony CLI             | apt (Ondrej PPA) | 2.0.0   | N/A          |
+| `jvm`     | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN           | 2.0.0   | N/A          |
+| `dotnet`  | .NET SDK 9.0/8.0 with ASP.NET Core             | apt (Microsoft)  | 2.0.0   | N/A          |
 
 ### Infrastructure & DevOps
 
-| Extension | Description | Tool Manager | Version |
-|-----------|-------------|--------------|---------|
-| `docker` | Docker Engine with compose, dive, ctop | apt + binary | 2.0.0 |
-| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel | Mixed | 2.0.0 |
-| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs | Official installers | 2.0.0 |
-| `ai-tools` | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed | 2.0.0 |
+| Extension     | Description                                        | Tool Manager        | Version |
+| ------------- | -------------------------------------------------- | ------------------- | ------- |
+| `docker`      | Docker Engine with compose, dive, ctop             | apt + binary        | 2.0.0   |
+| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel          | Mixed               | 2.0.0   |
+| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs         | Official installers | 2.0.0   |
+| `ai-tools`    | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed               | 2.0.0   |
 
 ### Monitoring & Utilities
 
-| Extension | Description | Tool Manager | Version |
-|-----------|-------------|--------------|---------|
-| `monitoring` | System monitoring tools (htop, glances, btop, etc.) | apt | 2.0.0 |
-| `tmux-workspace` | Tmux session management | apt | 2.0.0 |
-| `playwright` | Browser automation testing | npm | 2.0.0 |
-| `agent-manager` | Claude Code agent management | Custom | 2.0.0 |
-| `context-loader` | Context system for Claude | Custom | 2.0.0 |
-| `github-cli` | GitHub CLI authentication and workflows | Pre-installed | 1.0.0 |
+| Extension        | Description                                         | Tool Manager  | Version |
+| ---------------- | --------------------------------------------------- | ------------- | ------- |
+| `monitoring`     | System monitoring tools (htop, glances, btop, etc.) | apt           | 2.0.0   |
+| `tmux-workspace` | Tmux session management                             | apt           | 2.0.0   |
+| `playwright`     | Browser automation testing                          | npm           | 2.0.0   |
+| `agent-manager`  | Claude Code agent management                        | Custom        | 2.0.0   |
+| `context-loader` | Context system for Claude                           | Custom        | 2.0.0   |
+| `github-cli`     | GitHub CLI authentication and workflows             | Pre-installed | 1.0.0   |
 
 ---
 
@@ -213,6 +214,7 @@ While not protected, these are highly recommended as many tools depend on them.
 ### What is mise?
 
 [mise](https://mise.jdx.dev) is a modern polyglot tool version manager that provides:
+
 - **Unified tool management**: Single command for all language runtimes and CLI tools
 - **Declarative configuration**: TOML-based configuration files
 - **Version management**: Per-project and global tool versions
@@ -284,10 +286,10 @@ mise automatically switches to the specified versions when you enter the directo
 
 Extensions support two configurations via `CI_MODE` environment variable:
 
-| Environment | TOML File | Purpose |
-|-------------|-----------|---------|
-| Development | `<extension>.toml` | Full development environment with all tools |
-| CI/Testing | `<extension>-ci.toml` | Minimal environment for faster CI builds |
+| Environment | TOML File             | Purpose                                     |
+| ----------- | --------------------- | ------------------------------------------- |
+| Development | `<extension>.toml`    | Full development environment with all tools |
+| CI/Testing  | `<extension>-ci.toml` | Minimal environment for faster CI builds    |
 
 **Setting CI_MODE:**
 
@@ -311,6 +313,7 @@ export CI_MODE="true"
 **Symptom**: `command not found: mise`
 
 **Solution**:
+
 ```bash
 # Install mise-config extension
 extension-manager install mise-config
@@ -327,6 +330,7 @@ eval "$(mise activate bash)"
 **Symptom**: Tool installed via mise but not in PATH
 
 **Solution**:
+
 ```bash
 # Ensure mise is activated
 eval "$(mise activate bash)"
@@ -343,6 +347,7 @@ mise install
 **Symptom**: Multiple versions of same tool
 
 **Solution**:
+
 ```bash
 # List all versions
 mise ls <tool>
@@ -359,6 +364,7 @@ mise uninstall <tool>@<unwanted-version>
 **Symptom**: `mise install` fails with parse error
 
 **Solution**:
+
 ```bash
 # Validate TOML syntax
 mise config
@@ -375,6 +381,7 @@ cat ~/.config/mise/conf.d/<extension>.toml
 **Symptom**: CI TOML not being used
 
 **Solution**:
+
 ```bash
 # Verify CI_MODE is set
 echo $CI_MODE
@@ -426,21 +433,21 @@ mise ls
 
 All extensions must implement these six standard functions:
 
-| Function | Purpose | Required |
-|----------|---------|----------|
-| `prerequisites()` | Check system requirements before installation | Yes |
-| `install()` | Install packages and tools | Yes |
-| `configure()` | Post-install configuration and setup | Yes |
-| `validate()` | Run smoke tests to verify installation | Yes |
-| `status()` | Check installation state and display metadata | Yes |
-| `remove()` | Uninstall and cleanup | Yes |
+| Function          | Purpose                                       | Required |
+| ----------------- | --------------------------------------------- | -------- |
+| `prerequisites()` | Check system requirements before installation | Yes      |
+| `install()`       | Install packages and tools                    | Yes      |
+| `configure()`     | Post-install configuration and setup          | Yes      |
+| `validate()`      | Run smoke tests to verify installation        | Yes      |
+| `status()`        | Check installation state and display metadata | Yes      |
+| `remove()`        | Uninstall and cleanup                         | Yes      |
 
 ### API v2.0 Additions
 
 API v2.0 adds standardized upgrade support:
 
-| Function | Purpose | Required |
-|----------|---------|----------|
+| Function    | Purpose                              | Required   |
+| ----------- | ------------------------------------ | ---------- |
 | `upgrade()` | Upgrade installed tools and packages | Yes (v2.0) |
 
 ### Required Metadata Fields
@@ -496,14 +503,14 @@ Valid values for `EXT_UPGRADE_STRATEGY`:
 
 Use standard categories for consistency:
 
-| Category | Purpose | Examples |
-|----------|---------|----------|
-| `language` | Language runtimes | nodejs, python, rust, golang |
-| `devtools` | Development utilities | nodejs-devtools, monitoring |
-| `infrastructure` | Infrastructure tools | docker, infra-tools, cloud-tools |
-| `ai` | AI coding assistants | claude-config, ai-tools, agent-manager |
-| `core` | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
-| `utility` | General utilities | tmux-workspace, playwright |
+| Category         | Purpose                            | Examples                                          |
+| ---------------- | ---------------------------------- | ------------------------------------------------- |
+| `language`       | Language runtimes                  | nodejs, python, rust, golang                      |
+| `devtools`       | Development utilities              | nodejs-devtools, monitoring                       |
+| `infrastructure` | Infrastructure tools               | docker, infra-tools, cloud-tools                  |
+| `ai`             | AI coding assistants               | claude-config, ai-tools, agent-manager            |
+| `core`           | Core system components (protected) | workspace-structure, mise-config, ssh-environment |
+| `utility`        | General utilities                  | tmux-workspace, playwright                        |
 
 ---
 
@@ -511,11 +518,11 @@ Use standard categories for consistency:
 
 ### File Naming Conventions
 
-| File Type | Pattern | Example |
-|-----------|---------|---------|
+| File Type        | Pattern            | Example            |
+| ---------------- | ------------------ | ------------------ |
 | Extension script | `<name>.extension` | `nodejs.extension` |
-| Development TOML | `<name>.toml` | `nodejs.toml` |
-| CI TOML | `<name>-ci.toml` | `nodejs-ci.toml` |
+| Development TOML | `<name>.toml`      | `nodejs.toml`      |
+| CI TOML          | `<name>-ci.toml`   | `nodejs-ci.toml`   |
 
 ### Extension Template (API v2.0)
 
@@ -1118,6 +1125,7 @@ extension-manager validate extension-name
 ### Backward Compatibility
 
 Extensions without `upgrade()` function:
+
 - Will not break existing functionality
 - Cannot be upgraded via `extension-manager upgrade`
 - Will be skipped by `extension-manager upgrade-all`
@@ -1263,6 +1271,7 @@ monitoring
    - `nodejs` must come before `claude-config`
 
 2. **Core first**: Protected extensions are automatically installed first
+
    ```
    # Protected extensions (required, cannot be removed):
    workspace-structure  # Creates directory structure
@@ -1275,6 +1284,7 @@ monitoring
    ```
 
 3. **Group by category**: Organize related extensions together
+
    ```
    # Languages
    python
@@ -1288,6 +1298,7 @@ monitoring
    ```
 
 4. **Comment liberally**: Document why extensions are included
+
    ```
    # Required for CI/CD pipelines
    docker
@@ -1306,6 +1317,7 @@ monitoring
 Protected extensions are **core system components** that cannot be removed. They are automatically installed on first container startup.
 
 **Protected extensions:**
+
 - `workspace-structure` - Base directory structure
 - `mise-config` - Unified tool version manager
 - `ssh-environment` - SSH configuration for non-interactive sessions
@@ -1370,6 +1382,7 @@ mise --version
 ### Version Numbering
 
 Follow semantic versioning:
+
 - **Major** (X.0.0): Breaking changes, different tool manager, API version change
   - Example: v2.x → v3.x (NVM → mise for nodejs)
   - Example: v1.x → v2.x (API v1.0 → API v2.0)
@@ -1538,12 +1551,12 @@ python        # v2.x (mise-powered)
 
 When upgrading to mise-powered versions:
 
-| Extension | Traditional | mise-Powered | Breaking Change |
-|-----------|-------------|--------------|-----------------|
-| nodejs | v2.x (NVM) | v3.x (mise) | NVM commands no longer available |
-| python | v1.x (apt) | v2.x (mise) | System Python not used |
-| rust | v1.x (rustup) | v2.x (mise) | rustup not installed |
-| golang | v1.x (manual) | v2.x (mise) | Manual installation replaced |
+| Extension | Traditional   | mise-Powered | Breaking Change                  |
+| --------- | ------------- | ------------ | -------------------------------- |
+| nodejs    | v2.x (NVM)    | v3.x (mise)  | NVM commands no longer available |
+| python    | v1.x (apt)    | v2.x (mise)  | System Python not used           |
+| rust      | v1.x (rustup) | v2.x (mise)  | rustup not installed             |
+| golang    | v1.x (manual) | v2.x (mise)  | Manual installation replaced     |
 
 ---
 

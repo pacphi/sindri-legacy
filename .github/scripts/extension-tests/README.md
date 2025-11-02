@@ -24,6 +24,7 @@ extension-tests/
 Shared utility functions for test scripts.
 
 **Functions:**
+
 - **Output**: `print_success()`, `print_error()`, `print_warning()`, `print_info()`, `print_section()`
 - **Environment**: `source_environment()` - Load shell environment for non-interactive sessions
 - **Commands**: `command_exists()`, `check_command_with_version()`
@@ -33,6 +34,7 @@ Shared utility functions for test scripts.
 - **Debugging**: `dump_environment()`, `dump_manifest()`
 
 **Usage:**
+
 ```bash
 #!/bin/bash
 source "$(dirname "$0")/lib/test-helpers.sh"
@@ -53,6 +55,7 @@ fi
 Test assertion library with automatic test counting.
 
 **Assertions:**
+
 - `assert_command_exists <cmd> [message]`
 - `assert_file_exists <file> [message]`
 - `assert_directory_exists <dir> [message]`
@@ -65,10 +68,12 @@ Test assertion library with automatic test counting.
 - `assert_output_contains <command> <pattern> [message]`
 
 **Test Management:**
+
 - `print_test_summary()` - Show pass/fail counts
 - `reset_test_counters()` - Reset for new test suite
 
 **Usage:**
+
 ```bash
 #!/bin/bash
 source "$(dirname "$0")/lib/test-helpers.sh"
@@ -90,16 +95,19 @@ print_test_summary  # Shows: Tests run: 3, Passed: 3, Failed: 0
 Verifies CI extension manifest structure.
 
 **What it does:**
+
 1. Checks manifest file exists
 2. Verifies protected extensions are present
 3. Adds missing protected extensions if needed
 
 **Usage (on VM):**
+
 ```bash
 bash /tmp/verify-manifest.sh
 ```
 
 **From GitHub Actions:**
+
 ```yaml
 - name: Verify CI extension manifest
   run: |
@@ -119,16 +127,19 @@ bash /tmp/verify-manifest.sh
 Installs extension with its dependencies.
 
 **Arguments:**
+
 - `$1`: Extension name (required)
 - `$2-$n`: Dependencies (optional, space or comma separated)
 
 **What it does:**
+
 1. Creates/updates manifest
 2. Adds dependencies to manifest
 3. Adds main extension to manifest
 4. Runs `extension-manager install-all`
 
 **Usage:**
+
 ```bash
 # Install rust with mise-config dependency
 bash add-extension.sh rust mise-config
@@ -138,6 +149,7 @@ bash add-extension.sh monitoring mise-config,nodejs,python
 ```
 
 **From GitHub Actions:**
+
 ```yaml
 - name: Add extension to manifest
   run: |
@@ -157,20 +169,24 @@ bash add-extension.sh monitoring mise-config,nodejs,python
 Verifies that extension commands are available in PATH.
 
 **Arguments:**
+
 - `$1`: Comma-separated list of commands (required)
 
 **What it does:**
+
 1. Sources environment
 2. Checks each command with `command -v`
 3. Falls back to checking common paths
 4. Shows version info if available
 
 **Usage:**
+
 ```bash
 bash verify-commands.sh "node,npm,npx"
 ```
 
 **Output:**
+
 ```
 === Command Verification ===
 Commands to verify: node,npm,npx
@@ -194,9 +210,11 @@ Checking command: npm
 Tests primary tool functionality for an extension.
 
 **Arguments:**
+
 - `$1`: Key tool name (required)
 
 **Supported Tools:**
+
 - **Languages**: node, python3, rustc, go, java, php, ruby, dotnet
 - **Tools**: mise, claude, tsc, tmux, docker, terraform, aws, gh
 - **AI Tools**: ollama, codex, playwright, claude-monitor, agent-manager
@@ -204,6 +222,7 @@ Tests primary tool functionality for an extension.
 
 **What it does:**
 Runs tool-specific functional tests:
+
 - **Node**: Version check + hello world execution
 - **Rust**: Compile and run simple program
 - **Go**: Compile and run simple program
@@ -212,11 +231,13 @@ Runs tool-specific functional tests:
 - etc.
 
 **Usage:**
+
 ```bash
 bash test-key-functionality.sh node
 ```
 
 **Output:**
+
 ```
 === Testing key functionality for: node ===
 ℹ️  Testing Node.js...
@@ -234,9 +255,11 @@ Hello from Node.js
 Tests Extension API compliance (validate, status functions).
 
 **Arguments:**
+
 - `$1`: Extension name (required)
 
 **What it tests:**
+
 1. `validate()` function returns success
 2. `status()` function shows required fields:
    - Extension name
@@ -244,11 +267,13 @@ Tests Extension API compliance (validate, status functions).
 3. Extension is present in manifest
 
 **Usage:**
+
 ```bash
 bash test-api-compliance.sh nodejs
 ```
 
 **Output:**
+
 ```
 === Testing Extension API Compliance: nodejs ===
 
@@ -273,16 +298,19 @@ Status: installed
 Tests that running `extension-manager install-all` twice doesn't cause errors.
 
 **What it does:**
+
 1. Runs `extension-manager install-all` again
 2. Checks for errors in output
 3. Reports warnings but doesn't fail on them
 
 **Usage:**
+
 ```bash
 bash test-idempotency.sh
 ```
 
 **Output:**
+
 ```
 === Testing Idempotency ===
 ℹ️  Running extension-manager install-all a second time...
@@ -413,10 +441,11 @@ ssh developer@app.fly.dev "bash /tmp/test-script.sh"
 **Error**: `bash: /tmp/script.sh: No such file or directory`
 
 **Solution**: Upload script via SFTP before running:
+
 ```yaml
 flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
-  put .github/scripts/extension-tests/script.sh /tmp/script.sh
-  quit
+put .github/scripts/extension-tests/script.sh /tmp/script.sh
+quit
 SFTP_EOF
 ```
 
@@ -425,6 +454,7 @@ SFTP_EOF
 **Error**: `bash: /tmp/script.sh: Permission denied`
 
 **Solution**: Scripts should be readable, not necessarily executable (bash reads them):
+
 ```bash
 bash /tmp/script.sh  # Works even without +x
 ```
@@ -434,6 +464,7 @@ bash /tmp/script.sh  # Works even without +x
 **Error**: Command fails with "command not found"
 
 **Solution**: Source environment first:
+
 ```bash
 flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
   # -l flag loads login shell which sources environment
@@ -446,6 +477,7 @@ flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
 **Error**: `lib/test-helpers.sh: No such file or directory`
 
 **Solution**: Create lib directory and upload helpers:
+
 ```bash
 mkdir -p /tmp/lib
 mv /tmp/test-helpers.sh /tmp/lib/

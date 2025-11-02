@@ -153,13 +153,16 @@ name: My Custom Agent
 description: Specialized agent for my specific needs
 
 ## Instructions
+
 You are a specialized agent that helps with...
 
 ## Capabilities
+
 - Specific capability 1
 - Specific capability 2
 
 ## Usage Examples
+
 Use this agent when you need to...
 ```
 

@@ -1,36 +1,36 @@
-name: 'Run VM Script'
-description: 'Copy script to VM and execute it via SSH'
+name: "Run VM Script"
+description: "Copy script to VM and execute it via SSH"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   script-path:
-    description: 'Local path to script file'
+    description: "Local path to script file"
     required: true
   vm-destination:
-    description: 'Destination path on VM'
+    description: "Destination path on VM"
     required: false
-    default: '/tmp'
+    default: "/tmp"
   user:
-    description: 'SSH user'
+    description: "SSH user"
     required: false
-    default: 'developer'
+    default: "developer"
   script-args:
-    description: 'Arguments to pass to script'
+    description: "Arguments to pass to script"
     required: false
-    default: ''
+    default: ""
 
 outputs:
   status:
-    description: 'Execution status (success or failure)'
+    description: "Execution status (success or failure)"
     value: ${{ steps.run.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Copy and execute script on VM
       id: run

@@ -1,37 +1,37 @@
-name: 'Test SSH Connectivity'
-description: 'Tests SSH connectivity to Fly.io machine with retry logic'
+name: "Test SSH Connectivity"
+description: "Tests SSH connectivity to Fly.io machine with retry logic"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   max-attempts:
-    description: 'Maximum connection attempts'
+    description: "Maximum connection attempts"
     required: false
-    default: '8'
+    default: "8"
   wait-between:
-    description: 'Wait time between attempts (seconds)'
+    description: "Wait time between attempts (seconds)"
     required: false
-    default: '15'
+    default: "15"
   ssh-timeout:
-    description: 'Timeout for each SSH attempt (seconds)'
+    description: "Timeout for each SSH attempt (seconds)"
     required: false
-    default: '45'
+    default: "45"
   user:
-    description: 'SSH user'
+    description: "SSH user"
     required: false
-    default: 'developer'
+    default: "developer"
 
 outputs:
   status:
-    description: 'Test status (success or failure)'
+    description: "Test status (success or failure)"
     value: ${{ steps.test.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Test SSH connectivity
       id: test

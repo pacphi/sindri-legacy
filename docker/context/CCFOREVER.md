@@ -35,12 +35,12 @@ Context: Part of a user registration system in Python.
 Success Criteria: Return True for valid emails (e.g., "user@domain.com"), False for invalid
 (e.g., "user@domain", "user.domain.com").
 Example:
- Before: No validation exists.
- After:
- def is_valid_email(email):
- import re
- pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
- return bool(re.match(pattern, email))
+Before: No validation exists.
+After:
+def is*valid_email(email):
+import re
+pattern = r'^[a-zA-Z0-9.*%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+return bool(re.match(pattern, email))
 Isolation: Ensure each subagent operates on a specific, isolated scope to avoid conflicts.
 Step 3: Implementation
 Write Code: Each subagent implements its assigned subtask, adhering to best practices
@@ -73,8 +73,8 @@ is_valid_email.
 Context: Current function: def is_valid_email(email): ...
 Success Criteria: Return False for empty string or None.
 Example:
- Before: is_valid_email("") returns error.
- After: is_valid_email("") returns False, is_valid_email(None) returns False.
+Before: is_valid_email("") returns error.
+After: is_valid_email("") returns False, is_valid_email(None) returns False.
 Verification Loop:
 Spawn a verification subagent to validate each fix.
 Check for regressions or new issues.
@@ -99,19 +99,19 @@ Subagent 2: Handle edge cases (empty list, single element).
 Subagent 3: Optimize for performance and readability.
 Implementation:
 Subagent 1 produces:def sort_integers(numbers):
- return sorted(numbers)
+return sorted(numbers)
 Subagent 2 adds edge case handling:def sort_integers(numbers):
- if not numbers:
- return []
- return sorted(numbers)
+if not numbers:
+return []
+return sorted(numbers)
 Quality Assurance:
 Initial Score: 95/100 (missing explicit handling of None input).
 Subagent 4 fixes:def sort_integers(numbers):
- if numbers is None:
- return []
- if not numbers:
- return []
- return sorted(numbers)
+if numbers is None:
+return []
+if not numbers:
+return []
+return sorted(numbers)
 Verification Subagent confirms fix, no regressions.
 Final Score: 100/100.
 Delivery:

@@ -1,49 +1,49 @@
-name: 'Deploy Fly.io Test App'
-description: 'Creates and deploys a Fly.io app with volume and secrets for testing'
+name: "Deploy Fly.io Test App"
+description: "Creates and deploys a Fly.io app with volume and secrets for testing"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   region:
-    description: 'Fly.io region'
+    description: "Fly.io region"
     required: false
-    default: 'sjc'
+    default: "sjc"
   volume-name:
-    description: 'Volume name'
+    description: "Volume name"
     required: false
-    default: 'test_data'
+    default: "test_data"
   volume-size:
-    description: 'Volume size in GB'
+    description: "Volume size in GB"
     required: false
-    default: '20'
+    default: "20"
   ssh-pubkey-path:
-    description: 'Path to SSH public key file'
+    description: "Path to SSH public key file"
     required: false
-    default: 'test_key.pub'
+    default: "test_key.pub"
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   org:
-    description: 'Fly.io organization'
+    description: "Fly.io organization"
     required: false
-    default: 'personal'
+    default: "personal"
   max-deploy-attempts:
-    description: 'Maximum deployment retry attempts'
+    description: "Maximum deployment retry attempts"
     required: false
-    default: '3'
+    default: "3"
   deploy-timeout:
-    description: 'Deployment timeout in seconds'
+    description: "Deployment timeout in seconds"
     required: false
-    default: '300'
+    default: "300"
 
 outputs:
   deployment-status:
-    description: 'Deployment status (success or failure)'
+    description: "Deployment status (success or failure)"
     value: ${{ steps.deploy.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Create Fly.io app
       shell: bash

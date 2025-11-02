@@ -121,6 +121,7 @@ ssh developer@<app-name>.fly.dev -p 10022
 ```
 
 **Use this for:**
+
 - Daily development work
 - Running extension-manager commands
 - IDE remote development
@@ -139,6 +140,7 @@ flyctl ssh console -a <app-name> --user developer
 ```
 
 **Use this only when:**
+
 - Port 10022 SSH is not working
 - Emergency access needed
 - System-level debugging required

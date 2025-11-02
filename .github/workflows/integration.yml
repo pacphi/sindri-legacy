@@ -2,60 +2,60 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
       # Workflow itself
-      - '.github/workflows/integration.yml'
-      - '.github/workflows/integration-test.yml'
-      - '.github/workflows/developer-workflow.yml'
-      - '.github/workflows/mise-stack-integration.yml'
+      - ".github/workflows/integration.yml"
+      - ".github/workflows/integration-test.yml"
+      - ".github/workflows/developer-workflow.yml"
+      - ".github/workflows/mise-stack-integration.yml"
       # Scripts
-      - '.github/scripts/integration/**'
-      - '.github/scripts/common/**'
+      - ".github/scripts/integration/**"
+      - ".github/scripts/common/**"
 
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
       # Workflow itself
-      - '.github/workflows/integration.yml'
-      - '.github/workflows/integration-test.yml'
-      - '.github/workflows/developer-workflow.yml'
-      - '.github/workflows/mise-stack-integration.yml'
+      - ".github/workflows/integration.yml"
+      - ".github/workflows/integration-test.yml"
+      - ".github/workflows/developer-workflow.yml"
+      - ".github/workflows/mise-stack-integration.yml"
       # Scripts
-      - '.github/scripts/integration/**'
-      - '.github/scripts/common/**'
+      - ".github/scripts/integration/**"
+      - ".github/scripts/common/**"
 
   workflow_dispatch:
     inputs:
       test_region:
-        description: 'Fly.io region for test deployment'
+        description: "Fly.io region for test deployment"
         required: false
-        default: 'sjc'
+        default: "sjc"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup (for debugging)'
+        description: "Skip cleanup (for debugging)"
         required: false
         default: false
         type: boolean

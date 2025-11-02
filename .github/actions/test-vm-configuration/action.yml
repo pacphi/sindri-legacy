@@ -1,29 +1,29 @@
-name: 'Test VM Configuration'
-description: 'Tests VM configuration, tools, and extension system'
+name: "Test VM Configuration"
+description: "Tests VM configuration, tools, and extension system"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   required-tools:
     description: 'Comma-separated list of required tools to check (e.g., "curl,git,ssh")'
     required: false
-    default: 'curl,git,ssh'
+    default: "curl,git,ssh"
   user:
-    description: 'SSH user'
+    description: "SSH user"
     required: false
-    default: 'developer'
+    default: "developer"
 
 outputs:
   status:
-    description: 'Test status (success or failure)'
+    description: "Test status (success or failure)"
     value: ${{ steps.test.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Test VM configuration
       id: test

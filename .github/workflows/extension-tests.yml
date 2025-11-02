@@ -2,79 +2,77 @@ name: Extension System Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
-      - 'docker/lib/upgrade-history.sh'
-      - 'docker/lib/upgrade-notifier.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
+      - "docker/lib/upgrade-history.sh"
+      - "docker/lib/upgrade-notifier.sh"
       # Workflow itself
-      - '.github/workflows/extension-tests.yml'
-      - '.github/workflows/*.yml'
+      - ".github/workflows/extension-tests.yml"
+      - ".github/workflows/*.yml"
       # Actions
-      - '.github/actions/**'
+      - ".github/actions/**"
       # Test scripts
-      - '.github/scripts/extension-tests/**'
-      - 'tests/**/*.sh'
+      - ".github/scripts/extension-tests/**"
 
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
-      - 'docker/lib/upgrade-history.sh'
-      - 'docker/lib/upgrade-notifier.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
+      - "docker/lib/upgrade-history.sh"
+      - "docker/lib/upgrade-notifier.sh"
       # Workflow itself
-      - '.github/workflows/extension-tests.yml'
+      - ".github/workflows/extension-tests.yml"
       # Actions
-      - '.github/actions/**'
+      - ".github/actions/**"
       # Test scripts
-      - '.github/scripts/extension-tests/**'
-      - 'tests/**/*.sh'
+      - ".github/scripts/extension-tests/**"
 
   workflow_dispatch:
     inputs:
       extension_name:
-        description: 'Test specific extension (e.g., rust, golang, ai-tools)'
+        description: "Test specific extension (e.g., rust, golang, ai-tools)"
         required: false
         type: string
       skip_cleanup:
-        description: 'Skip cleanup for debugging'
+        description: "Skip cleanup for debugging"
         required: false
         default: false
         type: boolean
       skip_idempotency:
-        description: 'Skip idempotency tests (faster, but less thorough)'
+        description: "Skip idempotency tests (faster, but less thorough)"
         required: false
         default: false
         type: boolean
       test_app_prefix:
-        description: 'Test app prefix'
+        description: "Test app prefix"
         required: false
-        default: 'ext-test'
+        default: "ext-test"
         type: string
       region:
-        description: 'Fly.io region'
+        description: "Fly.io region"
         required: false
-        default: 'sjc'
+        default: "sjc"
         type: string
 
 jobs:
@@ -225,17 +223,6 @@ jobs:
   # Upgrade Tests
   # ============================================================================
 
-  test-upgrade-helpers:
-    name: Upgrade Helpers
-    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/test-upgrade-helpers.yml
-    with:
-      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
-      region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
-    secrets:
-      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
-
   test-extensions-metadata:
     name: Extensions Metadata
     needs: [setup-config, extension-manager-validation, extension-syntax-validation]
@@ -259,19 +246,14 @@ jobs:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
-  # Documentation Tests
+  # Documentation Linting
+  # Validates markdown files for formatting and style consistency
   # ============================================================================
 
   test-documentation:
-    name: Documentation
+    name: Lint Documentation
     needs: [setup-config, extension-manager-validation, extension-syntax-validation]
     uses: ./.github/workflows/test-documentation.yml
-    with:
-      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
-      region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
-    secrets:
-      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
   # Report Results
@@ -291,7 +273,6 @@ jobs:
       - manifest-operations-tests
       - dependency-chain-tests
       - extension-combinations
-      - test-upgrade-helpers
       - test-extensions-metadata
       - test-extensions-upgrade-vm
       - test-documentation

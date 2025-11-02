@@ -55,6 +55,7 @@ Thanks for the inspiration [Marcus Patman](https://github.com/marcuspat)!
 - **Clean Removal**: Proper uninstall with dependency warnings
 
 **Available Extensions:**
+
 - Core: `workspace-structure`, `nodejs`, `ssh-environment`
 - Claude AI: `claude-config`, `nodejs-devtools`, `agent-manager`, `context-loader`
 - Languages: `python`, `rust`, `golang`, `ruby`, `php`, `jvm`, `dotnet`
@@ -339,12 +340,12 @@ npx playwright test --ui
 
 ### Key Configuration Files
 
-| File | Purpose | Location |
-|------|---------|----------|
-| `agents-config.yaml` | Agent sources | `/workspace/config/` |
-| `tmux.conf` | Tmux configuration | `/workspace/config/` |
-| `CLAUDE.md` | Global context | `/workspace/context/` |
-| `CCFOREVER.md` | Quality assurance | `/workspace/context/` |
+| File                 | Purpose            | Location              |
+| -------------------- | ------------------ | --------------------- |
+| `agents-config.yaml` | Agent sources      | `/workspace/config/`  |
+| `tmux.conf`          | Tmux configuration | `/workspace/config/`  |
+| `CLAUDE.md`          | Global context     | `/workspace/context/` |
+| `CCFOREVER.md`       | Quality assurance  | `/workspace/context/` |
 
 ### Environment Variables
 
@@ -491,13 +492,16 @@ name: My Custom Agent
 description: Specialized agent for my specific needs
 
 ## Instructions
+
 You are a specialized agent that helps with...
 
 ## Capabilities
+
 - Specific capability 1
 - Specific capability 2
 
 ## Usage Examples
+
 Use this agent when you need to...
 ```
 

@@ -825,6 +825,7 @@ export MISE_REGISTRY_URL=https://alternative-registry.example.com
 ```
 
 For more information, see:
+
 - mise documentation: https://mise.jdx.dev
 - Available tools: https://mise.jdx.dev/registry.html
 - Extension integration: [Extension System README](../docker/lib/extensions.d/README.md)

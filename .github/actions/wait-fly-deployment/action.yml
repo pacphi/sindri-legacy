@@ -1,24 +1,24 @@
-name: 'Wait for Fly.io Deployment'
-description: 'Waits for Fly.io machine to start and SSH daemon to be ready'
+name: "Wait for Fly.io Deployment"
+description: "Waits for Fly.io machine to start and SSH daemon to be ready"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   timeout-seconds:
-    description: 'Maximum time to wait in seconds'
+    description: "Maximum time to wait in seconds"
     required: false
-    default: '240'
+    default: "240"
   poll-interval:
-    description: 'Polling interval in seconds'
+    description: "Polling interval in seconds"
     required: false
-    default: '15'
+    default: "15"
   ssh-init-wait:
-    description: 'Additional wait time for SSH daemon initialization (seconds)'
+    description: "Additional wait time for SSH daemon initialization (seconds)"
     required: false
-    default: '15'
+    default: "15"
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   expected-status:
     description: |
@@ -30,15 +30,15 @@ inputs:
 
       Use 'running' only for production deployments with health checks enabled.
     required: false
-    default: 'started'
+    default: "started"
 
 outputs:
   ready:
-    description: 'Whether the deployment is ready (true or false)'
+    description: "Whether the deployment is ready (true or false)"
     value: ${{ steps.wait.outputs.ready }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Wait for machine to start
       id: wait

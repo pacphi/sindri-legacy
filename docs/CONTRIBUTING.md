@@ -45,7 +45,27 @@ adding features, improving documentation, or sharing extensions, your contributi
    cd sindri
    ```
 
-2. **Set Up Development VM**
+2. **Local Development Setup (Optional)**
+
+   For working on Sindri's documentation, linting, and formatting:
+
+   ```bash
+   # Install pnpm (if not already installed)
+   npm install -g pnpm
+
+   # Install dependencies
+   pnpm install
+
+   # Run linting and formatting
+   pnpm run lint:md          # Lint markdown files
+   pnpm run lint:md:fix      # Fix markdown issues
+   pnpm run format           # Format all files
+   pnpm run format:check     # Check formatting
+   ```
+
+   > **Note**: Sindri uses pnpm for package management. The `package.json` file contains scripts for linting and formatting documentation.
+
+3. **Set Up Development VM**
 
    ```bash
    # Deploy development environment
@@ -56,7 +76,7 @@ adding features, improving documentation, or sharing extensions, your contributi
    /workspace/scripts/vm-configure.sh
    ```
 
-3. **Install Development Tools with mise**
+4. **Install Development Tools with mise**
 
    Sindri uses [mise](https://mise.jdx.dev) for polyglot tool version management:
 
@@ -77,7 +97,7 @@ adding features, improving documentation, or sharing extensions, your contributi
    mise doctor
    ```
 
-4. **Create Feature Branch**
+5. **Create Feature Branch**
 
    ```bash
    git checkout -b feature/your-feature-name
@@ -321,7 +341,6 @@ ssh -o PasswordAuthentication=no -o PreferredAuthentications=publickey \
    ```
 
 2. **Make Changes**
-
    - Write code following project standards
    - Add or update documentation
    - Include tests where applicable
@@ -359,7 +378,6 @@ ssh -o PasswordAuthentication=no -o PreferredAuthentications=publickey \
    ```
 
    Then create a pull request on GitHub with:
-
    - Clear description of changes
    - Screenshots or examples if UI-related
    - Testing steps performed
@@ -386,6 +404,7 @@ Use these prefixes for commit messages:
 Extensions are organized in directories under `docker/lib/extensions.d/`. Each extension has its own directory containing the extension file and any related configuration files.
 
 **Directory Structure:**
+
 ```
 docker/lib/extensions.d/
 └── extension-name/
@@ -570,6 +589,7 @@ function remove() {
 **mise TOML Configuration Best Practices:**
 
 1. **Organize tools by category:**
+
    ```toml
    [tools]
    # Language runtime
@@ -584,6 +604,7 @@ function remove() {
    ```
 
 2. **Use version constraints:**
+
    ```toml
    [tools]
    "python" = "3.13"          # Specific version
@@ -592,6 +613,7 @@ function remove() {
    ```
 
 3. **Document tool purposes:**
+
    ```toml
    [tools]
    # Code formatting and linting
@@ -615,17 +637,20 @@ function remove() {
 To add a new tool to an existing mise-managed extension:
 
 1. **Locate the TOML file:**
+
    ```bash
    ls /workspace/config/mise/*.toml
    ```
 
 2. **Edit the appropriate TOML:**
+
    ```bash
    # For Node.js tools
    nano /workspace/config/mise/nodejs.toml
    ```
 
 3. **Add tool entry:**
+
    ```toml
    [tools]
    # Existing tools...
@@ -636,6 +661,7 @@ To add a new tool to an existing mise-managed extension:
    ```
 
 4. **Install the new tool:**
+
    ```bash
    mise install -C /workspace/config/mise/nodejs.toml
    ```
@@ -696,6 +722,7 @@ extension-manager install tool-name  # Should succeed without errors
 **Common Patterns:**
 
 1. **Language + ecosystem tools:**
+
    ```toml
    [tools]
    "python" = "3.13"
@@ -705,6 +732,7 @@ extension-manager install tool-name  # Should succeed without errors
    ```
 
 2. **Binary tools from GitHub:**
+
    ```toml
    [tools]
    "ubi:sharkdp/bat" = "latest"
@@ -719,6 +747,7 @@ extension-manager install tool-name  # Should succeed without errors
    ```
 
 For complete mise documentation, see:
+
 - [mise official docs](https://mise.jdx.dev)
 - [mise registry](https://mise.jdx.dev/registry.html)
 - [Sindri mise standardization](MISE_STANDARDIZATION.md)

@@ -1,29 +1,29 @@
-name: 'Test Volume Mount'
-description: 'Verifies volume mount, permissions, and write capability'
+name: "Test Volume Mount"
+description: "Verifies volume mount, permissions, and write capability"
 
 inputs:
   app-name:
-    description: 'Fly.io app name'
+    description: "Fly.io app name"
     required: true
   fly-api-token:
-    description: 'Fly.io API token'
+    description: "Fly.io API token"
     required: true
   mount-path:
-    description: 'Volume mount path to verify'
+    description: "Volume mount path to verify"
     required: false
-    default: '/workspace'
+    default: "/workspace"
   user:
-    description: 'SSH user'
+    description: "SSH user"
     required: false
-    default: 'developer'
+    default: "developer"
 
 outputs:
   status:
-    description: 'Test status (success or failure)'
+    description: "Test status (success or failure)"
     value: ${{ steps.test.outputs.status }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Verify volume mount
       id: test

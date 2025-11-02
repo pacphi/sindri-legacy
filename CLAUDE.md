@@ -116,19 +116,23 @@ extension-manager upgrade-history        # View upgrade history
 ### Available Extensions
 
 **Core Extensions (Protected - Cannot be Removed):**
+
 - `workspace-structure` - Base directory structure (must be first)
 - `mise-config` - Unified tool version manager for all mise-powered extensions
 - `ssh-environment` - SSH configuration for non-interactive sessions and CI/CD
 
 **Foundational Languages:**
+
 - `nodejs` - Node.js LTS via mise with npm (requires mise-config, recommended - many tools depend on it)
 - `python` - Python 3.13 via mise with pip, venv, uv, pipx (requires mise-config)
 
 **Claude AI:**
+
 - `claude-config` - Claude Code CLI with developer configuration (requires nodejs)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
 **Development Tools:**
+
 - `github-cli` - GitHub CLI authentication and workflow configuration
 - `rust` - Rust toolchain with cargo, clippy, rustfmt (requires mise-config)
 - `golang` - Go 1.24 with gopls, delve, golangci-lint (requires mise-config)
@@ -139,12 +143,14 @@ extension-manager upgrade-history        # View upgrade history
 - `tmux-workspace` - Tmux session management with helper scripts
 
 **Infrastructure:**
+
 - `docker` - Docker Engine with compose, dive, ctop
 - `infra-tools` - Terraform, Ansible, kubectl, Helm
 - `cloud-tools` - AWS, Azure, GCP, Oracle, DigitalOcean CLIs
 - `ai-tools` - AI coding assistants (Codex, Gemini, Ollama, etc.)
 
 **Monitoring & Utilities:**
+
 - `monitoring` - System monitoring tools
 - `tmux-workspace` - Tmux session management
 - `playwright` - Browser automation testing
@@ -156,6 +162,7 @@ extension-manager upgrade-history        # View upgrade history
 Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
 
 Example manifest:
+
 ```
 # Protected extensions (required for system functionality):
 workspace-structure
@@ -181,6 +188,7 @@ post-cleanup
 ### Extension API
 
 Each extension implements 6 standard functions:
+
 - `prerequisites()` - Check system requirements
 - `install()` - Install packages and tools
 - `configure()` - Post-install configuration
@@ -193,10 +201,13 @@ Each extension implements 6 standard functions:
 Sindri provides multiple extensions for Node.js development:
 
 **nodejs** (Core - mise-powered):
+
 ```bash
 extension-manager install nodejs
 ```
+
 Provides:
+
 - Node.js LTS via mise (replaces NVM)
 - Multiple Node version support
 - npm with user-space global packages
@@ -204,10 +215,13 @@ Provides:
 - Per-project version management via mise.toml
 
 **nodejs-devtools** (Optional - mise-powered):
+
 ```bash
 extension-manager install nodejs-devtools
 ```
+
 Provides:
+
 - TypeScript (`tsc`, `ts-node`)
 - ESLint with TypeScript support
 - Prettier code formatter
@@ -216,16 +230,20 @@ Provides:
 - Tools managed via mise npm plugin
 
 **claude-config** (Recommended):
+
 ```bash
 extension-manager install claude-config
 ```
+
 Provides:
+
 - Claude Code CLI (`claude` command)
 - Global preferences (~/.claude/CLAUDE.md)
 - Auto-formatting hooks (Prettier, TypeScript)
 - Authentication management
 
 **Typical Setup**:
+
 ```bash
 # Edit manifest to uncomment desired extensions
 # /workspace/scripts/extensions.d/active-extensions.conf
@@ -368,6 +386,7 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 ### Available Workflows
 
 **Extension Testing (`extension-tests.yml`)**
+
 - Tests Extension API v1.0 and v2.0
 - Validates extension manager functionality
 - Tests individual extensions in parallel
@@ -375,18 +394,27 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 - Location: `.github/workflows/extension-tests.yml`
 
 **Integration Testing (`integration.yml`)**
+
 - End-to-end VM deployment tests
 - Developer workflow validation
 - mise-powered stack integration
 - Location: `.github/workflows/integration.yml`
 
 **Validation (`validate.yml`)**
+
 - Shell script validation with shellcheck
 - YAML syntax validation
-- Documentation checks
 - Location: `.github/workflows/validate.yml`
 
+**Documentation Linting (`test-documentation.yml`)**
+
+- Markdown file linting with markdownlint
+- Validates formatting and style consistency across all .md files
+- Runs on PR changes to markdown files
+- Location: `.github/workflows/test-documentation.yml`
+
 **Release (`release.yml`)**
+
 - Automated release creation
 - Changelog generation
 - Version tagging
