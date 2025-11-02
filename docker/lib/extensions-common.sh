@@ -188,6 +188,95 @@ check_disk_space() {
 }
 
 # ============================================================================
+# PACKAGE INSTALLATION HELPERS (with automatic retry)
+# ============================================================================
+
+# Install APT packages with automatic retry and error handling
+# Usage: install_apt_packages package1 package2 ...
+# Returns: 0 on success, 1 on failure
+install_apt_packages() {
+    if [[ $# -eq 0 ]]; then
+        print_error "install_apt_packages: No packages specified"
+        return 1
+    fi
+
+    print_status "Installing APT packages: $*"
+
+    # Update package lists first
+    if apt_update_retry 3; then
+        # Install with retry
+        if apt_install_retry 3 "$@"; then
+            print_success "APT packages installed successfully"
+            return 0
+        else
+            print_error "Failed to install APT packages: $*"
+            return 1
+        fi
+    else
+        print_error "Failed to update APT package lists"
+        return 1
+    fi
+}
+
+# Install npm packages globally with automatic retry
+# Usage: install_npm_global package1 package2 ...
+# Returns: 0 on success, 1 on failure
+install_npm_global() {
+    if [[ $# -eq 0 ]]; then
+        print_error "install_npm_global: No packages specified"
+        return 1
+    fi
+
+    print_status "Installing npm packages globally: $*"
+
+    if npm_install_retry 3 -g "$@"; then
+        print_success "npm packages installed successfully"
+        return 0
+    else
+        print_error "Failed to install npm packages: $*"
+        return 1
+    fi
+}
+
+# Install pip packages with automatic retry
+# Usage: install_pip_packages package1 package2 ...
+# Returns: 0 on success, 1 on failure
+install_pip_packages() {
+    if [[ $# -eq 0 ]]; then
+        print_error "install_pip_packages: No packages specified"
+        return 1
+    fi
+
+    print_status "Installing pip packages: $*"
+
+    if pip_install_retry 3 "$@"; then
+        print_success "pip packages installed successfully"
+        return 0
+    else
+        print_error "Failed to install pip packages: $*"
+        return 1
+    fi
+}
+
+# Download file with automatic retry
+# Usage: download_file URL [output_file]
+# Returns: 0 on success, 1 on failure
+download_file() {
+    local url="$1"
+    local output="${2:--O}"
+
+    print_status "Downloading: $url"
+
+    if wget_retry 3 "$url" "$output"; then
+        print_success "Download completed"
+        return 0
+    else
+        print_error "Failed to download: $url"
+        return 1
+    fi
+}
+
+# ============================================================================
 # STATUS HELPERS
 # ============================================================================
 
@@ -421,41 +510,6 @@ cleanup_bashrc() {
             print_success "Removed entries from .bashrc"
         fi
     fi
-}
-
-# Setup git aliases for an extension
-# Usage: setup_git_aliases "alias1:command1" "alias2:command2" ...
-# Example: setup_git_aliases "py-test:!pytest" "py-lint:!ruff check"
-setup_git_aliases() {
-    local alias_defs=("$@")
-
-    if ! command_exists git; then
-        return 0
-    fi
-
-    for alias_def in "${alias_defs[@]}"; do
-        local alias_name="${alias_def%%:*}"
-        local alias_cmd="${alias_def#*:}"
-        git config --global "alias.${alias_name}" "$alias_cmd" 2>/dev/null || true
-        print_debug "Configured git alias: $alias_name"
-    done
-}
-
-# Remove git aliases for an extension
-# Usage: cleanup_git_aliases "alias1" "alias2" ...
-cleanup_git_aliases() {
-    local aliases=("$@")
-
-    if ! command_exists git; then
-        return 0
-    fi
-
-    for alias in "${aliases[@]}"; do
-        if git config --global --get-all "alias.${alias}" >/dev/null 2>&1; then
-            git config --global --unset-all "alias.${alias}" 2>/dev/null || true
-            print_debug "Removed git alias: $alias"
-        fi
-    done
 }
 
 # Standardized confirmation prompt
@@ -844,8 +898,6 @@ export -f show_dependent_extensions_warning
 
 # Cleanup helpers
 export -f cleanup_bashrc
-export -f setup_git_aliases
-export -f cleanup_git_aliases
 export -f prompt_confirmation
 
 # Upgrade helpers (Extension API v2.0)

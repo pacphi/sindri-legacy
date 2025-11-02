@@ -122,6 +122,19 @@ configure() {
     fi
   fi
 
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/claude-config.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added Claude Flow aliases to .bashrc"
+    fi
+  fi
+
   print_success "Claude Code configuration created"
   print_status "Authenticate with: claude"
   return 0
@@ -307,6 +320,12 @@ remove() {
   else
     print_status "Claude configuration preserved at ~/.claude"
     print_status "Contains: CLAUDE.md (preferences) and settings.json (hooks)"
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed Claude Flow aliases from .bashrc"
   fi
 
   print_success "Claude Code uninstalled"

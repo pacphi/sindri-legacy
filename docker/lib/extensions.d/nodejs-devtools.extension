@@ -45,11 +45,7 @@ prerequisites() {
   fi
 
   # Hard requirement: mise must be available
-  if ! command_exists mise; then
-    print_error "mise is required but not found"
-    print_status "Install the mise-config extension first"
-    return 1
-  fi
+  check_mise_prerequisite || return 1
 
   print_success "All prerequisites met"
   return 0

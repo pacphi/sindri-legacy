@@ -3,6 +3,13 @@
 # Provides retry logic with exponential backoff for flaky operations
 
 # Generic retry with exponential backoff
+# NOTE: This is the CI/automation version optimized for GitHub Actions.
+#       A similar function exists in docker/lib/common.sh for VM use
+#       with different defaults (1s delay, no cap).
+#       These are intentionally separate - CI version has:
+#       - Higher initial delay (5s vs 1s) for flaky remote operations
+#       - Max delay cap (60s) to prevent workflow timeouts
+#       - Different parameter handling ("$@" vs eval) for safety in automation
 retry_with_backoff() {
   local max_attempts=${1:-3}
   local initial_delay=${2:-5}

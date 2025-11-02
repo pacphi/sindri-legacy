@@ -66,28 +66,26 @@ install() {
 configure() {
   print_status "Configuring SSH environment support..."
 
-  # Use configure_ssh_daemon_for_env from common.sh if available
-  if command -v configure_ssh_daemon_for_env >/dev/null 2>&1; then
-    configure_ssh_daemon_for_env
+  local sshd_config_d="/etc/ssh/sshd_config.d"
+  local env_config_file="$sshd_config_d/99-bash-env.conf"
+  local ssh_env_file="/etc/profile.d/00-ssh-environment.sh"
+
+  # Create sshd_config.d directory if it doesn't exist
+  if [[ ! -d "$sshd_config_d" ]]; then
+    sudo mkdir -p "$sshd_config_d"
+  fi
+
+  # Add BASH_ENV configuration for non-interactive SSH sessions
+  if [[ ! -f "$env_config_file" ]]; then
+    sudo tee "$env_config_file" > /dev/null << EOF
+# Configure BASH_ENV for non-interactive SSH sessions
+# This allows environment setup for commands executed via SSH
+Match User *
+    SetEnv BASH_ENV=$ssh_env_file
+EOF
+    print_success "Created SSH daemon environment config: $env_config_file"
   else
-    # Fallback: implement the configuration directly
-    local sshd_config_d="/etc/ssh/sshd_config.d"
-    local env_config_file="$sshd_config_d/99-bash-env.conf"
-    local ssh_env_file="${SSH_ENV_FILE:-/etc/ssh/ssh_env.sh}"
-
-    # Create sshd_config.d directory if it doesn't exist
-    if [[ ! -d "$sshd_config_d" ]]; then
-      sudo mkdir -p "$sshd_config_d"
-    fi
-
-    # Add BASH_ENV configuration for non-interactive SSH sessions
-    if [[ ! -f "$env_config_file" ]]; then
-      # Read template and substitute ssh_env_file variable, then write via sudo
-      envsubst < "$(dirname "${BASH_SOURCE[0]}")/ssh-environment.sshd-config.template" | sudo tee "$env_config_file" > /dev/null
-      print_success "Created SSH daemon environment config: $env_config_file"
-    else
-      print_status "SSH daemon environment config already exists"
-    fi
+    print_debug "SSH daemon environment config already exists"
   fi
 
   # Reload SSH daemon to apply changes

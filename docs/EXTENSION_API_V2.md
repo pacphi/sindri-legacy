@@ -477,7 +477,7 @@ fi
 ## Examples
 
 Complete working examples can be found in:
-- `docker/lib/extensions.d/template.extension` - Reference implementation
+- `docs/templates/template.extension` - Reference implementation
 - `docker/lib/extensions.d/nodejs.extension` - mise pattern
 - `docker/lib/extensions.d/docker.extension` - mixed pattern
 - `docker/lib/extensions.d/mise-config.extension` - binary pattern

@@ -161,6 +161,19 @@ EOF
   mkdir -p /workspace/context/global
   mkdir -p /workspace/context/templates
 
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/context-loader.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added context loader aliases to .bashrc"
+    fi
+  fi
+
   print_success "Context management configured"
   return 0
 }
@@ -337,6 +350,12 @@ remove() {
     else
       print_status "Context directory preserved"
     fi
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed context aliases from .bashrc"
   fi
 
   print_success "Context management utilities uninstalled"

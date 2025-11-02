@@ -593,12 +593,12 @@ When adding a new extension, ensure it will pass all 10 test jobs:
 # Get into extensions directory
 cd docker/lib/extensions.d
 
-# Copy template
+# Copy template from docs/templates
 # Example: creating extension for R programming language
-cp template.extension r.extension
+cp ../../../docs/templates/template.extension r.extension
 
 # Implement all 6 required API functions
-vim docker/lib/extensions.d/r.extension
+vim r.extension
 ```
 
 **Required API Functions:**

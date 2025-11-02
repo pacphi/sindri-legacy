@@ -1,0 +1,153 @@
+#!/bin/bash
+# agent-manager.aliases - Agent management and discovery aliases
+# Sourced by agent-manager extension
+
+# ============================================================================
+# AGENT MANAGEMENT
+# ============================================================================
+
+# Core agent management
+alias agent-install="agent-manager install --config /workspace/config/agents-config.yaml"
+alias agent-list="agent-manager list --config /workspace/config/agents-config.yaml"
+alias agent-update="agent-manager update --config /workspace/config/agents-config.yaml"
+alias agent-validate="agent-manager validate --config /workspace/config/agents-config.yaml"
+
+# Agent discovery and search (using agent-discovery.sh functions)
+alias agent-count='count_agents'
+alias agent-sources="agent-manager validate --config /workspace/config/agents-config.yaml --show-sources 2>/dev/null || echo 'Run agent-validate to see sources'"
+
+# Agent search functions (now using proper discovery functions)
+alias agent-find='search_agents_by_name'
+alias agent-sample='sample_agents'
+alias agent-by-category='list_agents_by_category'
+alias agent-with-keyword='find_agents_with_functionality'
+
+# Advanced search and discovery
+alias agent-search='search_agents_by_content'
+alias agent-metadata='get_agent_metadata'
+alias agent-list-all='list_all_agents_with_metadata'
+alias agent-by-tag='find_agents_by_tag'
+alias agent-search-fast='search_agent_index'
+alias agent-duplicates='find_duplicate_agents'
+alias agent-validate-all='validate_all_agents'
+
+# Index management
+alias agent-index='create_agent_index'
+alias agent-index-search='search_agent_index'
+
+# Statistics and information
+alias agent-stats='get_agent_stats'
+
+# Agent information and validation (simplified - using discovery functions)
+alias agent-info='get_agent_metadata'
+alias agent-validate-file='validate_agent_file'
+
+# Batch operations
+alias agent-install-all="agent-manager install --config /workspace/config/agents-config.yaml --all"
+
+agent-backup() {
+    cp -r /workspace/agents "/workspace/backups/agents-$(date +%Y%m%d-%H%M%S)"
+}
+
+# Configuration management
+alias agent-config="nano /workspace/config/agents-config.yaml"
+alias agent-config-validate="agent-manager validate --config /workspace/config/agents-config.yaml --config-only"
+alias agent-config-show="cat /workspace/config/agents-config.yaml"
+
+# Maintenance aliases
+alias agent-cleanup="find /workspace/agents -name '*.bak' -delete && find /workspace/agents -empty -type d -delete"
+
+# Development helpers for creating custom agents
+new-agent() {
+    local name="$1"
+    if [[ -z "$name" ]]; then
+        echo "Usage: new-agent <name>"
+        return 1
+    fi
+    local file="/workspace/agents/custom/${name}.md"
+    mkdir -p "$(dirname "$file")"
+    cat > "$file" << EOF
+name: $name
+description: Custom agent for specific tasks
+
+## Instructions
+You are a specialized agent that helps with...
+
+## Capabilities
+- Capability 1
+- Capability 2
+
+## Usage Examples
+Use this agent when you need to...
+EOF
+    echo "Created new agent template: $file"
+}
+
+# Quick access to mandatory agents
+alias doc-planner="cat /workspace/agents/doc-planner.md"
+alias microtask-breakdown="cat /workspace/agents/microtask-breakdown.md"
+
+# Integration with Claude Flow
+cf-with-agents() {
+    echo "Available agents: $(count_agents)"
+    echo "Mandatory agents loaded:"
+    doc-planner | head -5
+    echo "---"
+    microtask-breakdown | head -5
+}
+
+# Help command - shows all available agent commands
+agent-help() {
+    cat << 'EOF'
+🤖 Agent Management Commands
+============================
+
+CORE MANAGEMENT:
+  agent-install         Install agents from configured sources
+  agent-update          Update agents to latest versions
+  agent-list            List all installed agents
+  agent-validate        Validate agent configuration
+
+SEARCH & DISCOVERY:
+  agent-find <term>     Search agents by name
+  agent-search <term>   Search agents by content
+  agent-by-category     List agents organized by category
+  agent-by-tag <tag>    Find agents with specific tag
+  agent-with-keyword    Find agents with keyword in filename
+  agent-sample [n]      Show n random agents (default: 5)
+
+INFORMATION:
+  agent-count           Count total installed agents
+  agent-stats           Show comprehensive statistics
+  agent-info <file>     Show metadata for specific agent
+  agent-list-all        List all agents with descriptions
+  agent-metadata <file> Get structured metadata for agent
+
+VALIDATION & QUALITY:
+  agent-validate-all    Validate all installed agents
+  agent-validate-file   Validate specific agent file
+  agent-duplicates      Find agents with duplicate names
+  agent-sources         Show configured agent sources
+
+INDEX & PERFORMANCE:
+  agent-index           Create search index for faster queries
+  agent-index-search    Search using indexed data (fast)
+  agent-search-fast     Alias for indexed search
+
+MAINTENANCE:
+  agent-backup          Backup all agents with timestamp
+  agent-cleanup         Remove backup and empty directories
+  agent-config          Edit agent manager configuration
+  agent-config-show     Display current configuration
+
+DEVELOPMENT:
+  new-agent <name>      Create new custom agent template
+  doc-planner           View doc-planner agent
+  microtask-breakdown   View microtask agent
+
+INTEGRATION:
+  cf-with-agents        Show agent status for Claude Flow
+
+Use "agent-<command> -h" or "agent-<command> --help" for detailed help on specific commands.
+EOF
+}

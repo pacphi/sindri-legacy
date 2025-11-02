@@ -1,10 +1,12 @@
 # Extension System v1.0
 
-Sindri uses a manifest-based extension system to manage development tools and environments. Extensions follow a standardized API with explicit dependency management and activation control.
+Sindri uses a manifest-based extension system to manage development tools and environments.
+Extensions follow a standardized API with explicit dependency management and activation control.
 
 ## Overview
 
 **Extension API v1.0** provides:
+
 - **Manifest-based activation**: Control which extensions install via `active-extensions.conf`
 - **Standardized API**: All extensions implement 6 required functions
 - **Dependency management**: Explicit prerequisites checking before installation
@@ -40,11 +42,13 @@ extension-manager validate nodejs
 All extensions must implement these 6 functions:
 
 ### 1. `prerequisites()`
+
 **Purpose**: Check system requirements before installation
 
 **Returns**: `0` if all prerequisites met, `1` otherwise
 
 **Checks**:
+
 - Required system packages
 - Commands available in PATH
 - Disk space and memory
@@ -52,6 +56,7 @@ All extensions must implement these 6 functions:
 - Dependent extensions
 
 **Example**:
+
 ```bash
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
@@ -67,17 +72,20 @@ prerequisites() {
 ```
 
 ### 2. `install()`
+
 **Purpose**: Install packages and tools
 
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Download and install packages
 - Compile from source if needed
 - Verify installation success
 - Handle already-installed gracefully
 
 **Example**:
+
 ```bash
 install() {
   print_status "Installing ${EXT_NAME}..."
@@ -95,17 +103,20 @@ install() {
 ```
 
 ### 3. `configure()`
+
 **Purpose**: Post-installation configuration
 
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Add to PATH in .bashrc
 - Create configuration files
 - Set environment variables
 - Create SSH wrappers for non-interactive sessions
 
 **Example**:
+
 ```bash
 configure() {
   print_status "Configuring ${EXT_NAME}..."
@@ -120,17 +131,20 @@ configure() {
 ```
 
 ### 4. `validate()`
+
 **Purpose**: Run smoke tests to verify installation
 
 **Returns**: `0` if valid, `1` if validation fails
 
 **Tests**:
+
 - Command availability
 - Version checks
 - Basic functionality tests
 - Configuration validation
 
 **Example**:
+
 ```bash
 validate() {
   print_status "Validating ${EXT_NAME}..."
@@ -146,17 +160,20 @@ validate() {
 ```
 
 ### 5. `status()`
+
 **Purpose**: Display current installation state
 
 **Returns**: `0` if installed, `1` if not installed
 
 **Shows**:
+
 - Installed version
 - Configuration status
 - Component availability
 - Helpful diagnostics
 
 **Example**:
+
 ```bash
 status() {
   print_status "Checking ${EXT_NAME} status..."
@@ -173,11 +190,13 @@ status() {
 ```
 
 ### 6. `remove()`
+
 **Purpose**: Uninstall and clean up
 
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Check for dependent extensions
 - Prompt for confirmation
 - Remove packages and files
@@ -185,6 +204,7 @@ status() {
 - Remove PATH modifications
 
 **Example**:
+
 ```bash
 remove() {
   print_warning "Uninstalling ${EXT_NAME}..."
@@ -205,15 +225,18 @@ remove() {
 Extensions are organized by category in the activation manifest.
 
 ### Core Infrastructure
+
 - **workspace-structure** - Base /workspace directory structure
 - **nodejs** - Node.js LTS via NVM (Node Version Manager)
 - **ssh-environment** - SSH wrappers for non-interactive sessions
 
 ### Claude AI
+
 - **claude-config** - Claude Code CLI with developer configuration
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie
 
 ### Development Tools
+
 - **monitoring** - System monitoring tools (htop, ncdu, glances)
 - **playwright** - Browser automation testing framework
 - **tmux-workspace** - Tmux session manager
@@ -221,6 +244,7 @@ Extensions are organized by category in the activation manifest.
 - **context-loader** - Context management for Claude
 
 ### Programming Languages
+
 - **python** - Python 3.13 with pip, venv, uv
 - **rust** - Rust toolchain with cargo, clippy, rustfmt
 - **golang** - Go 1.24 with gopls, delve, golangci-lint
@@ -230,12 +254,14 @@ Extensions are organized by category in the activation manifest.
 - **dotnet** - .NET SDK 9.0/8.0 with ASP.NET Core
 
 ### Infrastructure, Cloud, and AI
+
 - **docker** - Docker Engine with compose, dive, ctop
 - **infra-tools** - Terraform, Ansible, kubectl, Helm, Carvel, Pulumi
 - **cloud-tools** - AWS, Azure, GCP, Oracle, DigitalOcean CLIs
 - **ai-tools** - AI coding assistants (Codex, Gemini, Ollama, Fabric, Plandex)
 
 ### Post-Installation
+
 - **post-cleanup** - Clean caches, set permissions, create tools summary (run LAST)
 
 ## Activation Manifest
@@ -275,6 +301,7 @@ post-cleanup
 The `extension-manager` CLI tool manages extension lifecycle:
 
 ### List Extensions
+
 ```bash
 # Show all available extensions
 extension-manager list
@@ -283,6 +310,7 @@ extension-manager list
 ```
 
 ### Activate Extension
+
 ```bash
 # Manually add to manifest (doesn't install yet)
 # Edit: /workspace/scripts/lib/extensions.d/active-extensions.conf
@@ -294,6 +322,7 @@ extension-manager install claude-config
 ```
 
 ### Install Extension
+
 ```bash
 # Install single extension
 extension-manager install nodejs
@@ -303,6 +332,7 @@ extension-manager install-all
 ```
 
 ### Check Status
+
 ```bash
 # Show installation status
 extension-manager status nodejs
@@ -311,6 +341,7 @@ extension-manager status nodejs
 ```
 
 ### Validate Installation
+
 ```bash
 # Run smoke tests
 extension-manager validate nodejs
@@ -319,6 +350,7 @@ extension-manager validate nodejs
 ```
 
 ### Uninstall Extension
+
 ```bash
 # Remove extension and clean up
 extension-manager uninstall nodejs
@@ -327,6 +359,7 @@ extension-manager uninstall nodejs
 ```
 
 ### Reorder Priority
+
 ```bash
 # Change execution order in manifest
 extension-manager reorder nodejs 5
@@ -337,11 +370,13 @@ extension-manager reorder nodejs 5
 ## Creating Extensions
 
 ### 1. Copy Template
+
 ```bash
-cp template.extension my-extension.extension
+cp ../../../docs/templates/template.extension my-extension.extension
 ```
 
 ### 2. Update Metadata
+
 ```bash
 #!/bin/bash
 # my-extension.extension - Brief description
@@ -354,6 +389,7 @@ EXT_CATEGORY="utility"  # utility, language, infrastructure
 ```
 
 ### 3. Source Shared Helper Functions
+
 ```bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
@@ -367,33 +403,41 @@ extension_init
 The `extensions-common.sh` library provides these helper functions to eliminate code duplication:
 
 **Environment Helpers:**
+
 - `is_ci_mode()` - Check if running in CI
 - `activate_mise_environment()` - Activate mise in current shell
 
 **Prerequisite Checks:**
+
 - `check_mise_prerequisite()` - Verify mise is installed
 - `check_disk_space [mb]` - Check available disk space (default 600MB)
 
 **Status Helpers:**
+
 - `print_extension_header()` - Print standard extension header with metadata
 
 **Validation Helpers:**
+
 - `validate_commands <array>` - Validate multiple commands with version checks
 
 **mise Helpers:**
+
 - `install_mise_config "name"` - Install mise TOML configuration (handles CI vs dev selection)
 - `remove_mise_config "name"` - Remove mise configuration
 
 **Git Helpers:**
+
 - `setup_git_aliases "alias:command" ...` - Setup git aliases
 - `cleanup_git_aliases "alias1" "alias2" ...` - Remove git aliases
 
 **Cleanup Helpers:**
+
 - `cleanup_bashrc "marker"` - Remove extension entries from .bashrc
 - `prompt_confirmation "question"` - Standardized yes/no prompt
 - `show_dependent_extensions_warning "cmd1" "cmd2"` - Check and display dependent extensions
 
 **Main Execution Wrapper:**
+
 - `extension_main "$@"` - Standard main execution block (replaces manual case statement)
 
 ### 4. Implement Required Functions
@@ -477,7 +521,7 @@ extension-manager validate my-extension
 
 ### Helper Function Reference
 
-See the updated `template.extension` for comprehensive examples of using all helper functions. Key benefits:
+See `docs/templates/template.extension` for comprehensive examples of using all helper functions. Key benefits:
 
 1. **Less Code**: Helper functions eliminate 50-100 lines of boilerplate per extension
 2. **Consistency**: All extensions use the same patterns
@@ -488,7 +532,9 @@ See the updated `template.extension` for comprehensive examples of using all hel
 ## Best Practices
 
 ### 1. Idempotent Operations
+
 Extensions must be safe to re-run:
+
 ```bash
 install() {
   if command_exists my-tool; then
@@ -501,7 +547,9 @@ install() {
 ```
 
 ### 2. Explicit Dependencies
+
 Declare dependencies in `prerequisites()`:
+
 ```bash
 prerequisites() {
   if ! command_exists npm; then
@@ -514,7 +562,9 @@ prerequisites() {
 ```
 
 ### 3. Graceful Error Handling
+
 Don't exit on minor failures:
+
 ```bash
 install() {
   npm install -g tool1 || print_warning "tool1 failed"
@@ -526,7 +576,9 @@ install() {
 ```
 
 ### 4. Consistent Logging
+
 Use provided print functions:
+
 - `print_status` - Informational messages
 - `print_success` - Success messages
 - `print_error` - Error messages
@@ -534,6 +586,7 @@ Use provided print functions:
 - `print_debug` - Debug output (only when DEBUG=true)
 
 ### 5. User-Space Installation
+
 Avoid sudo when possible. Use version managers and user-space installation methods:
 
 ```bash
@@ -555,6 +608,7 @@ sudo gem install package
 ```
 
 **Important for Node.js/NVM**: Do NOT set npm prefix when using NVM:
+
 ```bash
 # WRONG: Conflicts with NVM
 npm config set prefix "$HOME/.npm-global"
@@ -566,7 +620,9 @@ npm install -g package  # No sudo needed, installs to NVM directory
 ```
 
 ### 6. SSH Session Support
+
 Create wrappers for non-interactive SSH:
+
 ```bash
 configure() {
   if command_exists create_tool_wrapper 2>/dev/null; then
@@ -576,6 +632,7 @@ configure() {
 ```
 
 ### 7. Clean Configuration
+
 Add comments when modifying .bashrc:
 ```bash
 echo "" >> "$HOME/.bashrc"
@@ -584,7 +641,9 @@ echo "export PATH=\"$HOME/.local/bin:\$PATH\"" >> "$HOME/.bashrc"
 ```
 
 ### 8. Manifest Ordering
+
 Consider dependencies when ordering in manifest:
+
 ```bash
 # Good: nodejs before claude-config
 nodejs
@@ -598,6 +657,7 @@ nodejs
 ## Debugging
 
 ### Enable Debug Output
+
 ```bash
 # Set DEBUG environment variable
 DEBUG=true extension-manager install nodejs
@@ -607,6 +667,7 @@ DEBUG=true /workspace/scripts/vm-configure.sh
 ```
 
 ### Test Individual Functions
+
 ```bash
 # Run specific function
 bash -x my-extension.sh.example install
@@ -616,6 +677,7 @@ my-extension.sh.example prerequisites && echo "OK" || echo "FAIL"
 ```
 
 ### Check Logs
+
 ```bash
 # Extension-manager logs to stdout/stderr
 extension-manager install nodejs 2>&1 | tee install.log
@@ -625,6 +687,7 @@ cat /workspace/scripts/extensions.d/active-extensions.conf
 ```
 
 ### Validate Manually
+
 ```bash
 # Check installation state
 extension-manager status my-extension
@@ -641,17 +704,21 @@ extension-manager list | grep ACTIVE
 If you have custom extensions using the old numbered prefix system (e.g., `50-my-tool.sh`):
 
 ### 1. Rename File
+
 ```bash
 mv 50-my-tool.sh my-tool.sh.example
 ```
 
 ### 2. Add Metadata
+
 Add `EXT_NAME`, `EXT_VERSION`, `EXT_DESCRIPTION`, `EXT_CATEGORY` at the top.
 
 ### 3. Wrap in Functions
+
 Convert script body into `install()` function. Add other 5 API functions.
 
 ### 4. Install Extension
+
 ```bash
 # Install command will auto-activate the extension
 extension-manager install my-tool
@@ -660,6 +727,7 @@ extension-manager install my-tool
 ```
 
 ### 5. Test
+
 ```bash
 extension-manager validate my-tool
 ```
@@ -667,6 +735,7 @@ extension-manager validate my-tool
 ## Troubleshooting
 
 ### Extension Won't Activate
+
 ```bash
 # Check file exists
 ls -l /workspace/scripts/lib/extensions.d/my-extension.sh.example
@@ -679,6 +748,7 @@ bash -n my-extension.sh.example
 ```
 
 ### Prerequisites Fail
+
 ```bash
 # Run prerequisites manually
 ./my-extension.sh.example prerequisites
@@ -688,6 +758,7 @@ extension-manager status dependency-name
 ```
 
 ### Installation Fails
+
 ```bash
 # Enable debug mode
 DEBUG=true extension-manager install my-extension
@@ -700,6 +771,7 @@ curl -I https://github.com
 ```
 
 ### Validation Fails
+
 ```bash
 # See what failed
 extension-manager validate my-extension
