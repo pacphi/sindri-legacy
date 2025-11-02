@@ -131,7 +131,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Testing playwright → nodejs dependency chain..."
+          echo "Testing playwright → nodejs dependency error handling..."
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
@@ -147,35 +147,32 @@ jobs:
             cat \$manifest
 
             echo \"\"
-            echo \"Attempting to install playwright without nodejs...\"
-            if timeout 5m bash extension-manager.sh install playwright 2>&1 | tee /tmp/playwright_test.log; then
-              echo \"\"
-              echo \"Installation completed, checking if nodejs was auto-installed...\"
+            echo \"Attempting to install playwright without nodejs (should fail)...\"
+            set +e  # Don'\''t exit on error
+            timeout 5m bash extension-manager.sh install playwright 2>&1 | tee /tmp/playwright_test.log
+            install_exit=\${PIPESTATUS[0]}
+            set -e
 
-              if command -v node >/dev/null 2>&1; then
-                echo \"✅ nodejs was auto-installed as dependency\"
-
-                # Verify both are in manifest
-                if grep -q \"^nodejs\" \$manifest && grep -q \"^playwright\" \$manifest; then
-                  echo \"✅ Both nodejs and playwright added to manifest\"
-                else
-                  echo \"⚠️  Extensions installed but manifest may need updating\"
-                fi
-              else
-                echo \"❌ playwright installed but nodejs is missing\"
-                exit 1
-              fi
-            else
-              echo \"\"
-              echo \"Installation failed, checking error message...\"
-              if grep -qi \"node.*required\|install.*nodejs\" /tmp/playwright_test.log; then
-                echo \"✅ Appropriate error message shown (prerequisite check working)\"
-              else
-                echo \"❌ Error message unclear\"
-                cat /tmp/playwright_test.log
-                exit 1
-              fi
+            if [ \$install_exit -eq 0 ]; then
+              echo \"❌ Installation succeeded when it should have failed (nodejs prerequisite missing)\"
+              cat /tmp/playwright_test.log
+              exit 1
             fi
+
+            echo \"\"
+            echo \"✅ Installation correctly failed (exit code: \$install_exit)\"
+            echo \"Verifying error message quality...\"
+
+            if grep -qi \"node.*required\|install.*nodejs\" /tmp/playwright_test.log; then
+              echo \"✅ Clear error message shown about nodejs prerequisite\"
+            else
+              echo \"❌ Error message unclear or missing prerequisite information\"
+              cat /tmp/playwright_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Dependency prerequisite check working correctly\"
           '"
 
       - name: Test monitoring dependency on python
@@ -185,7 +182,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Testing monitoring → python dependency chain..."
+          echo "Testing monitoring → python dependency error handling..."
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
@@ -201,35 +198,32 @@ jobs:
             cat \$manifest
 
             echo \"\"
-            echo \"Attempting to install monitoring without python...\"
-            if timeout 5m bash extension-manager.sh install monitoring 2>&1 | tee /tmp/monitoring_test.log; then
-              echo \"\"
-              echo \"Installation completed, checking if python was auto-installed...\"
+            echo \"Attempting to install monitoring without python (should fail)...\"
+            set +e  # Don'\''t exit on error
+            timeout 5m bash extension-manager.sh install monitoring 2>&1 | tee /tmp/monitoring_test.log
+            install_exit=\${PIPESTATUS[0]}
+            set -e
 
-              if command -v python3 >/dev/null 2>&1; then
-                echo \"✅ python was auto-installed as dependency\"
-
-                # Verify both are in manifest
-                if grep -q \"^python\" \$manifest && grep -q \"^monitoring\" \$manifest; then
-                  echo \"✅ Both python and monitoring added to manifest\"
-                else
-                  echo \"⚠️  Extensions installed but manifest may need updating\"
-                fi
-              else
-                echo \"❌ monitoring installed but python is missing\"
-                exit 1
-              fi
-            else
-              echo \"\"
-              echo \"Installation failed, checking error message...\"
-              if grep -qi \"python.*required\|install.*python\" /tmp/monitoring_test.log; then
-                echo \"✅ Appropriate error message shown (prerequisite check working)\"
-              else
-                echo \"❌ Error message unclear\"
-                cat /tmp/monitoring_test.log
-                exit 1
-              fi
+            if [ \$install_exit -eq 0 ]; then
+              echo \"❌ Installation succeeded when it should have failed (python prerequisite missing)\"
+              cat /tmp/monitoring_test.log
+              exit 1
             fi
+
+            echo \"\"
+            echo \"✅ Installation correctly failed (exit code: \$install_exit)\"
+            echo \"Verifying error message quality...\"
+
+            if grep -qi \"python.*required\|install.*python\" /tmp/monitoring_test.log; then
+              echo \"✅ Clear error message shown about python prerequisite\"
+            else
+              echo \"❌ Error message unclear or missing prerequisite information\"
+              cat /tmp/monitoring_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Dependency prerequisite check working correctly\"
           '"
 
       # Using composite action for cleanup

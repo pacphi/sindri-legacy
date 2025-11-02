@@ -6,7 +6,7 @@
 go = "1.24"
 
 [env]
-GOPATH = "{{home}}/go"
+GOPATH = "$HOME/go"
 GO111MODULE = "on"
 GOPROXY = "https://proxy.golang.org,direct"
 CI = "true"

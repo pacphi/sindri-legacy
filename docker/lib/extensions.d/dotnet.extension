@@ -229,9 +229,9 @@ configure() {
   # Configure PATH for SSH sessions
   if command_exists setup_tool_path 2>/dev/null; then
     setup_tool_path "dotnet" \
-      'export DOTNET_CLI_TELEMETRY_OPTOUT=1' \
-      'export DOTNET_ROOT=/usr/share/dotnet' \
-      'export PATH=$PATH:$HOME/.dotnet/tools'
+      'export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_ROOT=/usr/share/dotnet
+export PATH=$PATH:$HOME/.dotnet/tools'
   else
     # Fallback: add to bashrc
     if ! grep -q "DOTNET_ROOT" "$HOME/.bashrc" 2>/dev/null; then

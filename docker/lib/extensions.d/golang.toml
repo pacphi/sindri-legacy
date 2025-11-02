@@ -14,7 +14,7 @@ go = "1.24"
 "go:github.com/goreleaser/goreleaser@latest" = "latest"
 
 [env]
-GOPATH = "{{home}}/go"
+GOPATH = "$HOME/go"
 GO111MODULE = "on"
 GOPROXY = "https://proxy.golang.org,direct"
 
