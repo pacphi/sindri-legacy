@@ -35,34 +35,23 @@ jobs:
           echo "Testing extension name extraction..."
           cd docker/lib
 
-          # Test with new non-numbered filename format
-          test_file="extensions.d/rust.extension"
+          # Test with directory-based structure
+          test_dir="extensions.d/rust"
+          test_file="${test_dir}/rust.extension"
+
           if [[ -f "$test_file" ]]; then
-            # Extract name using the same logic as extension-manager
-            name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
-            echo "Extracted name from $test_file: $name"
+            # Extract name from directory (matches extension-manager logic)
+            name=$(basename "$test_dir")
+            echo "Extracted name from directory $test_dir: $name"
 
             if [[ "$name" != "rust" ]]; then
               echo "ERROR: Expected 'rust', got '$name'"
               exit 1
             fi
-            echo "✅ New naming convention works"
+            echo "✅ Directory-based naming convention works"
           else
-            echo "⚠️  New format file not found, checking legacy format..."
-            # Fallback to test legacy format if it exists
-            test_file="extensions.d/10-rust.extension"
-            if [[ -f "$test_file" ]]; then
-              name=$(basename "$test_file" .extension | sed 's/^[0-9]*-//')
-              echo "Extracted name from legacy file: $name"
-              if [[ "$name" != "rust" ]]; then
-                echo "ERROR: Expected 'rust', got '$name'"
-                exit 1
-              fi
-              echo "✅ Legacy naming convention still supported"
-            else
-              echo "ERROR: No test files found"
-              exit 1
-            fi
+            echo "ERROR: Extension file not found at $test_file"
+            exit 1
           fi
 
           echo "✅ Extension name extraction working correctly"
