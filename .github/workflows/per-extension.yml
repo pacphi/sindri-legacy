@@ -370,8 +370,7 @@ jobs:
 
           # Upload files and fix permissions for developer user
           flyctl ssh sftp put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh --app $app_name
-          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-key-functionality.sh /tmp/lib/test-helpers.sh"
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-key-functionality.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/test-key-functionality.sh $key_tool
