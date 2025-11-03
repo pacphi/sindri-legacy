@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true
@@ -94,6 +99,7 @@ jobs:
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           deploy-timeout: "600"
           retry-attempts: "3"
+          pre-built-image: ${{ inputs.pre_built_image }}
 
       # Using composite action for waiting
       - name: Wait for deployment

@@ -72,6 +72,7 @@ claude
 - **[Architecture](docs/ARCHITECTURE.md)** - System architecture and file structure
 - **[Cost Management](docs/COST_MANAGEMENT.md)** - Optimization strategies and monitoring
 - **[Customization](docs/CUSTOMIZATION.md)** - Extensions, tools, and configuration
+- **[Extensions](docs/EXTENSIONS.md)** - Extension system architecture and development
 - **[Security](docs/SECURITY.md)** - Security features and best practices
 - **[Agents](docs/AGENTS.md)** - Agent management, search, and development
 - **[Turbo Flow](docs/TURBO_FLOW.md)** - Mimic enterprise AI development features from [turbo-flow-claude](https://github.com/marcuspat/turbo-flow-claude)
@@ -92,6 +93,7 @@ claude
 
 ### CI/CD Infrastructure
 
+- **[Pre-Built Images Setup](docs/PREBUILT_IMAGES_SETUP.md)** - Docker image caching for faster CI/CD
 - **[Composite Actions](.github/actions/README.md)** - Reusable GitHub Actions
 - **[Test Scripts](.github/scripts/extension-tests/README.md)** - Shell test utilities
 
@@ -191,7 +193,7 @@ extension-manager status <name>     # Check status
 - `agent-manager` - Agent management
 - `context-loader` - Context system
 
-> See [Customization Guide](docs/CUSTOMIZATION.md) for complete extension details.
+> See [Customization Guide](docs/CUSTOMIZATION.md) for complete extension details and [Extensions Guide](docs/EXTENSIONS.md) for architecture and development.
 
 ## 🔧 Essential Commands
 

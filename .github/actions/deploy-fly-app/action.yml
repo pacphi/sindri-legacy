@@ -36,6 +36,10 @@ inputs:
     description: "Deployment timeout in seconds"
     required: false
     default: "300"
+  pre-built-image:
+    description: "Pre-built Docker image URL (e.g., registry.fly.io/app:tag). If provided, skips build."
+    required: false
+    default: ""
 
 outputs:
   deployment-status:
@@ -88,12 +92,35 @@ runs:
         max_attempts=${{ inputs.max-deploy-attempts }}
         attempt=1
 
+        # Determine deployment command
+        if [ -n "${{ inputs.pre-built-image }}" ]; then
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Using pre-built image (fast deployment)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Image: ${{ inputs.pre-built-image }}"
+          echo ""
+
+          DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
+            --image ${{ inputs.pre-built-image }} \
+            --strategy immediate \
+            --wait-timeout ${{ inputs.deploy-timeout }}s \
+            --yes"
+        else
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Building from source (no pre-built image)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
+            --strategy immediate \
+            --wait-timeout ${{ inputs.deploy-timeout }}s \
+            --yes"
+        fi
+
         while [ $attempt -le $max_attempts ]; do
           echo "Deployment attempt $attempt of $max_attempts..."
-          if flyctl deploy --app ${{ inputs.app-name }} \
-              --strategy immediate \
-              --wait-timeout ${{ inputs.deploy-timeout }}s \
-              --yes; then
+
+          if eval $DEPLOY_CMD; then
             echo "✅ Deployment successful"
             echo "status=success" >> $GITHUB_OUTPUT
             exit 0

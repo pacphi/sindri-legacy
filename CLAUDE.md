@@ -420,12 +420,51 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 - Version tagging
 - Location: `.github/workflows/release.yml`
 
+**Build Docker Images (`build-image.yml`)**
+
+- Builds and pushes Docker images to Fly.io registry
+- Automatic triggers on Dockerfile/docker/* changes
+- Tags: PR-specific, branch-specific, and latest
+- Enables ~75% faster CI/CD by reusing images
+- Location: `.github/workflows/build-image.yml`
+
+### Pre-Built Docker Images
+
+Sindri uses pre-built Docker images to dramatically improve CI/CD performance:
+
+**Setup (First-Time Only)**:
+```bash
+# Create registry app (one-time setup)
+flyctl apps create sindri-registry --org personal
+```
+
+**How It Works**:
+- Images are built once and reused across all test jobs
+- Automatic rebuilding when Dockerfile or docker/* files change
+- Conditional reuse when no Docker changes detected
+- ~75% reduction in workflow execution time
+
+**Image Tags**:
+- Pull Requests: `registry.fly.io/sindri-registry:pr-<number>-<sha>`
+- Branch Builds: `registry.fly.io/sindri-registry:<branch>-<sha>`
+- Latest (main): `registry.fly.io/sindri-registry:latest`
+
+**Performance Impact**:
+- Integration Tests: 15min → 4min (**73% faster**)
+- Extension Tests: 45min → 12min (**73% faster**)
+- Per-Extension Tests: 6min → 1.5min (**75% faster**)
+
+**Documentation**:
+- Setup Guide: `docs/PREBUILT_IMAGES_SETUP.md`
+- Architecture: `.github/actions/build-push-image/README.md`
+
 ### Composite Actions
 
 Reusable workflow components in `.github/actions/`:
 
 - `setup-fly-test-env/` - Complete test environment setup
-- `deploy-fly-app/` - Fly.io app deployment with retry logic
+- `deploy-fly-app/` - Fly.io app deployment with retry logic and pre-built image support
+- `build-push-image/` - Build and push Docker images to Fly registry
 - `wait-fly-deployment/` - Wait for deployment completion
 - `cleanup-fly-app/` - Cleanup test resources
 

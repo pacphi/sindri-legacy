@@ -7,7 +7,8 @@ This directory contains reusable composite actions for Fly.io test environment m
 ### Infrastructure Actions
 
 - **setup-fly-test-env** - Complete test environment setup
-- **deploy-fly-app** - Deploy Fly.io app with volumes and secrets
+- **deploy-fly-app** - Deploy Fly.io app with volumes and secrets (supports pre-built images)
+- **build-push-image** - Build and push Docker images to Fly.io registry
 - **wait-fly-deployment** - Wait for machine to reach desired state
 - **cleanup-fly-app** - Destroy test resources
 
@@ -62,7 +63,7 @@ Sets up the complete test environment for Fly.io extension testing.
 
 ### deploy-fly-app
 
-Deploys a Fly.io app with volume and secrets, including retry logic.
+Deploys a Fly.io app with volume and secrets, including retry logic and pre-built image support.
 
 **What it does:**
 
@@ -70,10 +71,12 @@ Deploys a Fly.io app with volume and secrets, including retry logic.
 2. Creates and attaches volume
 3. Sets SSH and CI secrets
 4. Deploys with automatic retries (default: 3 attempts)
+5. Optionally uses pre-built Docker image (skips build)
 
 **Usage:**
 
 ```yaml
+# Standard deployment (builds from Dockerfile)
 - name: Deploy test environment
   uses: ./.github/actions/deploy-fly-app
   with:
@@ -81,6 +84,15 @@ Deploys a Fly.io app with volume and secrets, including retry logic.
     region: "sjc"
     fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
     deploy-timeout: "300" # Optional, default: 300s
+
+# Fast deployment with pre-built image (~75% faster)
+- name: Deploy test environment
+  uses: ./.github/actions/deploy-fly-app
+  with:
+    app-name: ${{ steps.setup.outputs.app-name }}
+    region: "sjc"
+    fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+    pre-built-image: "registry.fly.io/sindri-registry:pr-123-a1b2c3d"
 ```
 
 **Features:**
@@ -89,6 +101,52 @@ Deploys a Fly.io app with volume and secrets, including retry logic.
 - Configurable timeout and retry attempts
 - Volume creation and attachment
 - SSH key injection
+- **Pre-built image support** - skip Docker build for faster deployments
+
+---
+
+### build-push-image
+
+Builds Docker images and pushes them to Fly.io registry for reuse across workflows.
+
+**What it does:**
+
+1. Authenticates with Fly.io Docker registry
+2. Builds Docker image from Dockerfile
+3. Tags image with provided tag
+4. Pushes to registry.fly.io
+
+**Usage:**
+
+```yaml
+- name: Build and push image
+  id: build
+  uses: ./.github/actions/build-push-image
+  with:
+    fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+    tag: "pr-123-a1b2c3d"
+    registry-app: "sindri-registry" # Optional, default: sindri-registry
+```
+
+**Outputs:**
+
+- `image-url`: Full image URL (e.g., `registry.fly.io/sindri-registry:pr-123-a1b2c3d`)
+- `image-tag`: The tag used
+
+**Benefits:**
+
+- **~75% faster CI/CD**: Reuse images across multiple test jobs
+- **Cost savings**: Build once, deploy many times
+- **Consistency**: Same image for all tests
+
+**Setup Required:**
+
+```bash
+# One-time setup: Create registry app
+flyctl apps create sindri-registry --org personal
+```
+
+See `docs/PREBUILT_IMAGES_SETUP.md` for complete setup guide.
 
 ---
 

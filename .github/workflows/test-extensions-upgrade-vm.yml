@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true

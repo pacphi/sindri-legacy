@@ -28,6 +28,11 @@ on:
         required: false
         default: "sjc"
         type: string
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true
@@ -165,6 +170,7 @@ jobs:
           app-name: ${{ steps.setup.outputs.app-name }}
           region: ${{ inputs.region }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          pre-built-image: ${{ inputs.pre_built_image }}
 
       # NEW: Using composite action for waiting
       - name: Wait for deployment

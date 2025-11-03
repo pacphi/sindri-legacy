@@ -82,17 +82,103 @@ jobs:
           echo "skip_cleanup=${{ github.event.inputs.skip_cleanup == 'true' }}" >> $GITHUB_OUTPUT
 
   # ============================================================================
+  # Build Docker Image
+  # ============================================================================
+
+  build-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: setup-config
+    outputs:
+      image-url: ${{ steps.final.outputs.image-url }}
+      should-use-image: ${{ steps.check.outputs.should-use }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Check if build needed
+        id: check
+        run: |
+          # Get list of changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+            # workflow_dispatch - always build
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if Dockerfile or docker/* changed
+          if echo "$CHANGED_FILES" | grep -qE '^(Dockerfile|docker/)'; then
+            echo "Docker files changed, rebuild needed"
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+          else
+            echo "Docker files unchanged, reusing latest image"
+            echo "should-build=false" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate tag
+        id: gen-tag
+        if: steps.check.outputs.should-build == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            TAG="pr-${PR_NUMBER}-${GITHUB_SHA:0:7}"
+          else
+            BRANCH=${GITHUB_REF#refs/heads/}
+            BRANCH=${BRANCH//\//-}
+            TAG="${BRANCH}-${GITHUB_SHA:0:7}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push new image
+        id: build
+        if: steps.check.outputs.should-build == 'true'
+        uses: ./.github/actions/build-push-image
+        with:
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          tag: ${{ steps.gen-tag.outputs.tag }}
+
+      - name: Get existing image
+        id: get-existing
+        if: steps.check.outputs.should-build == 'false'
+        run: |
+          IMAGE_URL="registry.fly.io/sindri-registry:latest"
+          echo "url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+          echo "Using existing image: ${IMAGE_URL}"
+
+      - name: Set final image URL
+        id: final
+        run: |
+          if [ "${{ steps.check.outputs.should-build }}" = "true" ]; then
+            IMAGE_URL="${{ steps.build.outputs.image-url }}"
+          else
+            IMAGE_URL="${{ steps.get-existing.outputs.url }}"
+          fi
+          echo "image-url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+          echo "Final image URL: ${IMAGE_URL}"
+
+  # ============================================================================
   # Core Integration Test
   # ============================================================================
 
   integration-test:
     name: Integration Test
-    needs: setup-config
+    needs: [setup-config, build-image]
     uses: ./.github/workflows/integration-test.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
       skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -102,12 +188,13 @@ jobs:
 
   developer-workflow:
     name: Developer Workflow
-    needs: [setup-config, integration-test]
+    needs: [setup-config, build-image, integration-test]
     uses: ./.github/workflows/developer-workflow.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
       skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -117,12 +204,13 @@ jobs:
 
   mise-stack-integration:
     name: Mise Stack Integration
-    needs: [setup-config, integration-test]
+    needs: [setup-config, build-image, integration-test]
     uses: ./.github/workflows/mise-stack-integration.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
       skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
@@ -133,7 +221,7 @@ jobs:
   notify-failure:
     name: Notify on Failure
     if: failure()
-    needs: [setup-config, integration-test, developer-workflow, mise-stack-integration]
+    needs: [setup-config, build-image, integration-test, developer-workflow, mise-stack-integration]
     runs-on: ubuntu-latest
 
     steps:

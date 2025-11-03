@@ -1,0 +1,406 @@
+name: Self-Service Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "App name (e.g., my-sindri-dev)"
+        required: true
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: choice
+        options:
+          - sjc  # San Jose, CA
+          - iad  # Ashburn, VA
+          - lhr  # London, UK
+          - ams  # Amsterdam, NL
+          - fra  # Frankfurt, DE
+          - syd  # Sydney, AU
+          - nrt  # Tokyo, JP
+          - gru  # São Paulo, BR
+      vm_preset:
+        description: "VM resource preset"
+        required: false
+        default: "medium"
+        type: choice
+        options:
+          - small      # 2GB RAM, 1 shared CPU - minimal cost
+          - medium     # 8GB RAM, 4 shared CPUs - balanced (default)
+          - large      # 16GB RAM, 4 performance CPUs - intensive workloads
+          - xlarge     # 32GB RAM, 8 performance CPUs - maximum performance
+      volume_size:
+        description: "Persistent volume size (GB)"
+        required: false
+        default: "30"
+        type: string
+      extension_profile:
+        description: "Extension profile to install"
+        required: false
+        default: "full-node"
+        type: choice
+        options:
+          - minimal       # Core only (workspace-structure, mise-config, ssh-environment)
+          - full-node     # Complete Node.js stack (nodejs, nodejs-devtools, claude)
+          - mise-stack    # All mise-powered languages (nodejs, python, rust, golang)
+          - fullstack     # Web development (nodejs, python, docker, cloud-tools)
+          - systems       # Systems programming (rust, golang, docker)
+          - enterprise    # Enterprise stack (nodejs, jvm, docker, infra-tools)
+          - ai-dev        # AI development (nodejs, python, ai-tools, monitoring)
+          - custom        # Specify custom extensions below
+      custom_extensions:
+        description: "Custom extensions (comma-separated, only if profile=custom)"
+        required: false
+        default: ""
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup (keep VM running for persistent use)"
+        required: false
+        default: true
+        type: boolean
+      use_prebuilt_image:
+        description: "Use pre-built Docker image (~75% faster deployment)"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  # ============================================================================
+  # Setup Configuration
+  # ============================================================================
+
+  setup-config:
+    name: Setup Deployment Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      app_name: ${{ steps.config.outputs.app_name }}
+      region: ${{ steps.config.outputs.region }}
+      volume_size: ${{ steps.config.outputs.volume_size }}
+      vm_memory: ${{ steps.config.outputs.vm_memory }}
+      cpu_kind: ${{ steps.config.outputs.cpu_kind }}
+      cpu_count: ${{ steps.config.outputs.cpu_count }}
+      extensions: ${{ steps.config.outputs.extensions }}
+      skip_cleanup: ${{ steps.config.outputs.skip_cleanup }}
+      pre_built_image: ${{ steps.config.outputs.pre_built_image }}
+
+    steps:
+      - name: Configure deployment parameters
+        id: config
+        run: |
+          # Basic configuration
+          echo "app_name=${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
+          echo "region=${{ github.event.inputs.region }}" >> $GITHUB_OUTPUT
+          echo "volume_size=${{ github.event.inputs.volume_size }}" >> $GITHUB_OUTPUT
+          echo "skip_cleanup=${{ github.event.inputs.skip_cleanup }}" >> $GITHUB_OUTPUT
+
+          # Map VM preset to resources
+          case "${{ github.event.inputs.vm_preset }}" in
+            small)
+              echo "vm_memory=2048" >> $GITHUB_OUTPUT
+              echo "cpu_kind=shared" >> $GITHUB_OUTPUT
+              echo "cpu_count=1" >> $GITHUB_OUTPUT
+              ;;
+            medium)
+              echo "vm_memory=8192" >> $GITHUB_OUTPUT
+              echo "cpu_kind=shared" >> $GITHUB_OUTPUT
+              echo "cpu_count=4" >> $GITHUB_OUTPUT
+              ;;
+            large)
+              echo "vm_memory=16384" >> $GITHUB_OUTPUT
+              echo "cpu_kind=performance" >> $GITHUB_OUTPUT
+              echo "cpu_count=4" >> $GITHUB_OUTPUT
+              ;;
+            xlarge)
+              echo "vm_memory=32768" >> $GITHUB_OUTPUT
+              echo "cpu_kind=performance" >> $GITHUB_OUTPUT
+              echo "cpu_count=8" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+          # Map extension profile to extension list
+          case "${{ github.event.inputs.extension_profile }}" in
+            minimal)
+              # Protected extensions only (auto-included, but explicit for clarity)
+              extensions="workspace-structure,mise-config,ssh-environment"
+              ;;
+            full-node)
+              extensions="workspace-structure,mise-config,ssh-environment,nodejs,nodejs-devtools,claude"
+              ;;
+            mise-stack)
+              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,rust,golang"
+              ;;
+            fullstack)
+              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,docker,cloud-tools"
+              ;;
+            systems)
+              extensions="workspace-structure,mise-config,ssh-environment,rust,golang,docker"
+              ;;
+            enterprise)
+              extensions="workspace-structure,mise-config,ssh-environment,nodejs,jvm,docker,infra-tools"
+              ;;
+            ai-dev)
+              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,ai-tools,monitoring"
+              ;;
+            custom)
+              # Use custom_extensions input, but always ensure protected extensions are included
+              extensions="${{ github.event.inputs.custom_extensions }}"
+              # Prepend protected extensions if not already present
+              if [[ ! "$extensions" =~ workspace-structure ]]; then
+                extensions="workspace-structure,$extensions"
+              fi
+              if [[ ! "$extensions" =~ mise-config ]]; then
+                extensions="mise-config,$extensions"
+              fi
+              if [[ ! "$extensions" =~ ssh-environment ]]; then
+                extensions="ssh-environment,$extensions"
+              fi
+              ;;
+          esac
+
+          echo "extensions=$extensions" >> $GITHUB_OUTPUT
+
+          # Determine pre-built image
+          if [ "${{ github.event.inputs.use_prebuilt_image }}" = "true" ]; then
+            IMAGE_URL="registry.fly.io/sindri-registry:latest"
+            echo "pre_built_image=${IMAGE_URL}" >> $GITHUB_OUTPUT
+            echo "Using pre-built image: ${IMAGE_URL}"
+          else
+            echo "pre_built_image=" >> $GITHUB_OUTPUT
+            echo "Building from source (no pre-built image)"
+          fi
+
+          # Log configuration for transparency
+          echo "## Deployment Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Name**: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ github.event.inputs.region }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **VM Preset**: ${{ github.event.inputs.vm_preset }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Volume Size**: ${{ github.event.inputs.volume_size }}GB" >> $GITHUB_STEP_SUMMARY
+          echo "- **Extension Profile**: ${{ github.event.inputs.extension_profile }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Extensions**: $extensions" >> $GITHUB_STEP_SUMMARY
+          echo "- **Persistent**: ${{ github.event.inputs.skip_cleanup }}" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Deploy VM and Extensions
+  # ============================================================================
+
+  deploy:
+    name: Deploy Sindri VM
+    needs: setup-config
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ needs.setup-config.outputs.app_name }}
+          extension-name: "self-service"
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: ${{ needs.setup-config.outputs.vm_memory }}
+          vm-cpu-kind: ${{ needs.setup-config.outputs.cpu_kind }}
+          vm-cpu-count: ${{ needs.setup-config.outputs.cpu_count }}
+          volume-size: ${{ needs.setup-config.outputs.volume_size }}
+
+      - name: Deploy Fly.io app
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ needs.setup-config.outputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "600"
+          retry-attempts: "3"
+          pre-built-image: ${{ needs.setup-config.outputs.pre_built_image }}
+
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "420"
+          expected-status: "started"
+
+      - name: Configure extension manifest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extensions="${{ needs.setup-config.outputs.extensions }}"
+
+          echo "Configuring extension manifest..."
+          echo "Extensions to install: $extensions"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest_file=\"extensions.d/active-extensions.conf\"
+
+            # Create manifest from CI template (already has protected extensions)
+            if [ ! -f \"\$manifest_file\" ]; then
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+            fi
+
+            # Verify protected extensions are present
+            echo \"Verifying protected extensions...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present in manifest\"
+              else
+                echo \"❌ \$ext missing - adding it\"
+                echo \"\$ext\" >> \"\$manifest_file\"
+              fi
+            done
+
+            # Add non-protected extensions from profile
+            echo \"\"
+            echo \"Adding selected extensions...\"
+            protected=\"workspace-structure mise-config ssh-environment\"
+            IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
+
+            for ext in \"\${EXT_ARRAY[@]}\"; do
+              ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
+
+              # Skip if protected (already verified above)
+              if echo \"\$protected\" | grep -q \"\$ext\"; then
+                echo \"⏭️  Skipping \$ext (protected, already in manifest)\"
+                continue
+              fi
+
+              if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
+                echo \"\$ext\" >> \"\$manifest_file\"
+                echo \"✅ \$ext added to manifest\"
+              else
+                echo \"✅ \$ext already in manifest\"
+              fi
+            done
+
+            echo \"\"
+            echo \"=== Final Extension Manifest ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+          '"
+
+      - name: Install extensions
+        timeout-minutes: 45
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Installing all extensions from manifest..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            echo \"Running extension-manager install-all...\"
+            if bash extension-manager.sh install-all; then
+              echo \"✅ All extensions installed successfully\"
+            else
+              echo \"❌ Extension installation failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Verify deployment
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Verifying deployment and extensions..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            # Source SSH environment
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              source /etc/profile.d/00-ssh-environment.sh
+            fi
+
+            echo \"=== Deployment Verification ===\"
+
+            # Verify workspace structure
+            if [ -d /workspace/src ] && [ -d /workspace/tests ]; then
+              echo \"✅ Workspace structure present\"
+            else
+              echo \"❌ Workspace structure missing\"
+              exit 1
+            fi
+
+            # Verify mise if required
+            if command -v mise >/dev/null 2>&1; then
+              echo \"✅ mise available: \$(mise --version)\"
+            fi
+
+            # Verify SSH environment
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              echo \"✅ SSH environment configured\"
+            fi
+
+            echo \"\"
+            echo \"✅ Deployment verified successfully\"
+          '"
+
+      - name: Output connection details
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "## 🎉 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔌 Connection Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 1: Connect via flyctl (Recommended - No Setup Required)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Connect immediately using Fly.io's hallpass service:" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl ssh console -a ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 2: Direct SSH Access (Requires One-Time Setup)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# First time only: Configure SSH access with your local SSH keys" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl ssh issue --agent -a ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# After setup, connect directly:" >> $GITHUB_STEP_SUMMARY
+          echo "ssh developer@${app_name}.fly.dev -p 10022" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note**: Direct SSH requires running \`flyctl ssh issue --agent\` once to authorize your SSH keys." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Management Commands" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Check VM status:" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl status -a ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# View logs:" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl logs -a ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Suspend VM (save costs when not in use):" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl machine stop \$(flyctl machine list -a ${app_name} -q)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Resume VM:" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl machine start \$(flyctl machine list -a ${app_name} -q)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Destroy VM and volumes:" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl apps destroy ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.setup-config.outputs.skip_cleanup }}" = "true" ]; then
+            echo "⚠️ **Persistent Mode**: VM will remain running. Remember to suspend or destroy when done." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup test resources
+        if: always() && needs.setup-config.outputs.skip_cleanup == 'false'
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
