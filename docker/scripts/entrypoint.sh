@@ -173,21 +173,10 @@ if [ -f "/docker/scripts/setup-motd.sh" ]; then
     bash /docker/scripts/setup-motd.sh
 fi
 
-# Install protected extensions if manifest exists and extensions aren't installed yet
-if [ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ] && [ -f "/workspace/scripts/lib/extension-manager.sh" ]; then
-    # Check if mise is already installed (indicates protected extensions were installed)
-    if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
-        echo "🔧 Installing protected extensions..."
-        # Run as developer user with proper HOME environment
-        if sudo -u developer HOME=/workspace/developer bash -c 'cd /workspace/scripts/lib && bash extension-manager.sh install-all' 2>&1; then
-            echo "✅ Protected extensions installed"
-        else
-            echo "⚠️  Some protected extensions may have failed to install (non-critical)"
-        fi
-    else
-        echo "✅ Protected extensions already installed"
-    fi
-fi
+# Note: Extensions are NOT installed automatically at startup.
+# Users should run 'extension-manager install-all' to install extensions.
+# Protected extensions (workspace-structure, mise-config, ssh-environment) will
+# be automatically ensured in the manifest and installed first when install-all runs.
 
 # Start SSH daemon (check for CI mode)
 if [ "$CI_MODE" = "true" ]; then

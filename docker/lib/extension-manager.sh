@@ -722,6 +722,12 @@ install_extension() {
     print_status "Installing extension: $ext_name"
     echo ""
 
+    # Check if already installed (idempotency check)
+    if is_extension_installed "$ext_name"; then
+        print_success "Extension '$ext_name' is already installed (skipping)"
+        return 0
+    fi
+
     # Auto-activate if needed
     if ! auto_activate_extension "$ext_name"; then
         return 1

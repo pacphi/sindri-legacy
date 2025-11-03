@@ -51,15 +51,6 @@ prerequisites() {
 install() {
     print_status "Installing mise..."
 
-    # Check if already installed
-    if command_exists mise; then
-        local current_version
-        current_version=$(mise --version 2>/dev/null | head -n1)
-        print_warning "mise is already installed: $current_version"
-        print_status "Proceeding with configuration..."
-        return 0
-    fi
-
     # Install mise using official installer
     print_status "Downloading and installing mise..."
     if curl https://mise.run | sh; then
