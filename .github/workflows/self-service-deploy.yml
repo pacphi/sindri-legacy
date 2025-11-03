@@ -13,24 +13,24 @@ on:
         default: "sjc"
         type: choice
         options:
-          - sjc  # San Jose, CA
-          - iad  # Ashburn, VA
-          - lhr  # London, UK
-          - ams  # Amsterdam, NL
-          - fra  # Frankfurt, DE
-          - syd  # Sydney, AU
-          - nrt  # Tokyo, JP
-          - gru  # São Paulo, BR
+          - sjc # San Jose, CA
+          - iad # Ashburn, VA
+          - lhr # London, UK
+          - ams # Amsterdam, NL
+          - fra # Frankfurt, DE
+          - syd # Sydney, AU
+          - nrt # Tokyo, JP
+          - gru # São Paulo, BR
       vm_preset:
         description: "VM resource preset"
         required: false
         default: "medium"
         type: choice
         options:
-          - small      # 2GB RAM, 1 shared CPU - minimal cost
-          - medium     # 8GB RAM, 4 shared CPUs - balanced (default)
-          - large      # 16GB RAM, 4 performance CPUs - intensive workloads
-          - xlarge     # 32GB RAM, 8 performance CPUs - maximum performance
+          - small # 2GB RAM, 1 shared CPU - minimal cost
+          - medium # 8GB RAM, 4 shared CPUs - balanced (default)
+          - large # 16GB RAM, 4 performance CPUs - intensive workloads
+          - xlarge # 32GB RAM, 8 performance CPUs - maximum performance
       volume_size:
         description: "Persistent volume size (GB)"
         required: false
@@ -42,14 +42,14 @@ on:
         default: "full-node"
         type: choice
         options:
-          - minimal       # Core only (workspace-structure, mise-config, ssh-environment)
-          - full-node     # Complete Node.js stack (nodejs, nodejs-devtools, claude)
-          - mise-stack    # All mise-powered languages (nodejs, python, rust, golang)
-          - fullstack     # Web development (nodejs, python, docker, cloud-tools)
-          - systems       # Systems programming (rust, golang, docker)
-          - enterprise    # Enterprise stack (nodejs, jvm, docker, infra-tools)
-          - ai-dev        # AI development (nodejs, python, ai-tools, monitoring)
-          - custom        # Specify custom extensions below
+          - minimal # Core only (workspace-structure, mise-config, ssh-environment)
+          - full-node # Complete Node.js stack (nodejs, nodejs-devtools, claude)
+          - mise-stack # All mise-powered languages (nodejs, python, rust, golang)
+          - fullstack # Web development (nodejs, python, docker, cloud-tools)
+          - systems # Systems programming (rust, golang, docker)
+          - enterprise # Enterprise stack (nodejs, jvm, docker, infra-tools)
+          - ai-dev # AI development (nodejs, python, ai-tools, monitoring)
+          - custom # Specify custom extensions below
       custom_extensions:
         description: "Custom extensions (comma-separated, only if profile=custom)"
         required: false

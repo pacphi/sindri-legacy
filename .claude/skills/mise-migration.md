@@ -430,17 +430,17 @@ legacy_version_file = true  # Support .nvmrc, .python-version, etc.
 
 ## Comparison Table
 
-| Feature | NVM | pyenv | rbenv | rustup | mise |
-|---------|-----|-------|-------|--------|------|
-| Node.js | ✓ | ✗ | ✗ | ✗ | ✓ |
-| Python | ✗ | ✓ | ✗ | ✗ | ✓ |
-| Ruby | ✗ | ✗ | ✓ | ✗ | ✓ |
-| Rust | ✗ | ✗ | ✗ | ✓ | ✓ |
-| Go | ✗ | ✗ | ✗ | ✗ | ✓ |
-| 100+ tools | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Auto-switch | ✗ | ✓ | ✓ | ✓ | ✓ |
-| Performance | Slow | Medium | Medium | Fast | Fast |
-| Written in | Bash | Python | Bash | Rust | Rust |
+| Feature     | NVM  | pyenv  | rbenv  | rustup | mise |
+| ----------- | ---- | ------ | ------ | ------ | ---- |
+| Node.js     | ✓    | ✗      | ✗      | ✗      | ✓    |
+| Python      | ✗    | ✓      | ✗      | ✗      | ✓    |
+| Ruby        | ✗    | ✗      | ✓      | ✗      | ✓    |
+| Rust        | ✗    | ✗      | ✗      | ✓      | ✓    |
+| Go          | ✗    | ✗      | ✗      | ✗      | ✓    |
+| 100+ tools  | ✗    | ✗      | ✗      | ✗      | ✓    |
+| Auto-switch | ✗    | ✓      | ✓      | ✓      | ✓    |
+| Performance | Slow | Medium | Medium | Fast   | Fast |
+| Written in  | Bash | Python | Bash   | Rust   | Rust |
 
 ## Resources
 

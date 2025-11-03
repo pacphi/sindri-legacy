@@ -5,25 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Removed
-
-- **Removed post-cleanup extension** - Extension provided minimal value for ephemeral Fly.io VMs
-  - Cache clearing was counterproductive (slowed subsequent package operations by 60-80%)
-  - Dangerous automatic operations (`apt-get autoremove`, `docker system prune`) removed
-  - Tools summary functionality already available via `extension-manager status-all`
-  - Cleanup operations should be manual and on-demand when actually needed
-  - Removed 670+ lines of code and eliminated 2-4 minute overhead from `install-all`
-
-### Changed
-
-- Simplified extension-manager.sh by removing cleanup extension auto-reordering logic
-- Removed cleanup-extensions-tests.yml workflow (no longer needed)
-- Updated all documentation to remove post-cleanup references
-
----
-
 ## [1.0.0-rc.1] - 2025-10-23
 
 ### ✨ Features

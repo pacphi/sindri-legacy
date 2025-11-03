@@ -423,7 +423,7 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 **Build Docker Images (`build-image.yml`)**
 
 - Builds and pushes Docker images to Fly.io registry
-- Automatic triggers on Dockerfile/docker/* changes
+- Automatic triggers on Dockerfile/docker/\* changes
 - Tags: PR-specific, branch-specific, and latest
 - Enables ~75% faster CI/CD by reusing images
 - Location: `.github/workflows/build-image.yml`
@@ -433,28 +433,33 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 Sindri uses pre-built Docker images to dramatically improve CI/CD performance:
 
 **Setup (First-Time Only)**:
+
 ```bash
 # Create registry app (one-time setup)
 flyctl apps create sindri-registry --org personal
 ```
 
 **How It Works**:
+
 - Images are built once and reused across all test jobs
-- Automatic rebuilding when Dockerfile or docker/* files change
+- Automatic rebuilding when Dockerfile or docker/\* files change
 - Conditional reuse when no Docker changes detected
 - ~75% reduction in workflow execution time
 
 **Image Tags**:
+
 - Pull Requests: `registry.fly.io/sindri-registry:pr-<number>-<sha>`
 - Branch Builds: `registry.fly.io/sindri-registry:<branch>-<sha>`
 - Latest (main): `registry.fly.io/sindri-registry:latest`
 
 **Performance Impact**:
+
 - Integration Tests: 15min → 4min (**73% faster**)
 - Extension Tests: 45min → 12min (**73% faster**)
 - Per-Extension Tests: 6min → 1.5min (**75% faster**)
 
 **Documentation**:
+
 - Setup Guide: `docs/PREBUILT_IMAGES_SETUP.md`
 - Architecture: `.github/actions/build-push-image/README.md`
 

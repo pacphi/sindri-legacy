@@ -5,6 +5,7 @@ This guide walks through setting up the pre-built Docker images feature for Sind
 ## Overview
 
 Pre-built Docker images dramatically improve CI/CD performance by:
+
 - **Reducing workflow time by ~75%**: Build once, deploy many times
 - **Saving CI minutes**: Reuse images when Docker files haven't changed
 - **Improving reliability**: Consistent images across all test jobs
@@ -32,8 +33,9 @@ flyctl apps list | grep sindri-registry
 ```
 
 **Output:**
-```
-sindri-registry  personal  (no deployment)
+
+```text
+sindri-registry                 personal        pending
 ```
 
 That's it! The registry app doesn't need to be deployed or running - it's just a namespace.
@@ -48,6 +50,7 @@ Ensure your repository has the required secret:
 ```
 
 Required secret:
+
 - `FLYIO_AUTH_TOKEN` - Your Fly.io API token
 
 ### Step 3: Test the Setup
@@ -99,6 +102,7 @@ Images are tagged based on context:
 **Problem**: The `sindri-registry` app doesn't exist.
 
 **Solution**:
+
 ```bash
 flyctl apps create sindri-registry --org personal
 ```
@@ -108,6 +112,7 @@ flyctl apps create sindri-registry --org personal
 **Problem**: Authentication or network issues.
 
 **Solution**:
+
 1. Verify `FLYIO_AUTH_TOKEN` is set correctly
 2. Check token hasn't expired: `flyctl auth whoami`
 3. Regenerate token if needed: `flyctl tokens create deploy`
@@ -117,6 +122,7 @@ flyctl apps create sindri-registry --org personal
 **Problem**: Changes to Dockerfile aren't reflected.
 
 **Solution**:
+
 1. Check if Dockerfile changes were committed
 2. Workflow only detects committed changes
 3. Manually trigger build: `gh workflow run build-image.yml`
@@ -126,6 +132,7 @@ flyctl apps create sindri-registry --org personal
 **Problem**: Docker images are slow to pull/push.
 
 **Solution**:
+
 1. See [Image Optimization Guide](./IMAGE_OPTIMIZATION.md)
 2. Use multi-stage builds
 3. Minimize installed packages
@@ -176,11 +183,11 @@ flyctl registry delete sindri-registry:<tag>
 
 Expected improvements after enabling pre-built images:
 
-| Workflow | Before | After | Improvement |
-|----------|--------|-------|-------------|
-| Integration Tests | ~15min | ~4min | **73%** faster |
-| Extension Tests | ~45min | ~12min | **73%** faster |
-| Per-Extension (each) | ~6min | ~1.5min | **75%** faster |
+| Workflow             | Before | After   | Improvement    |
+| -------------------- | ------ | ------- | -------------- |
+| Integration Tests    | ~15min | ~4min   | **73%** faster |
+| Extension Tests      | ~45min | ~12min  | **73%** faster |
+| Per-Extension (each) | ~6min  | ~1.5min | **75%** faster |
 
 **CI Minutes Savings**: ~70-80% reduction in total CI minutes
 
@@ -191,11 +198,13 @@ Expected improvements after enabling pre-built images:
 To use a different registry:
 
 1. Update registry app name in workflows:
+
    ```yaml
    registry-app: "your-registry-name"
    ```
 
 2. Update `build-push-image` action calls:
+
    ```yaml
    uses: ./.github/actions/build-push-image
    with:
@@ -228,6 +237,7 @@ pre_built_image: ""
 ## Support
 
 For issues or questions:
+
 1. Check [Troubleshooting](#troubleshooting) above
 2. Review workflow logs in GitHub Actions
 3. File an issue at: `https://github.com/your-org/sindri/issues`

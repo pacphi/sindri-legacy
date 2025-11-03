@@ -61,21 +61,21 @@ When invoked:
 **Composite Action Template**:
 
 ```yaml
-name: 'Action Name'
-description: 'Brief description'
+name: "Action Name"
+description: "Brief description"
 
 inputs:
   input-name:
-    description: 'Input description'
+    description: "Input description"
     required: true
 
 outputs:
   output-name:
-    description: 'Output description'
+    description: "Output description"
     value: ${{ steps.step-id.outputs.value }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Step name
       shell: bash
@@ -185,8 +185,8 @@ jobs:
 ```yaml
 - uses: actions/setup-node@v4
   with:
-    node-version: '20'
-    cache: 'npm'
+    node-version: "20"
+    cache: "npm"
 ```
 
 **pip/Python**:
@@ -194,8 +194,8 @@ jobs:
 ```yaml
 - uses: actions/setup-python@v5
   with:
-    python-version: '3.11'
-    cache: 'pip'
+    python-version: "3.11"
+    cache: "pip"
 ```
 
 **Custom Cache**:
@@ -217,8 +217,8 @@ jobs:
 on:
   push:
     paths:
-      - 'docker/lib/extensions.d/**'
-      - '.github/workflows/extension-tests.yml'
+      - "docker/lib/extensions.d/**"
+      - ".github/workflows/extension-tests.yml"
 ```
 
 **Branch-Based**:
@@ -251,7 +251,7 @@ steps:
 ```yaml
 jobs:
   test:
-    timeout-minutes: 15  # Prevent runaway jobs
+    timeout-minutes: 15 # Prevent runaway jobs
 ```
 
 **Step Timeouts**:

@@ -40,15 +40,15 @@ Sindri uses GitHub Actions for continuous integration and deployment with a focu
 
 ## Quick Reference
 
-| Workflow | Purpose | Trigger | Duration |
-|----------|---------|---------|----------|
-| [Extension Tests](#extension-system-tests) | Test extension system and individual extensions | Push, PR to main/develop | ~12 min |
-| [Integration Tests](#integration-tests) | End-to-end VM deployment and workflow validation | Push, PR, manual | ~4 min |
-| [Project Validation](#project-validation) | Validate project structure and configuration | Push, PR | ~2 min |
-| [Build Docker Image](#build-and-push-docker-image) | Build and cache Docker images | Dockerfile changes, manual | ~5 min |
-| [Release Automation](#release-automation) | Automated releases and changelogs | Version tags | ~3 min |
-| [Lint Documentation](#lint-documentation) | Markdown linting | Markdown changes | ~1 min |
-| [Self-Service Deploy](#self-service-deploy) | Manual VM deployment from GitHub | Manual only | ~10 min |
+| Workflow                                           | Purpose                                          | Trigger                    | Duration |
+| -------------------------------------------------- | ------------------------------------------------ | -------------------------- | -------- |
+| [Extension Tests](#extension-system-tests)         | Test extension system and individual extensions  | Push, PR to main/develop   | ~12 min  |
+| [Integration Tests](#integration-tests)            | End-to-end VM deployment and workflow validation | Push, PR, manual           | ~4 min   |
+| [Project Validation](#project-validation)          | Validate project structure and configuration     | Push, PR                   | ~2 min   |
+| [Build Docker Image](#build-and-push-docker-image) | Build and cache Docker images                    | Dockerfile changes, manual | ~5 min   |
+| [Release Automation](#release-automation)          | Automated releases and changelogs                | Version tags               | ~3 min   |
+| [Lint Documentation](#lint-documentation)          | Markdown linting                                 | Markdown changes           | ~1 min   |
+| [Self-Service Deploy](#self-service-deploy)        | Manual VM deployment from GitHub                 | Manual only                | ~10 min  |
 
 ## Core Testing Workflows
 
@@ -187,8 +187,8 @@ Builds Docker images and pushes them to Fly.io registry for reuse in CI/CD.
 
 **Triggers**:
 
-- Push to `main` or `develop` with Dockerfile/docker/* changes
-- Pull requests with Dockerfile/docker/* changes
+- Push to `main` or `develop` with Dockerfile/docker/\* changes
+- Pull requests with Dockerfile/docker/\* changes
 - Manual workflow dispatch with custom tag options
 
 **What It Does**:
@@ -375,7 +375,7 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "docker/**"           # Only run on Docker changes
+      - "docker/**" # Only run on Docker changes
       - ".github/workflows/**" # Or workflow changes
 ```
 

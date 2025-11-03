@@ -4,21 +4,21 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'Dockerfile'
-      - 'docker/**'
+      - "Dockerfile"
+      - "docker/**"
   pull_request:
     branches: [main, develop]
     paths:
-      - 'Dockerfile'
-      - 'docker/**'
+      - "Dockerfile"
+      - "docker/**"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Custom image tag (default: auto-generated)'
+        description: "Custom image tag (default: auto-generated)"
         required: false
         type: string
       push_latest:
-        description: 'Tag as latest'
+        description: "Tag as latest"
         required: false
         default: false
         type: boolean

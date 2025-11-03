@@ -194,7 +194,8 @@ extension-manager status <name>     # Check status
 - `agent-manager` - Agent management
 - `context-loader` - Context system
 
-> See [Customization Guide](docs/CUSTOMIZATION.md) for complete extension details and [Extensions Guide](docs/EXTENSIONS.md) for architecture and development.
+> See [Customization Guide](docs/CUSTOMIZATION.md) for complete extension details and
+> [Extensions Guide](docs/EXTENSIONS.md) for architecture and development.
 
 ## 🔧 Essential Commands
 

@@ -238,7 +238,7 @@ Numbered lists:
 
 - `code` for commands, files, functions
 - **bold** for important terms (first use)
-- *italic* for emphasis (use sparingly)
+- _italic_ for emphasis (use sparingly)
 
 ### Linting Compliance
 
@@ -262,7 +262,7 @@ markdownlint '**/*.md' --fix
 
 For new extensions in `docker/lib/extensions.d/<name>/README.md`:
 
-```markdown
+````markdown
 # Extension Name
 
 Brief description of what this extension provides.
@@ -310,41 +310,42 @@ Common issues and solutions.
 - Tool version: X.Y.Z
 - Extension version: 1.0.0
 - API version: 2.0
-```
+````
 
 ### Workflow Documentation Template
 
 For composite actions in `.github/actions/<name>/README.md`:
 
-```markdown
+````markdown
 # Action Name
 
 Description of what this action does.
 
 ## Inputs
 
-| Name | Description | Required | Default |
-|------|-------------|----------|---------|
-| input-name | Input description | Yes | - |
+| Name       | Description       | Required | Default |
+| ---------- | ----------------- | -------- | ------- |
+| input-name | Input description | Yes      | -       |
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
+| Name        | Description        |
+| ----------- | ------------------ |
 | output-name | Output description |
 
 ## Example Usage
 
 \```yaml
+
 - uses: ./.github/actions/action-name
   with:
-    input-name: value
-\```
+  input-name: value
+  \```
 
 ## Implementation Details
 
 How the action works internally.
-```
+````
 
 ## Update Workflow
 
