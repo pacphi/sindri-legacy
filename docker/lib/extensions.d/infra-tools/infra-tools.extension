@@ -286,9 +286,9 @@ configure() {
     'export PATH="/usr/local/bin:$PATH"'
   )
 
-  # Add mise activation if mise is installed
+  # Add mise activation if mise is installed (with timeout protection)
   if command_exists mise; then
-    paths_to_add+=('eval "$(mise activate bash)"')
+    paths_to_add+=('if command -v mise >/dev/null 2>&1; then eval "$(timeout 3 mise activate bash 2>/dev/null || echo "")"; fi')
   fi
 
   # Add Pulumi if installed

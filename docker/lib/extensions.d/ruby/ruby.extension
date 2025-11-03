@@ -214,17 +214,22 @@ configure() {
 
   # Configure PATH for SSH sessions
   if command_exists setup_tool_path 2>/dev/null; then
+    # Use timeout protection to prevent hanging during shell initialization
     setup_tool_path "rbenv" \
       'export PATH="$HOME/.rbenv/bin:$PATH"' \
-      'eval "$(rbenv init - bash)"'
+      'if command -v rbenv >/dev/null 2>&1; then eval "$(timeout 3 rbenv init - bash 2>/dev/null || echo "")"; fi'
   else
-    # Fallback: add to bashrc
+    # Fallback: add to bashrc with timeout protection
     if ! grep -q "rbenv" "$HOME/.bashrc" 2>/dev/null; then
       echo "" >> "$HOME/.bashrc"
       echo "# ${EXT_NAME} - rbenv" >> "$HOME/.bashrc"
       echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> "$HOME/.bashrc"
-      echo 'eval "$(rbenv init - bash)"' >> "$HOME/.bashrc"
-      print_success "Added rbenv to PATH"
+      echo '# Protect against rbenv init hanging with timeout' >> "$HOME/.bashrc"
+      echo 'if command -v rbenv >/dev/null 2>&1; then' >> "$HOME/.bashrc"
+      echo '  rbenv_init=$(timeout 3 rbenv init - bash 2>/dev/null || echo "")' >> "$HOME/.bashrc"
+      echo '  [ -n "$rbenv_init" ] && eval "$rbenv_init"' >> "$HOME/.bashrc"
+      echo 'fi' >> "$HOME/.bashrc"
+      print_success "Added rbenv to PATH with timeout protection"
     fi
   fi
 

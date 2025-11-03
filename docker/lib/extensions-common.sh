@@ -23,8 +23,14 @@ export PROTECTED_EXTENSIONS="workspace-structure mise-config ssh-environment"
 # This function replaces the COMMON UTILITIES section in each extension
 extension_init() {
     # Calculate script and library directories
+    # Extension file is at: /workspace/scripts/lib/extensions.d/<name>/<name>.extension
+    # SCRIPT_DIR will be: /workspace/scripts/lib/extensions.d/<name>
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
-    LIB_DIR="$(dirname "$SCRIPT_DIR")"
+
+    # Go up TWO levels to get to /workspace/scripts/lib
+    # From: /workspace/scripts/lib/extensions.d/<name>
+    # To:   /workspace/scripts/lib
+    LIB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
     # Try to source common.sh from known locations
     if [[ -f "$LIB_DIR/common.sh" ]]; then
