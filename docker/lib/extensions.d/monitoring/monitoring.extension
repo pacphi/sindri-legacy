@@ -33,10 +33,31 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check for Python 3 (required for claude-monitor)
+  # Must be installed via the python extension (mise-managed), not system python
   if ! command_exists python3; then
     print_error "python3 is required but not installed"
     print_status "Install the python extension first: extension-manager install python"
     return 1
+  fi
+
+  # Verify Python is managed by mise (from python extension), not system Python
+  if command_exists mise; then
+    if ! mise ls python &>/dev/null || ! mise ls 2>&1 | grep -q "python"; then
+      print_error "Python must be installed via the python extension (mise-managed)"
+      print_status "System Python detected, but monitoring requires mise-managed Python"
+      print_status "Install the python extension first: extension-manager install python"
+      return 1
+    fi
+  else
+    # If mise is not available, check if python is from system
+    # This helps catch the case where system python exists but python extension isn't installed
+    python_path=$(command -v python3 2>/dev/null || echo "")
+    if [[ "$python_path" != *"mise"* ]] && [[ "$python_path" != *".local"* ]]; then
+      print_error "Python must be installed via the python extension"
+      print_status "System Python detected at: $python_path"
+      print_status "Install the python extension first: extension-manager install python"
+      return 1
+    fi
   fi
 
   # Check for Node.js/npm (optional - for claude-usage-cli)
