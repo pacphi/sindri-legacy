@@ -71,12 +71,19 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Copying test fixtures to VM..."
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
-            put .github/workflows/test-fixtures/manifest-reorder-test.conf /tmp/manifest-reorder.conf
-            put .github/workflows/test-fixtures/manifest-with-comments.conf /tmp/manifest-comments.conf
-            quit
-          SFTP_EOF
+          echo "Copying test fixtures to VM via SFTP..."
+          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-reorder-test.conf /tmp/manifest-reorder.conf --app $app_name
+          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-with-comments.conf /tmp/manifest-comments.conf --app $app_name
+
+          echo "Setting permissions for developer user..."
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-reorder.conf /tmp/manifest-comments.conf"
+
+          echo "Verifying file access as developer user..."
+          flyctl ssh console --app $app_name --user developer --command "
+            ls -lh /tmp/manifest-reorder.conf /tmp/manifest-comments.conf &&
+            wc -l /tmp/manifest-reorder.conf /tmp/manifest-comments.conf &&
+            echo '✓ Fixtures verified and accessible'
+          "
 
       - name: Test reorder functionality
         env:

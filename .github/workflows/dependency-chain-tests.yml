@@ -71,47 +71,18 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Verifying SSH connectivity..."
-          max_attempts=5
-          for attempt in $(seq 1 $max_attempts); do
-            if flyctl ssh console --app $app_name --user developer --command "echo 'SSH ready'" 2>/dev/null; then
-              echo "✓ SSH connection verified"
-              break
-            fi
-            if [ $attempt -eq $max_attempts ]; then
-              echo "✗ SSH connection failed after $max_attempts attempts"
-              exit 1
-            fi
-            echo "Attempt $attempt failed, retrying in $((attempt * 2))s..."
-            sleep $((attempt * 2))
-          done
+          echo "Copying test fixture to VM via SFTP..."
+          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-only-top-level.conf /tmp/manifest-top-level.conf --app $app_name
 
-          echo "Copying test fixture to VM..."
-          max_attempts=5
-          for attempt in $(seq 1 $max_attempts); do
-            if flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-              put .github/workflows/test-fixtures/manifest-only-top-level.conf /tmp/manifest-top-level.conf
-              quit
-          SFTP_EOF
-            then
-              echo "✓ Fixture copied successfully"
+          echo "Setting permissions for developer user..."
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-top-level.conf"
 
-              # Verify file exists and has content
-              if flyctl ssh console --app $app_name --user developer --command "test -s /tmp/manifest-top-level.conf && echo 'File verified'" 2>/dev/null | grep -q "File verified"; then
-                echo "✓ Fixture verified on VM"
-                break
-              else
-                echo "⚠ Fixture copied but verification failed"
-              fi
-            fi
-
-            if [ $attempt -eq $max_attempts ]; then
-              echo "✗ Failed to copy fixture after $max_attempts attempts"
-              exit 1
-            fi
-            echo "Attempt $attempt failed, retrying in $((attempt * 2))s..."
-            sleep $((attempt * 2))
-          done
+          echo "Verifying file access as developer user..."
+          flyctl ssh console --app $app_name --user developer --command "
+            ls -lh /tmp/manifest-top-level.conf &&
+            wc -l /tmp/manifest-top-level.conf &&
+            echo '✓ Fixture verified and accessible'
+          "
 
       - name: Test transitive dependency installation
         timeout-minutes: 25

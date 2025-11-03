@@ -111,13 +111,11 @@ jobs:
           # Create lib directory first
           flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
 
-          # Upload files directly to target locations to avoid permission issues
-          flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
-            put .github/scripts/extension-tests/test-api-compliance.sh /tmp/test-api-compliance.sh
-            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
-            put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh
-            quit
-          SFTP_EOF
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/test-api-compliance.sh /tmp/test-api-compliance.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-api-compliance.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/test-api-compliance.sh $extension

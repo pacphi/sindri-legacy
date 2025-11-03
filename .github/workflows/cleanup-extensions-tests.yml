@@ -71,11 +71,18 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Copying test fixture to VM..."
-          flyctl ssh sftp shell --app $app_name <<'SFTP_CMDS'
-            put .github/workflows/test-fixtures/manifest-cleanup-middle.conf /tmp/test-manifest.conf
-            bye
-          SFTP_CMDS
+          echo "Copying test fixture to VM via SFTP..."
+          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-cleanup-middle.conf /tmp/test-manifest.conf --app $app_name
+
+          echo "Setting permissions for developer user..."
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-manifest.conf"
+
+          echo "Verifying file access as developer user..."
+          flyctl ssh console --app $app_name --user developer --command "
+            ls -lh /tmp/test-manifest.conf &&
+            wc -l /tmp/test-manifest.conf &&
+            echo '✓ Fixture verified and accessible'
+          "
 
       - name: Test cleanup extension auto-moves to end
         env:

@@ -184,10 +184,8 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh
-            quit
-          SFTP_EOF
+          flyctl ssh sftp put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-manifest.sh"
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
@@ -202,10 +200,8 @@ jobs:
 
           echo "Adding $extension_name to manifest"
 
-          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh
-            quit
-          SFTP_EOF
+          flyctl ssh sftp put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/add-extension.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/add-extension.sh $extension_name $depends_on
@@ -347,13 +343,11 @@ jobs:
           # Create lib directory first
           flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
 
-          # Upload files directly to target locations to avoid permission issues
-          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh
-            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
-            put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh
-            quit
-          SFTP_EOF
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-commands.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/verify-commands.sh \"$commands\"
@@ -374,11 +368,10 @@ jobs:
           # Create lib directory first
           flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
 
-          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh
-            put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh
-            quit
-          SFTP_EOF
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-key-functionality.sh /tmp/lib/test-helpers.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/test-key-functionality.sh $key_tool
@@ -429,10 +422,8 @@ jobs:
 
           echo "Testing idempotency..."
 
-          flyctl ssh sftp shell --app $app_name 2>/dev/null <<'SFTP_EOF'
-            put .github/scripts/extension-tests/test-idempotency.sh /tmp/test-idempotency.sh
-            quit
-          SFTP_EOF
+          flyctl ssh sftp put .github/scripts/extension-tests/test-idempotency.sh /tmp/test-idempotency.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-idempotency.sh"
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             bash /tmp/test-idempotency.sh
