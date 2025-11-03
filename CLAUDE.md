@@ -140,7 +140,6 @@ extension-manager upgrade-history        # View upgrade history
 - `php` - PHP 8.3 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - `dotnet` - .NET SDK 9.0/8.0 with ASP.NET Core
-- `tmux-workspace` - Tmux session management with helper scripts
 
 **Infrastructure:**
 
@@ -159,7 +158,7 @@ extension-manager upgrade-history        # View upgrade history
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
+Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
 
@@ -243,7 +242,7 @@ Provides:
 
 ```bash
 # Edit manifest to uncomment desired extensions
-# /workspace/scripts/extensions.d/active-extensions.conf
+# docker/lib/extensions.d/active-extensions.conf.example
 
 # Then install all at once
 extension-manager install-all

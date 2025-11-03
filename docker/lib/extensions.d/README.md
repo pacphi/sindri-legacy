@@ -227,7 +227,7 @@ Extensions are organized by category in the activation manifest.
 ### Core Infrastructure
 
 - **workspace-structure** - Base /workspace directory structure
-- **nodejs** - Node.js LTS via NVM (Node Version Manager)
+- **nodejs** - Node.js LTS via mise (replaces NVM)
 - **ssh-environment** - SSH wrappers for non-interactive sessions
 
 ### Claude AI
@@ -262,7 +262,7 @@ Extensions are organized by category in the activation manifest.
 
 ## Activation Manifest
 
-Extensions are controlled via `/workspace/scripts/extensions.d/active-extensions.conf`:
+Extensions are controlled via `docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode):
 
 ```bash
 # Protected extensions (required, cannot be removed):
@@ -306,7 +306,7 @@ extension-manager list
 
 ```bash
 # Manually add to manifest (doesn't install yet)
-# Edit: /workspace/scripts/lib/extensions.d/active-extensions.conf
+# Edit: docker/lib/extensions.d/active-extensions.conf.example
 # Add line: claude
 
 # Or install directly (auto-activates)

@@ -98,7 +98,11 @@ configure() {
 
   # Create context-load CLI command
   print_status "Creating context-load CLI command..."
-  sudo tee /usr/local/bin/context-load >/dev/null <<'EOF'
+
+  # Create in user-space (no sudo needed) - consistent with other extensions
+  mkdir -p "$HOME/.local/bin"
+
+  cat > "$HOME/.local/bin/context-load" <<'EOF'
 #!/bin/bash
 # context-load - CLI wrapper for context loading utilities
 
@@ -154,8 +158,8 @@ case "${1:-all}" in
 esac
 EOF
 
-  sudo chmod +x /usr/local/bin/context-load
-  print_success "context-load command installed"
+  chmod +x "$HOME/.local/bin/context-load"
+  print_success "context-load command installed to ~/.local/bin"
 
   # Create context directories if they don't exist
   mkdir -p /workspace/context/global
@@ -335,8 +339,8 @@ remove() {
   done
 
   # Remove CLI command
-  if [[ -f "/usr/local/bin/context-load" ]]; then
-    sudo rm -f /usr/local/bin/context-load
+  if [[ -f "$HOME/.local/bin/context-load" ]]; then
+    rm -f "$HOME/.local/bin/context-load"
     print_success "Removed: context-load command"
   fi
 

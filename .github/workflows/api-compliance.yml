@@ -37,7 +37,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 2
       matrix:
         # Test representative sample of extensions for API compliance
         extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring"]

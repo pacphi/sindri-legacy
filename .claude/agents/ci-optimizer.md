@@ -135,7 +135,7 @@ strategy:
       - rust
       - golang
   fail-fast: false
-  max-parallel: 5
+  max-parallel: 3
 ```
 
 **Test Script Reuse**:
