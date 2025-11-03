@@ -338,28 +338,40 @@ status() {
   echo ""
 
   export PATH="$HOME/.rbenv/bin:$PATH"
-  eval "$(rbenv init - bash)"
+
+  # Protect against rbenv init hanging - use timeout
+  local rbenv_init_output
+  if rbenv_init_output=$(timeout 3 rbenv init - bash 2>/dev/null); then
+    eval "$rbenv_init_output"
+  else
+    print_warning "rbenv init timed out, skipping initialization"
+  fi
 
   # Show installed tools with versions
   print_status "Installed tools:"
   echo "  ✓ rbenv"
 
   if command_exists ruby; then
-    echo "  ✓ Ruby $(ruby -v | awk '{print $2}')"
+    echo "  ✓ Ruby $(ruby -v | awk '{print $2}' 2>/dev/null || echo 'installed')"
   fi
 
-  command_exists bundle && echo "  ✓ Bundler $(bundler -v 2>&1 | head -n1 | awk '{print $3}')"
-  command_exists rails && echo "  ✓ Rails $(rails -v 2>&1 | head -n1 | awk '{print $2}')"
+  command_exists bundle && echo "  ✓ Bundler $(bundler -v 2>&1 | head -n1 | awk '{print $3}' 2>/dev/null || echo 'installed')"
+  command_exists rails && echo "  ✓ Rails $(rails -v 2>&1 | head -n1 | awk '{print $2}' 2>/dev/null || echo 'installed')"
 
   echo ""
   print_status "Installed development gems:"
-  for gem_name in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
-    # Use gem list -i for fast gem existence check (doesn't load the gem)
-    # Add timeout to prevent hanging on network-dependent gems
-    if timeout 2 gem list -i "^${gem_name}$" &>/dev/null; then
-      echo "  ✓ $gem_name"
-    fi
-  done
+
+  # Use single gem list call with timeout instead of individual checks
+  local gem_list
+  if gem_list=$(timeout 10 gem list --local --no-versions 2>/dev/null); then
+    for gem_name in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
+      if echo "$gem_list" | grep -q "^${gem_name}$"; then
+        echo "  ✓ $gem_name"
+      fi
+    done
+  else
+    print_warning "Gem list timed out or unavailable"
+  fi
 
   return 0
 }

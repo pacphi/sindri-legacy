@@ -157,9 +157,9 @@ These extensions are **protected** and cannot be removed. They are automatically
 
 | Extension             | Description                               | Tool Manager | Version |
 | --------------------- | ----------------------------------------- | ------------ | ------- |
-| `workspace-structure` | Base directory structure                  | N/A          | 1.0.0   |
+| `workspace-structure` | Base directory structure                  | N/A          | 2.0.0   |
 | `mise-config`         | Unified tool version manager              | N/A          | 2.0.0   |
-| `ssh-environment`     | SSH wrappers for non-interactive sessions | N/A          | 1.0.0   |
+| `ssh-environment`     | SSH wrappers for non-interactive sessions | N/A          | 2.0.0   |
 
 ### Foundational Languages
 
@@ -167,14 +167,14 @@ While not protected, these are highly recommended as many tools depend on them.
 
 | Extension | Description                                | Tool Manager | Version | Dependencies |
 | --------- | ------------------------------------------ | ------------ | ------- | ------------ |
-| `nodejs`  | Node.js LTS and npm                        | mise         | 3.0.0   | mise-config  |
+| `nodejs`  | Node.js LTS and npm                        | mise         | 2.0.0   | mise-config  |
 | `python`  | Python 3.13 with pip, venv, uv, pipx tools | mise         | 2.0.0   | mise-config  |
 
 ### Claude AI Tools
 
 | Extension         | Description                                   | Tool Manager       | Version | Dependencies        |
 | ----------------- | --------------------------------------------- | ------------------ | ------- | ------------------- |
-| `claude`          | Claude Code CLI with developer configuration  | native             | 3.0.0   | -                   |
+| `claude`          | Claude Code CLI with developer configuration  | native             | 2.0.0   | -                   |
 | `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie | mise (npm backend) | 2.0.0   | nodejs, mise-config |
 
 ### Additional Language Runtimes
@@ -206,7 +206,7 @@ While not protected, these are highly recommended as many tools depend on them.
 | `playwright`     | Browser automation testing                          | npm           | 2.0.0   |
 | `agent-manager`  | Claude Code agent management                        | Custom        | 2.0.0   |
 | `context-loader` | Context system for Claude                           | Custom        | 2.0.0   |
-| `github-cli`     | GitHub CLI authentication and workflows             | Pre-installed | 1.0.0   |
+| `github-cli`     | GitHub CLI authentication and workflows             | Pre-installed | 2.0.0   |
 
 ---
 
@@ -457,7 +457,7 @@ API v2.0 adds standardized upgrade support:
 
 ```bash
 EXT_NAME="myextension"
-EXT_VERSION="1.0.0"
+EXT_VERSION="2.0.0"
 EXT_DESCRIPTION="My tool via mise"
 EXT_CATEGORY="language"
 ```

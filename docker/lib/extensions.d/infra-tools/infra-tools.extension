@@ -281,33 +281,53 @@ install() {
 configure() {
   print_status "Configuring infrastructure tools..."
 
-  # Configure Pulumi PATH for SSH sessions
+  # Ensure critical paths are available in SSH sessions
+  local paths_to_add=(
+    'export PATH="/usr/local/bin:$PATH"'
+  )
+
+  # Add mise activation if mise is installed
+  if command_exists mise; then
+    paths_to_add+=('eval "$(mise activate bash)"')
+  fi
+
+  # Add Pulumi if installed
   if command_exists pulumi; then
-    if command_exists setup_tool_path 2>/dev/null; then
-      setup_tool_path "pulumi" 'export PATH=$PATH:$HOME/.pulumi/bin'
-    else
-      # Fallback: add to bashrc
-      if ! grep -q ".pulumi/bin" "$HOME/.bashrc" 2>/dev/null; then
-        echo "" >> "$HOME/.bashrc"
-        echo "# ${EXT_NAME} - Pulumi" >> "$HOME/.bashrc"
-        echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> "$HOME/.bashrc"
-        print_success "Added Pulumi to PATH"
-      fi
-    fi
+    paths_to_add+=('export PATH="$PATH:$HOME/.pulumi/bin"')
     export PATH=$PATH:$HOME/.pulumi/bin
   fi
 
-  # Create SSH wrappers
+  # Setup all paths via helper or bashrc
+  if command_exists setup_tool_path 2>/dev/null; then
+    setup_tool_path "${EXT_NAME}" "${paths_to_add[@]}"
+  else
+    # Fallback: ensure paths are in bashrc (only if not already there)
+    if ! grep -q "# ${EXT_NAME} - PATH setup" "$HOME/.bashrc" 2>/dev/null; then
+      {
+        echo ""
+        echo "# ${EXT_NAME} - PATH setup"
+        printf '%s\n' "${paths_to_add[@]}"
+      } >> "$HOME/.bashrc"
+      print_success "Added infrastructure tools to PATH"
+    fi
+  fi
+
+  # Create SSH wrappers for all installed tools
   if command_exists create_tool_wrapper 2>/dev/null; then
-    local tools=(ansible terraform kubectl helm pulumi k9s kubectx kubens crossplane)
-    local carvel_tools=(kapp ytt kbld vendir imgpkg)
-    tools+=("${carvel_tools[@]}")
+    local tools=(ansible terraform kubectl helm pulumi k9s kubectx kubens crossplane kapp ytt kbld vendir imgpkg)
 
     for tool in "${tools[@]}"; do
       if command_exists "$tool"; then
-        create_tool_wrapper "$tool" "$(which $tool)"
+        local tool_path
+        tool_path=$(command -v "$tool")
+        if [[ -n "$tool_path" ]]; then
+          create_tool_wrapper "$tool" "$tool_path"
+        else
+          print_debug "Warning: $tool exists but path not found"
+        fi
       fi
     done
+    print_success "Created SSH wrappers for installed tools"
   fi
 
   # Create infrastructure aliases
