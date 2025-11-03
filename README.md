@@ -93,6 +93,7 @@ claude
 
 ### CI/CD Infrastructure
 
+- **[GitHub Workflows](docs/GITHUB_WORKFLOWS.md)** - Complete guide to automated testing and deployment workflows
 - **[Pre-Built Images Setup](docs/PREBUILT_IMAGES_SETUP.md)** - Docker image caching for faster CI/CD
 - **[Composite Actions](.github/actions/README.md)** - Reusable GitHub Actions
 - **[Test Scripts](.github/scripts/extension-tests/README.md)** - Shell test utilities
