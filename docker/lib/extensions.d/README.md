@@ -262,7 +262,8 @@ Extensions are organized by category in the activation manifest.
 
 ## Activation Manifest
 
-Extensions are controlled via `docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode):
+Extensions are controlled via `docker/lib/extensions.d/active-extensions.conf.example` (development)
+ or `active-extensions.ci.conf` (CI mode):
 
 ```bash
 # Protected extensions (required, cannot be removed):

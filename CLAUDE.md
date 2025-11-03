@@ -158,7 +158,8 @@ extension-manager upgrade-history        # View upgrade history
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode).
+Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development)
+ or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
 
