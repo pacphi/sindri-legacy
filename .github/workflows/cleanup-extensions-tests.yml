@@ -78,11 +78,11 @@ jobs:
           flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-manifest.conf"
 
           echo "Verifying file access as developer user..."
-          flyctl ssh console --app $app_name --user developer --command "
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             ls -lh /tmp/test-manifest.conf &&
             wc -l /tmp/test-manifest.conf &&
-            echo '✓ Fixture verified and accessible'
-          "
+            echo \"✓ Fixture verified and accessible\"
+          '"
 
       - name: Test cleanup extension auto-moves to end
         env:

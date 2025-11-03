@@ -78,11 +78,11 @@ jobs:
           flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-top-level.conf"
 
           echo "Verifying file access as developer user..."
-          flyctl ssh console --app $app_name --user developer --command "
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
             ls -lh /tmp/manifest-top-level.conf &&
             wc -l /tmp/manifest-top-level.conf &&
-            echo '✓ Fixture verified and accessible'
-          "
+            echo \"✓ Fixture verified and accessible\"
+          '"
 
       - name: Test transitive dependency installation
         timeout-minutes: 25
