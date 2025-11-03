@@ -200,9 +200,15 @@ status() {
   # Activate mise for status
   activate_mise_environment
 
-  # Check installation status
+  # Check installation status - must be mise-managed, not system Python
   if ! command_exists python3; then
     echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Verify Python is managed by mise (not system Python)
+  if ! mise ls python 2>/dev/null | grep -q "python"; then
+    echo "Status: ✗ NOT INSTALLED (system Python detected, but mise-managed Python required)"
     return 1
   fi
 

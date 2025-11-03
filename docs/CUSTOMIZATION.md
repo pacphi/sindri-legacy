@@ -94,7 +94,6 @@ While not protected, these are highly recommended:
 - **playwright** - Browser automation testing (depends on nodejs)
 - **agent-manager** - Claude Code agent management (depends on curl, jq)
 - **context-loader** - Context management utilities for Claude Code
-- **post-cleanup** - Clean caches, set permissions, create tools summary (run LAST)
 
 ## Extension Management
 
@@ -176,7 +175,7 @@ extension-manager reorder python 5
 >
 > [!NOTE]
 > Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and
-> cannot be removed. The `post-cleanup` extension should be installed last for optimal cleanup.
+> cannot be removed.
 
 ### Activation Manifest
 
@@ -203,9 +202,8 @@ rust
 docker
 infra-tools
 
-# Utilities (last)
+# Utilities
 monitoring
-post-cleanup
 ```
 
 **Managing the manifest:**

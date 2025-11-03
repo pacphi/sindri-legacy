@@ -58,6 +58,16 @@ prerequisites() {
   # Check disk space (PHP needs ~800MB)
   check_disk_space 1000
 
+  # Check network connectivity (non-blocking warning)
+  if command_exists check_network_connectivity; then
+    check_network_connectivity || print_warning "Continuing despite network issues..."
+  fi
+
+  # Check DNS resolution (non-blocking warning)
+  if command_exists check_dns_resolution; then
+    check_dns_resolution || print_warning "Continuing despite DNS issues..."
+  fi
+
   print_success "All prerequisites met"
   return 0
 }
@@ -72,7 +82,19 @@ install() {
   # Add PHP repository if not already added
   if ! grep -q "ondrej/php" /etc/apt/sources.list.d/*.list 2>/dev/null; then
     print_status "Adding PHP repository..."
-    sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>/dev/null
+    if ! sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>/dev/null; then
+      print_error "Failed to add Ondrej PHP PPA repository"
+      return 1
+    fi
+    # Wait for repository to be available
+    sleep 3
+  fi
+
+  # PRE-FLIGHT: Verify repository accessibility
+  print_status "Verifying PHP repository accessibility..."
+  if ! timeout 30s apt-cache search php8.3 > /dev/null 2>&1; then
+    print_warning "PHP 8.3 packages not found in repositories"
+    print_warning "Repository may not be accessible from this network"
   fi
 
   # Update package lists with retry

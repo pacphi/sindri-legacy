@@ -224,7 +224,6 @@ check_extension_installed "dependency-name" || {
 - Protected extensions first
 - Dependencies before dependents
 - Mise-config before all mise-powered extensions
-- Cleanup extensions (post-cleanup) last
 
 ## Idempotency Patterns
 

@@ -184,6 +184,85 @@ check_disk_space() {
 }
 
 # ============================================================================
+# NETWORK VALIDATION HELPERS
+# ============================================================================
+
+# Verify network connectivity to common package repositories
+# Usage: check_network_connectivity
+# Returns: 0 if network is accessible, 1 otherwise
+check_network_connectivity() {
+    print_status "Checking network connectivity..."
+
+    local test_urls=(
+        "http://archive.ubuntu.com"
+        "http://security.ubuntu.com"
+        "https://www.google.com"
+    )
+
+    local successful=0
+    for url in "${test_urls[@]}"; do
+        if timeout 5s curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null | grep -q "^[23]"; then
+            ((successful++))
+            print_debug "✓ Reached: $url"
+        else
+            print_debug "✗ Failed: $url"
+        fi
+    done
+
+    if [[ $successful -eq 0 ]]; then
+        print_error "Network connectivity check failed - cannot reach any repositories"
+        print_error "Please verify:"
+        print_error "  1. Internet connection is active"
+        print_error "  2. DNS resolution is working"
+        print_error "  3. Firewall/security groups allow outbound HTTP/HTTPS"
+        return 1
+    elif [[ $successful -lt ${#test_urls[@]} ]]; then
+        print_warning "Partial network connectivity ($successful/${#test_urls[@]} reachable)"
+        print_warning "Some package repositories may not be accessible"
+        return 0
+    else
+        print_success "Network connectivity verified ($successful/${#test_urls[@]} reachable)"
+        return 0
+    fi
+}
+
+# Verify DNS resolution is working
+# Usage: check_dns_resolution
+# Returns: 0 if DNS is working, 1 otherwise
+check_dns_resolution() {
+    print_status "Checking DNS resolution..."
+
+    local test_domains=(
+        "archive.ubuntu.com"
+        "packages.microsoft.com"
+        "download.docker.com"
+    )
+
+    local successful=0
+    for domain in "${test_domains[@]}"; do
+        if timeout 5s nslookup "$domain" > /dev/null 2>&1 || \
+           timeout 5s host "$domain" > /dev/null 2>&1; then
+            ((successful++))
+            print_debug "✓ Resolved: $domain"
+        else
+            print_debug "✗ Failed: $domain"
+        fi
+    done
+
+    if [[ $successful -eq 0 ]]; then
+        print_error "DNS resolution completely failed"
+        print_error "Please check /etc/resolv.conf and DNS server configuration"
+        return 1
+    elif [[ $successful -lt ${#test_domains[@]} ]]; then
+        print_warning "Partial DNS resolution ($successful/${#test_domains[@]} resolved)"
+        return 0
+    else
+        print_success "DNS resolution verified ($successful/${#test_domains[@]} resolved)"
+        return 0
+    fi
+}
+
+# ============================================================================
 # PACKAGE INSTALLATION HELPERS (with automatic retry)
 # ============================================================================
 

@@ -180,9 +180,6 @@ rust
 # Infrastructure tools
 docker
 infra-tools
-
-# Cleanup extensions (run last):
-post-cleanup
 ```
 
 ### Extension API

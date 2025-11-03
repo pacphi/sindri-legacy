@@ -39,7 +39,6 @@ Validate the extension activation manifest at `docker/lib/extensions.d/active-ex
      - Development tools
      - Infrastructure
      - Monitoring & Utilities
-     - Cleanup extensions (post-cleanup should be last)
 
 6. **Consistency with Available Extensions**:
    - List all available extensions in `docker/lib/extensions.d/`

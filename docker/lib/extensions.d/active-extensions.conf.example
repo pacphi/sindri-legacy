@@ -119,20 +119,11 @@ context-loader
 # ai-tools
 
 # ============================================================================
-# POST-INSTALLATION (optional - run this LAST)
-# ============================================================================
-
-# Clean caches, set permissions, create tools summary
-# Run this LAST for optimal cleanup after all other extensions
-post-cleanup
-
-# ============================================================================
 # NOTES
 # ============================================================================
 # - Order matters: extensions execute top to bottom
 # - Protected extensions (workspace-structure, mise-config, ssh-environment)
 #   are automatically added to manifest and cannot be removed
-# - Cleanup extensions (post-cleanup) automatically move to the end
 # - Dependencies are checked in prerequisites()
 # - Use extension-manager commands for management:
 #     extension-manager list              # Show all extensions

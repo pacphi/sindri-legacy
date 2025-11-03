@@ -260,10 +260,6 @@ Extensions are organized by category in the activation manifest.
 - **cloud-tools** - AWS, Azure, GCP, Oracle, DigitalOcean CLIs
 - **ai-tools** - AI coding assistants (Codex, Gemini, Ollama, Fabric, Plandex)
 
-### Post-Installation
-
-- **post-cleanup** - Clean caches, set permissions, create tools summary (run LAST)
-
 ## Activation Manifest
 
 Extensions are controlled via `/workspace/scripts/extensions.d/active-extensions.conf`:
@@ -289,9 +285,6 @@ golang
 # Infrastructure
 docker
 infra-tools
-
-# Post-installation (always last)
-post-cleanup
 ```
 
 **Order matters**: Extensions execute top to bottom. List dependencies before dependents.

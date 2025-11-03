@@ -274,7 +274,6 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 | agent-manager                | agent-manager      | -                   | Agent management         |
 | context-loader               | context-load       | -                   | Context utilities        |
 | github-cli                   | gh                 | -                   | GitHub CLI               |
-| post-cleanup                 | echo               | -                   | Post-install cleanup     |
 
 #### Test Steps
 
@@ -343,24 +342,7 @@ For details on protected extensions, see [EXTENSIONS.md - Protected Extensions](
 
 **When It Runs**: On every push/PR affecting extension files
 
-### 6. Cleanup Extensions Tests (CRITICAL)
-
-Tests automatic ordering of cleanup extensions:
-
-#### Cleanup Ordering Tests
-
-- **Auto-Move to End**: post-cleanup automatically moves to end of manifest
-  - Uses test fixture with post-cleanup in middle
-  - Triggers `ensure_cleanup_extensions_last()` via list command
-  - Verifies post-cleanup is in last 3 lines
-- **Protected Extensions Preserved**: Protected extensions stay at top during cleanup reordering
-- **Installation Order**: Verifies cleanup extensions run after other extensions
-
-**Test Fixtures Used**: `.github/workflows/test-fixtures/manifest-cleanup-middle.conf`
-
-**When It Runs**: On every push/PR affecting extension files
-
-### 7. Manifest Operations Tests
+### 6. Manifest Operations Tests
 
 Tests manifest file operations and integrity:
 
@@ -454,7 +436,6 @@ Located in `.github/workflows/test-fixtures/`:
 
 | Fixture File                   | Purpose                                           | Used By                   |
 | ------------------------------ | ------------------------------------------------- | ------------------------- |
-| `manifest-cleanup-middle.conf` | post-cleanup in middle of manifest                | cleanup-extensions-tests  |
 | `manifest-reorder-test.conf`   | 6 extensions for reorder testing                  | manifest-operations-tests |
 | `manifest-with-comments.conf`  | Manifest with various comment types               | manifest-operations-tests |
 | `manifest-only-top-level.conf` | Single top-level extension for dependency testing | dependency-chain-tests    |

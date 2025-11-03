@@ -160,21 +160,6 @@ jobs:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
-  # Cleanup Extensions Tests
-  # ============================================================================
-
-  cleanup-extensions-tests:
-    name: Cleanup Extensions
-    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/cleanup-extensions-tests.yml
-    with:
-      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
-      region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
-    secrets:
-      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
-
-  # ============================================================================
   # Manifest Operations Tests
   # ============================================================================
 
@@ -269,7 +254,6 @@ jobs:
       - per-extension-tests
       - extension-api-tests
       - protected-extensions-tests
-      - cleanup-extensions-tests
       - manifest-operations-tests
       - dependency-chain-tests
       - extension-combinations

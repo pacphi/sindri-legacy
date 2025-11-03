@@ -58,11 +58,6 @@ PROTECTED_EXTENSIONS=(
     "ssh-environment"       # Must be third - SSH config for CI/CD
 )
 
-# Extensions that must run last (cleanup, finalization)
-CLEANUP_EXTENSIONS=(
-    "post-cleanup"
-)
-
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -371,64 +366,6 @@ EOF
         print_success "Protected extensions ensured in manifest (${added_protected[*]})"
     fi
 
-    # Also ensure cleanup extensions are at the end
-    ensure_cleanup_extensions_last
-
-    return 0
-}
-
-# Ensure cleanup extensions are at the end of manifest
-ensure_cleanup_extensions_last() {
-    print_debug "Ensuring cleanup extensions run last..."
-
-    if [[ ! -f "$MANIFEST_FILE" ]]; then
-        return 0
-    fi
-
-    # Read current manifest preserving comments and structure
-    local temp_file=$(mktemp)
-    local found_cleanup=false
-    local cleanup_lines=()
-
-    # First pass: copy everything except cleanup extensions, track cleanup extensions
-    while IFS= read -r line; do
-        # Keep comments and empty lines
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
-            echo "$line" >> "$temp_file"
-            continue
-        fi
-
-        # Check if this is a cleanup extension
-        local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        local is_cleanup=false
-
-        for cleanup in "${CLEANUP_EXTENSIONS[@]}"; do
-            if [[ "$ext_name" == "$cleanup" ]]; then
-                is_cleanup=true
-                found_cleanup=true
-                cleanup_lines+=("$ext_name")
-                break
-            fi
-        done
-
-        # Add non-cleanup extensions to temp file
-        if [[ "$is_cleanup" == "false" ]]; then
-            echo "$line" >> "$temp_file"
-        fi
-    done < "$MANIFEST_FILE"
-
-    # Add cleanup section if we found any cleanup extensions
-    if [[ "$found_cleanup" == "true" ]]; then
-        echo "" >> "$temp_file"
-        echo "# Cleanup extensions (run last):" >> "$temp_file"
-        for cleanup_ext in "${cleanup_lines[@]}"; do
-            echo "$cleanup_ext" >> "$temp_file"
-        done
-        print_debug "  Cleanup extensions moved to end: ${cleanup_lines[*]}"
-    fi
-
-    # Replace manifest
-    mv "$temp_file" "$MANIFEST_FILE"
     return 0
 }
 

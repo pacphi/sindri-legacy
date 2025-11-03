@@ -113,8 +113,8 @@ jobs:
           failed_extensions=()
           required_functions=("prerequisites" "install" "configure" "validate" "status" "remove")
 
-          # Skip template and post-cleanup as they may have different requirements
-          skip_patterns="template.extension|post-cleanup.extension"
+          # Skip template as it may have different requirements
+          skip_patterns="template.extension"
 
           for script in docker/lib/extensions.d/*/*.extension; do
             [[ ! -f "$script" ]] && continue

@@ -128,7 +128,6 @@ jobs:
           - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m" }
           - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m" }
           - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m" }
-          - { name: "post-cleanup", commands: "echo", key_tool: "echo", timeout: "10m", run_last: "true" }
 
     steps:
       - name: Checkout repository
@@ -175,6 +174,45 @@ jobs:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           timeout-seconds: "300"
+
+      - name: Wait for VM network initialization
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Waiting for VM network stack initialization..."
+          max_attempts=12
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts: Testing network connectivity..."
+
+            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+              # Test basic network connectivity
+              if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1 && \
+                 ping -c 1 -W 2 archive.ubuntu.com > /dev/null 2>&1; then
+                echo \"✅ Network connectivity verified\"
+                exit 0
+              else
+                echo \"⚠️  Network not ready yet\"
+                exit 1
+              fi
+            '"; then
+              echo "✅ VM network stack ready"
+              break
+            else
+              if [ $attempt -lt $max_attempts ]; then
+                echo "⏳ Waiting 5s before retry..."
+                sleep 5
+                attempt=$((attempt + 1))
+              else
+                echo "❌ VM network stack did not become ready in time"
+                echo "Continuing anyway (may cause package installation failures)..."
+              fi
+            fi
+          done
 
       # Keep these steps as they're extension-specific
       - name: Verify CI extension manifest
@@ -321,8 +359,12 @@ jobs:
                 sleep 30
               else
                 echo "❌ extension-manager install-all failed after $max_config_attempts attempts"
-                echo "Retrieving app logs for diagnosis..."
-                flyctl logs --app $app_name
+                echo "Retrieving app logs for diagnosis (with 30s timeout)..."
+                timeout 30s flyctl logs --app $app_name --limit 200 || {
+                  echo "⚠️  Log retrieval timed out or failed"
+                  echo "Attempting to get machine status instead..."
+                  flyctl status --app $app_name || echo "Status check also failed"
+                }
                 exit 1
               fi
             fi
