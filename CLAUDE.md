@@ -28,11 +28,10 @@ flyctl deploy --strategy immediate --wait-timeout 60s  # Skip health checks
 ### On-VM Commands
 
 ```bash
-/workspace/scripts/vm-configure.sh                # Complete environment setup
-/workspace/scripts/vm-configure.sh --extension <name>  # Install specific extension
 extension-manager list                            # List available extensions
-extension-manager activate <name>                 # Activate extension
-extension-manager install <name>                  # Install extension
+extension-manager --interactive                   # Interactive extension setup
+extension-manager install <name>                  # Install specific extension
+extension-manager install-all                     # Install all active extensions
 claude                                            # Authenticate Claude Code
 npx claude-flow@alpha init --force               # Initialize Claude Flow in project
 new-project <name> [--type <type>]               # Create new project with enhancements
@@ -82,11 +81,14 @@ Sindri uses a manifest-based extension system to manage development tools and en
 # List all available extensions
 extension-manager list
 
-# Activate an extension (adds to manifest)
-extension-manager activate <name>
+# Interactive setup with prompts (recommended for first-time setup)
+extension-manager --interactive
 
-# Install an extension (runs prerequisites, install, configure)
+# Install an extension (auto-activates if needed)
 extension-manager install <name>
+
+# Install all active extensions from manifest
+extension-manager install-all
 
 # Check extension status
 extension-manager status <name>
@@ -94,43 +96,62 @@ extension-manager status <name>
 # Validate extension installation
 extension-manager validate <name>
 
+# Validate all installed extensions
+extension-manager validate-all
+
 # Uninstall extension
 extension-manager uninstall <name>
 
-# Install all active extensions
-extension-manager install-all
-
 # Reorder extension priority
 extension-manager reorder <name> <position>
+
+# Upgrade commands (Extension API v2.0)
+extension-manager upgrade <name>         # Upgrade specific extension
+extension-manager upgrade-all            # Upgrade all extensions
+extension-manager upgrade-all --dry-run  # Preview upgrades
+extension-manager check-updates          # Check for updates
+extension-manager upgrade-history        # View upgrade history
 ```
 
 ### Available Extensions
 
-**Core Environment:**
-- `workspace-structure` - Base directory structure
-- `nodejs` - Node.js LTS via NVM (Node Version Manager) with npm
-- `ssh-environment` - SSH wrappers for non-interactive sessions
+**Core Extensions (Protected - Cannot be Removed):**
+
+- `workspace-structure` - Base directory structure (must be first)
+- `mise-config` - Unified tool version manager for all mise-powered extensions
+- `ssh-environment` - SSH configuration for non-interactive sessions and CI/CD
+
+**Foundational Languages:**
+
+- `nodejs` - Node.js LTS via mise with npm (requires mise-config, recommended - many tools depend on it)
+- `python` - Python 3.13 via mise with pip, venv, uv, pipx (requires mise-config)
 
 **Claude AI:**
-- `claude-config` - Claude Code CLI with developer configuration (requires nodejs)
-- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
+
+- `claude` - Claude Code CLI with developer configuration
+- `claude-marketplace` - Plugin installer for https://claudecodemarketplace.com/ (requires claude, git)
+- `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
+- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
 **Development Tools:**
-- `python` - Python 3.13 with pip, venv, uv
-- `rust` - Rust toolchain with cargo, clippy, rustfmt
-- `golang` - Go 1.24 with gopls, delve, golangci-lint
-- `ruby` - Ruby 3.4/3.3 with rbenv, Rails, Bundler
-- `php` - PHP 8.3 with Composer, Symfony CLI
+
+- `github-cli` - GitHub CLI authentication and workflow configuration
+- `rust` - Rust toolchain with cargo, clippy, rustfmt (requires mise-config)
+- `golang` - Go 1.24 with gopls, delve, golangci-lint (requires mise-config)
+- `ruby` - Ruby 3.4.7 via mise with Rails, Bundler (requires mise-config)
+- `php` - PHP 8.4 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - `dotnet` - .NET SDK 9.0/8.0 with ASP.NET Core
 
 **Infrastructure:**
+
 - `docker` - Docker Engine with compose, dive, ctop
 - `infra-tools` - Terraform, Ansible, kubectl, Helm
 - `cloud-tools` - AWS, Azure, GCP, Oracle, DigitalOcean CLIs
 - `ai-tools` - AI coding assistants (Codex, Gemini, Ollama, etc.)
 
 **Monitoring & Utilities:**
+
 - `monitoring` - System monitoring tools
 - `tmux-workspace` - Tmux session management
 - `playwright` - Browser automation testing
@@ -139,17 +160,22 @@ extension-manager reorder <name> <position>
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
+Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development)
+or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
-```
-# Core extensions (always first)
+
+```bash
+# Protected extensions (required for system functionality):
 workspace-structure
-nodejs
+mise-config
 ssh-environment
 
-# Language runtimes
+# Foundational languages
+nodejs
 python
+
+# Additional language runtimes
 golang
 rust
 
@@ -161,6 +187,7 @@ infra-tools
 ### Extension API
 
 Each extension implements 6 standard functions:
+
 - `prerequisites()` - Check system requirements
 - `install()` - Install packages and tools
 - `configure()` - Post-install configuration
@@ -172,50 +199,269 @@ Each extension implements 6 standard functions:
 
 Sindri provides multiple extensions for Node.js development:
 
-**nodejs** (Core - NVM approach):
+**nodejs** (Core - mise-powered):
+
 ```bash
-extension-manager activate nodejs
 extension-manager install nodejs
 ```
+
 Provides:
-- Node.js LTS via NVM (v0.40.3)
+
+- Node.js LTS via mise (replaces NVM)
 - Multiple Node version support
 - npm with user-space global packages
 - No sudo required for global installs
+- Per-project version management via mise.toml
 
-**nodejs-devtools** (Optional):
+**nodejs-devtools** (Optional - mise-powered):
+
 ```bash
-extension-manager activate nodejs-devtools
 extension-manager install nodejs-devtools
 ```
+
 Provides:
+
 - TypeScript (`tsc`, `ts-node`)
 - ESLint with TypeScript support
 - Prettier code formatter
 - nodemon for auto-reload
 - goalie AI research assistant
+- Tools managed via mise npm plugin
 
-**claude-config** (Recommended):
+**claude** (Recommended):
+
 ```bash
-extension-manager activate claude-config
-extension-manager install claude-config
+extension-manager install claude
 ```
+
 Provides:
+
 - Claude Code CLI (`claude` command)
 - Global preferences (~/.claude/CLAUDE.md)
 - Auto-formatting hooks (Prettier, TypeScript)
 - Authentication management
 
-**Typical Setup**:
-```bash
-# Activate all three
-extension-manager activate nodejs
-extension-manager activate claude-config
-extension-manager activate nodejs-devtools
+**claude-marketplace** (Optional):
 
-# Install in dependency order
-extension-manager install-all
+```bash
+extension-manager install claude-marketplace
 ```
+
+Provides:
+
+- Plugin marketplace integration for https://claudecodemarketplace.com/
+- Automated plugin installation from `.plugins` configuration file
+- Curated collection of high-quality Claude Code plugins
+- Support for GitHub-hosted plugin repositories
+
+Common workflow:
+
+```bash
+# Copy template and customize
+cp /workspace/.plugins.example /workspace/.plugins
+vim /workspace/.plugins
+
+# Install extension (auto-installs plugins from .plugins file)
+extension-manager install claude-marketplace
+
+# Browse and install plugins interactively
+claude /plugin
+
+# List installed plugins
+claude /plugin list
+
+# Manage marketplaces
+claude /plugin marketplace list
+claude /plugin marketplace add owner/repo
+```
+
+Curated plugins in `.plugins.example`:
+
+- `steveyegge/beads` - Natural language programming
+- `croffasia/cc-blueprint-toolkit` - Project scaffolding templates
+- `quant-sentiment-ai/claude-equity-research` - Financial analysis tools
+- `czlonkowski/n8n-skills` - Workflow automation integration
+- `anthropics/life-sciences` - Life sciences research plugins
+- `ComposioHQ/awesome-claude-skills` - Community-curated skills collection
+
+**openskills** (Optional):
+
+```bash
+extension-manager install openskills
+```
+
+Provides:
+
+- OpenSkills CLI (`openskills` command, aliased as `skills`)
+- Install and manage Claude Code skills from Anthropic's marketplace
+- Progressive skill disclosure (loads instructions only when needed)
+- SKILL.md format support with YAML frontmatter
+- Skills installed to ~/.openskills/
+
+Common commands:
+
+```bash
+# Install skills from Anthropic's marketplace (interactive)
+openskills install anthropics/anthropic-skills-marketplace
+
+# List installed skills
+openskills list
+
+# Sync skills to AGENTS.md
+openskills sync
+
+# Read skill content for agents
+openskills read <skill-name>
+
+# Remove skills interactively
+openskills manage
+```
+
+Shell aliases available:
+
+- `skills` - Short alias for openskills
+- `skill-install` - Install skills
+- `skill-list` - List skills
+- `skill-sync` - Sync to AGENTS.md
+- `skill-marketplace` - Quick install from Anthropic's marketplace
+
+**Typical Setup**:
+
+```bash
+# Edit manifest to uncomment desired extensions
+# docker/lib/extensions.d/active-extensions.conf.example
+
+# Then install all at once
+extension-manager install-all
+
+# Or use interactive mode
+extension-manager --interactive
+```
+
+## mise Tool Manager
+
+Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes.
+mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, Ruby, and their associated tools,
+replacing multiple version managers (NVM, pyenv, rbenv, rustup, etc.) with one tool.
+
+**Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed.
+It must be installed before any mise-powered extensions.
+
+### mise-Managed Extensions
+
+The following extensions use mise for tool installation and version management (all require `mise-config`):
+
+- **nodejs**: Node.js LTS via mise (replaces NVM)
+  - Manages Node.js versions
+  - npm package manager
+  - Per-project version configuration
+
+- **python**: Python 3.13 + pipx tools via mise
+  - Python runtime versions
+  - pipx-installed tools (uv, black, ruff, etc.)
+  - Virtual environment support
+
+- **rust**: Rust stable + cargo tools via mise
+  - Rust toolchain versions
+  - Cargo package manager
+  - Development tools (clippy, rustfmt)
+
+- **golang**: Go 1.24 + go tools via mise
+  - Go language versions
+  - Go toolchain utilities
+  - Development tools (gopls, delve, golangci-lint)
+
+- **ruby**: Ruby 3.4.7 + Rails + gems via mise
+  - Ruby runtime versions
+  - gem and bundle package managers
+  - Rails framework (development mode only)
+  - Development gems (rubocop, rspec, pry, etc.)
+
+- **nodejs-devtools**: npm global tools via mise
+  - TypeScript, ESLint, Prettier
+  - nodemon, goalie
+  - Managed via mise npm plugin
+
+### Common mise Commands
+
+```bash
+# List all installed tools and versions
+mise ls
+
+# List versions of a specific tool
+mise ls node
+mise ls python
+mise ls rust
+mise ls go
+mise ls ruby
+
+# Install or switch tool versions
+mise use node@20          # Switch to Node.js 20
+mise use python@3.11      # Switch to Python 3.11
+mise use rust@stable      # Switch to stable Rust
+mise use go@1.24          # Switch to Go 1.24
+mise use ruby@3.4.7       # Switch to Ruby 3.4.7
+
+# Update all tools to latest versions
+mise upgrade
+
+# Check for configuration issues
+mise doctor
+
+# View current environment
+mise env
+
+# Install tools from mise.toml
+mise install
+
+# Uninstall a tool version
+mise uninstall node@18
+```
+
+### Per-Project Tool Versions
+
+Create a `mise.toml` file in your project root to specify tool versions:
+
+```toml
+[tools]
+node = "20"
+python = "3.11"
+rust = "1.75"
+go = "1.24"
+
+[env]
+NODE_ENV = "development"
+```
+
+mise automatically switches to the specified versions when you enter the directory:
+
+```bash
+# Create project with specific versions
+cd /workspace/projects/active/my-project
+cat > mise.toml << 'EOF'
+[tools]
+node = "20"
+python = "3.11"
+
+[env]
+NODE_ENV = "production"
+EOF
+
+# mise automatically detects and switches versions
+node --version    # v20.x.x
+python --version  # Python 3.11.x
+```
+
+### Benefits of mise
+
+- **Unified Interface**: One tool for all language runtimes
+- **Automatic Switching**: Changes versions based on directory
+- **Fast**: Written in Rust, faster than shell-based managers
+- **Cross-Platform**: Works on Linux, macOS, Windows
+- **Per-Project Config**: Each project defines its own versions
+- **Global Fallback**: Global versions used when no project config exists
+- **Plugin Ecosystem**: Supports 100+ tools via plugins
+- **Backwards Compatible**: Works with .nvmrc, .python-version, etc.
 
 ## Testing and Validation
 
@@ -226,6 +472,118 @@ No specific test framework enforced - check each project's README for:
 - Build processes
 
 Always run project-specific linting/formatting before commits.
+
+## CI/CD & GitHub Actions
+
+Sindri uses GitHub Actions for automated testing and validation. The workflows are designed to be maintainable and reusable.
+
+### Available Workflows
+
+**Extension Testing (`extension-tests.yml`)**
+
+- Tests Extension API v1.0 and v2.0
+- Validates extension manager functionality
+- Tests individual extensions in parallel
+- Verifies upgrade functionality
+- Location: `.github/workflows/extension-tests.yml`
+
+**Integration Testing (`integration.yml`)**
+
+- End-to-end VM deployment tests
+- Developer workflow validation
+- mise-powered stack integration
+- Location: `.github/workflows/integration.yml`
+
+**Validation (`validate.yml`)**
+
+- Shell script validation with shellcheck
+- YAML syntax validation
+- Location: `.github/workflows/validate.yml`
+
+**Documentation Linting (`test-documentation.yml`)**
+
+- Markdown file linting with markdownlint
+- Validates formatting and style consistency across all .md files
+- Runs on PR changes to markdown files
+- Location: `.github/workflows/test-documentation.yml`
+
+**Release (`release.yml`)**
+
+- Automated release creation
+- Changelog generation
+- Version tagging
+- Location: `.github/workflows/release.yml`
+
+**Build Docker Images (`build-image.yml`)**
+
+- Builds and pushes Docker images to Fly.io registry
+- Automatic triggers on Dockerfile/docker/\* changes
+- Tags: PR-specific, branch-specific, and latest
+- Enables ~75% faster CI/CD by reusing images
+- Location: `.github/workflows/build-image.yml`
+
+### Pre-Built Docker Images
+
+Sindri uses pre-built Docker images to dramatically improve CI/CD performance:
+
+**Setup (First-Time Only)**:
+
+```bash
+# Create registry app (one-time setup)
+flyctl apps create sindri-registry --org personal
+```
+
+**How It Works**:
+
+- Images are built once and reused across all test jobs
+- Automatic rebuilding when Dockerfile or docker/\* files change
+- Conditional reuse when no Docker changes detected
+- ~75% reduction in workflow execution time
+
+**Image Tags**:
+
+- Pull Requests: `registry.fly.io/sindri-registry:pr-<number>-<sha>`
+- Branch Builds: `registry.fly.io/sindri-registry:<branch>-<sha>`
+- Latest (main): `registry.fly.io/sindri-registry:latest`
+
+**Performance Impact**:
+
+- Integration Tests: 15min → 4min (**73% faster**)
+- Extension Tests: 45min → 12min (**73% faster**)
+- Per-Extension Tests: 6min → 1.5min (**75% faster**)
+
+**Documentation**:
+
+- Setup Guide: `docs/PREBUILT_IMAGES_SETUP.md`
+- Architecture: `.github/actions/build-push-image/README.md`
+
+### Composite Actions
+
+Reusable workflow components in `.github/actions/`:
+
+- `setup-fly-test-env/` - Complete test environment setup
+- `deploy-fly-app/` - Fly.io app deployment with retry logic and pre-built image support
+- `build-push-image/` - Build and push Docker images to Fly registry
+- `wait-fly-deployment/` - Wait for deployment completion
+- `cleanup-fly-app/` - Cleanup test resources
+
+### Test Scripts
+
+Reusable test scripts in `.github/scripts/extension-tests/`:
+
+- `verify-commands.sh` - Verify command availability
+- `test-key-functionality.sh` - Test primary tool functionality
+- `test-api-compliance.sh` - Validate Extension API compliance
+- `test-idempotency.sh` - Test idempotent installation
+- `lib/test-helpers.sh` - Shared utility functions (20+)
+- `lib/assertions.sh` - Test assertion library (10+)
+
+### Documentation
+
+For detailed information about workflows and testing:
+
+- `.github/actions/README.md` - Composite actions usage guide
+- `.github/scripts/extension-tests/README.md` - Test scripts reference
 
 ## Agent Configuration
 
@@ -310,9 +668,6 @@ codex suggest "optimize this function"
 codex edit file.js
 codex run "create REST API"
 
-# Claude Squad - Terminal-based AI assistant
-claude-squad "implement authentication"
-
 # Plandex - Multi-step development tasks
 plandex init                         # Initialize in project
 plandex plan "add user auth"         # Plan task
@@ -376,8 +731,7 @@ export GROK_API_KEY=your_key
 **Enable the extension:**
 
 ```bash
-extension-manager activate ai-tools
-/workspace/scripts/vm-configure.sh --extension ai-tools
+extension-manager install ai-tools
 ```
 
 See `/workspace/ai-tools/README.md` for complete documentation.

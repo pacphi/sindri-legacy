@@ -1,0 +1,375 @@
+#!/bin/bash
+# context-loader.sh.example - Claude Code context management utilities
+# Extension API v1.0
+#
+# This extension installs context management utilities for Claude Code,
+# including context loading functions and Claude Flow wrappers.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="context-loader"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Claude Code context management utilities"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"  # Shell scripts
+EXT_UPGRADE_STRATEGY="manual"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check template files exist
+  if [[ ! -f "/docker/lib/templates/context-loader.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/context-loader.sh"
+    print_status "Context loading utilities will need to be created manually"
+  fi
+
+  if [[ ! -f "/docker/lib/templates/cf-with-context.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/cf-with-context.sh"
+    print_status "Claude Flow wrapper will need to be created manually"
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing context management utilities..."
+
+  # No packages to install - this extension only copies scripts
+  print_success "No packages to install"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring context management..."
+
+  # Create context loading utilities
+  local utilities_script="/workspace/scripts/lib/context-loader.sh"
+  local template_file="/docker/lib/templates/context-loader.sh"
+
+  mkdir -p "/workspace/scripts/lib"
+
+  if [[ -f "$template_file" ]]; then
+    print_status "Copying context loader utilities..."
+    cp "$template_file" "$utilities_script"
+    chmod +x "$utilities_script"
+    print_success "Context loading utilities installed"
+  else
+    print_warning "Template not found at $template_file"
+    print_status "You'll need to create context-loader.sh manually"
+  fi
+
+  # Create Claude Flow context wrapper
+  local wrapper_script="/workspace/scripts/cf-with-context.sh"
+  local wrapper_template="/docker/lib/templates/cf-with-context.sh"
+
+  mkdir -p /workspace/scripts
+
+  if [[ -f "$wrapper_template" ]]; then
+    print_status "Copying Claude Flow context wrapper..."
+    cp "$wrapper_template" "$wrapper_script"
+    chmod +x "$wrapper_script"
+    print_success "Claude Flow context wrapper installed"
+  else
+    print_warning "Template not found at $wrapper_template"
+    print_status "You'll need to create cf-with-context.sh manually"
+  fi
+
+  # Create context-load CLI command
+  print_status "Creating context-load CLI command..."
+
+  # Create in user-space (no sudo needed) - consistent with other extensions
+  mkdir -p "$HOME/.local/bin"
+
+  cat > "$HOME/.local/bin/context-load" <<'EOF'
+#!/bin/bash
+# context-load - CLI wrapper for context loading utilities
+
+# Source the context loader library
+if [[ -f /workspace/scripts/lib/context-loader.sh ]]; then
+  source /workspace/scripts/lib/context-loader.sh
+else
+  echo "Error: context-loader.sh not found" >&2
+  exit 1
+fi
+
+# Parse command
+case "${1:-all}" in
+  all)
+    load_all_context
+    ;;
+  global)
+    load_global_context
+    ;;
+  user)
+    load_user_context
+    ;;
+  project)
+    load_project_context
+    ;;
+  agents)
+    load_mandatory_agents
+    ;;
+  validate)
+    validate_context
+    ;;
+  hierarchy)
+    show_context_hierarchy
+    ;;
+  help|--help|-h)
+    echo "Usage: context-load [COMMAND]"
+    echo ""
+    echo "Commands:"
+    echo "  all        Load all context (default)"
+    echo "  global     Load global context only"
+    echo "  user       Load user context only"
+    echo "  project    Load project context only"
+    echo "  agents     Load mandatory agents only"
+    echo "  validate   Validate context files"
+    echo "  hierarchy  Show context loading hierarchy"
+    echo "  help       Show this help message"
+    ;;
+  *)
+    echo "Unknown command: $1" >&2
+    echo "Run 'context-load help' for usage information" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  chmod +x "$HOME/.local/bin/context-load"
+  print_success "context-load command installed to ~/.local/bin"
+
+  # Create context directories if they don't exist
+  mkdir -p /workspace/context/global
+  mkdir -p /workspace/context/templates
+
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/context-loader.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added context loader aliases to .bashrc"
+    fi
+  fi
+
+  print_success "Context management configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating context management installation..."
+
+  local all_valid=true
+
+  # Check utilities script
+  if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
+    print_error "Context loader utilities not found"
+    all_valid=false
+  else
+    print_success "Context loader utilities: installed"
+
+    if [[ ! -x "/workspace/scripts/lib/context-loader.sh" ]]; then
+      print_warning "Context loader is not executable"
+    fi
+  fi
+
+  # Check wrapper script
+  if [[ ! -f "/workspace/scripts/cf-with-context.sh" ]]; then
+    print_error "Claude Flow wrapper not found"
+    all_valid=false
+  else
+    print_success "Claude Flow wrapper: installed"
+
+    if [[ ! -x "/workspace/scripts/cf-with-context.sh" ]]; then
+      print_warning "Wrapper is not executable"
+    fi
+  fi
+
+  # Check context-load CLI command
+  if ! command_exists context-load; then
+    print_error "context-load command not found in PATH"
+    all_valid=false
+  else
+    print_success "context-load command: installed"
+
+    # Test the command
+    if context-load help >/dev/null 2>&1; then
+      print_success "context-load command: functional"
+    else
+      print_warning "context-load command exists but may not be functional"
+    fi
+  fi
+
+  # Check context directories
+  if [[ ! -d "/workspace/context" ]]; then
+    print_warning "Context directory not found"
+  else
+    print_success "Context directory: exists"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  [[ -f "/workspace/scripts/lib/context-loader.sh" ]] && echo "  ✓ context-loader.sh" || echo "  ✗ context-loader.sh"
+  [[ -f "/workspace/scripts/cf-with-context.sh" ]] && echo "  ✓ cf-with-context.sh" || echo "  ✗ cf-with-context.sh"
+
+  # Show context directories
+  echo ""
+  print_status "Context directories:"
+  if [[ -d "/workspace/context/global" ]]; then
+    local global_count
+    global_count=$(find /workspace/context/global -type f 2>/dev/null | wc -l)
+    echo "  ✓ global: $global_count file(s)"
+  else
+    echo "  ✗ global: not found"
+  fi
+
+  if [[ -d "/workspace/context/templates" ]]; then
+    local template_count
+    template_count=$(find /workspace/context/templates -type f 2>/dev/null | wc -l)
+    echo "  ✓ templates: $template_count file(s)"
+  else
+    echo "  ✗ templates: not found"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # Context management utilities are static scripts - no upgrades needed
+  print_success "No upgrades needed for context management utilities"
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling context management utilities..."
+
+  # Check for dependent extensions
+  local dependent_exts=()
+  mapfile -t dependent_exts < <(check_dependent_extensions "context-loader" "cf-with-context")
+
+  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
+    print_warning "The following active extensions depend on context utilities and may stop working:"
+    for ext in "${dependent_exts[@]}"; do
+      echo "  - $ext"
+    done
+    echo ""
+  fi
+
+  if ! prompt_confirmation "Continue with context utilities removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove scripts
+  local scripts=(
+    "/workspace/scripts/lib/context-loader.sh"
+    "/workspace/scripts/cf-with-context.sh"
+  )
+
+  for script in "${scripts[@]}"; do
+    if [[ -f "$script" ]]; then
+      rm -f "$script"
+      print_success "Removed: $(basename "$script")"
+    fi
+  done
+
+  # Remove CLI command
+  if [[ -f "$HOME/.local/bin/context-load" ]]; then
+    rm -f "$HOME/.local/bin/context-load"
+    print_success "Removed: context-load command"
+  fi
+
+  # Ask about context directories
+  if [[ -d "/workspace/context" ]]; then
+    print_warning "Context directory exists with user data"
+    read -p "Remove /workspace/context directory? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "/workspace/context"
+      print_success "Context directory removed"
+    else
+      print_status "Context directory preserved"
+    fi
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed context aliases from .bashrc"
+  fi
+
+  print_success "Context management utilities uninstalled"
+
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

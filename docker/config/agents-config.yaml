@@ -3,9 +3,9 @@ version: "1.0"
 settings:
   base_dir: /workspace/agents
   docs_dir: /workspace/docs/agents
-  conflict_strategy: backup  # Options: backup, overwrite, skip, merge
+  conflict_strategy: backup # Options: backup, overwrite, skip, merge
   backup_dir: /workspace/backups/agents
-  log_level: info  # Options: debug, info, warn, error
+  log_level: info # Options: debug, info, warn, error
   concurrent_downloads: 3
   timeout: 300s
   continue_on_error: false
@@ -75,7 +75,7 @@ sources:
       include:
         extensions: [".md"]
       exclude:
-        patterns: ["CLAUDE.md","README.md","MIGRATION_SUMMARY.md"]
+        patterns: ["CLAUDE.md", "README.md", "MIGRATION_SUMMARY.md"]
 
   - name: wshobson-subagents-collection
     enabled: false

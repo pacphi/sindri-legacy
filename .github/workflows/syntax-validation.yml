@@ -1,0 +1,182 @@
+name: Extension Syntax Validation
+
+on:
+  workflow_call:
+
+jobs:
+  extension-syntax-validation:
+    name: Validate Extension Scripts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Validate all extension scripts
+        run: |
+          echo "Validating all extension scripts with shellcheck..."
+
+          failed_scripts=()
+
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
+            # Skip if file doesn't exist (in case no .sh files)
+            [[ ! -f "$script" ]] && continue
+
+            echo "Checking $script..."
+            if ! shellcheck -x "$script"; then
+              failed_scripts+=("$script")
+            fi
+          done
+
+          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
+            echo "❌ Shellcheck failed for:"
+            printf '%s\n' "${failed_scripts[@]}"
+            exit 1
+          fi
+
+          echo "✅ All extension scripts pass shellcheck"
+
+      - name: Verify common.sh sourcing
+        run: |
+          echo "Verifying all extensions source common.sh..."
+
+          missing_source=()
+
+          for script in docker/lib/extensions.d/*/*.extension; do
+            [[ ! -f "$script" ]] && continue
+
+            # Check if script sources common.sh
+            if ! grep -q "source.*common\.sh" "$script"; then
+              missing_source+=("$script")
+            fi
+          done
+
+          if [[ ${#missing_source[@]} -gt 0 ]]; then
+            echo "⚠️  Extensions missing common.sh source:"
+            printf '%s\n' "${missing_source[@]}"
+            echo "This is a warning - extensions may have alternative sourcing"
+          else
+            echo "✅ All extensions properly source common.sh"
+          fi
+
+      - name: Verify shebang presence
+        run: |
+          echo "Verifying all extensions have proper shebang..."
+
+          missing_shebang=()
+
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
+            [[ ! -f "$script" ]] && continue
+
+            # Check for shebang on first line
+            if ! head -n 1 "$script" | grep -q "^#!/bin/bash"; then
+              missing_shebang+=("$script")
+            fi
+          done
+
+          if [[ ${#missing_shebang[@]} -gt 0 ]]; then
+            echo "❌ Extensions missing proper shebang:"
+            printf '%s\n' "${missing_shebang[@]}"
+            exit 1
+          fi
+
+          echo "✅ All extensions have proper shebang"
+
+      - name: Check for error handling
+        run: |
+          echo "Checking for basic error handling patterns..."
+
+          for script in docker/lib/extensions.d/*/*.extension; do
+            [[ ! -f "$script" ]] && continue
+
+            script_name=$(basename "$script")
+
+            # Check if script uses print functions (good practice)
+            if grep -q "print_" "$script"; then
+              echo "✅ $script_name uses print functions"
+            else
+              echo "⚠️  $script_name doesn't use print functions"
+            fi
+          done
+
+      - name: Verify Extension API v1.0 functions
+        run: |
+          echo "Verifying Extension API v1.0 standard functions..."
+
+          failed_extensions=()
+          required_functions=("prerequisites" "install" "configure" "validate" "status" "remove")
+
+          # Skip template as it may have different requirements
+          skip_patterns="template.extension"
+
+          for script in docker/lib/extensions.d/*/*.extension; do
+            [[ ! -f "$script" ]] && continue
+
+            script_name=$(basename "$script")
+
+            # Skip special cases
+            if echo "$script_name" | grep -qE "$skip_patterns"; then
+              echo "⏭️  Skipping $script_name (special extension)"
+              continue
+            fi
+
+            echo ""
+            echo "Checking $script_name..."
+
+            missing_functions=()
+            for func in "${required_functions[@]}"; do
+              # Check if function is defined
+              if grep -qE "^[[:space:]]*${func}\(\)[[:space:]]*\{" "$script" || \
+                 grep -qE "^[[:space:]]*function[[:space:]]+${func}[[:space:]]*\{" "$script"; then
+                echo "  ✅ $func() found"
+              else
+                echo "  ❌ $func() missing"
+                missing_functions+=("$func")
+              fi
+            done
+
+            if [[ ${#missing_functions[@]} -gt 0 ]]; then
+              echo "  ❌ Missing functions in $script_name: ${missing_functions[*]}"
+              failed_extensions+=("$script_name")
+            else
+              echo "  ✅ All Extension API v1.0 functions present"
+            fi
+          done
+
+          echo ""
+          if [[ ${#failed_extensions[@]} -gt 0 ]]; then
+            echo "❌ Extensions with missing API functions:"
+            printf '%s\n' "${failed_extensions[@]}"
+            echo ""
+            echo "⚠️  All extensions should implement Extension API v1.0:"
+            echo "   - prerequisites()"
+            echo "   - install()"
+            echo "   - configure()"
+            echo "   - validate()"
+            echo "   - status()"
+            echo "   - remove()"
+            exit 1
+          else
+            echo "✅ All extensions implement Extension API v1.0 correctly"
+          fi
+
+      - name: Report validation results
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Extension syntax validation passed"
+            echo "## ✅ Extension Syntax Validation" >> $GITHUB_STEP_SUMMARY
+            echo "All extensions pass syntax validation and implement Extension API v1.0." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Extension syntax validation failed"
+            echo "## ❌ Extension Syntax Validation Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Some extensions failed syntax validation or are missing required API functions." >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for specific errors." >> $GITHUB_STEP_SUMMARY
+          fi

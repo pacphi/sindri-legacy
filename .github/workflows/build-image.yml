@@ -1,0 +1,99 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "Dockerfile"
+      - "docker/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "Dockerfile"
+      - "docker/**"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Custom image tag (default: auto-generated)"
+        required: false
+        type: string
+      push_latest:
+        description: "Tag as latest"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-push:
+    name: Build & Push to Fly Registry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      image-url: ${{ steps.build.outputs.image-url }}
+      image-tag: ${{ steps.build.outputs.image-tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Generate image tag
+        id: generate-tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            # Manual workflow dispatch with custom tag
+            TAG="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR builds: pr-<number>-<sha>
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            SHA_SHORT=${GITHUB_SHA:0:7}
+            TAG="pr-${PR_NUMBER}-${SHA_SHORT}"
+          else
+            # Push builds: <branch>-<sha>
+            BRANCH=${GITHUB_REF#refs/heads/}
+            BRANCH=${BRANCH//\//-}  # Replace / with -
+            SHA_SHORT=${GITHUB_SHA:0:7}
+            TAG="${BRANCH}-${SHA_SHORT}"
+          fi
+
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated tag: ${TAG}"
+
+      - name: Build and push image
+        id: build
+        uses: ./.github/actions/build-push-image
+        with:
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          tag: ${{ steps.generate-tag.outputs.tag }}
+          registry-app: "sindri-registry"
+
+      - name: Tag as latest (main branch or manual request)
+        if: github.ref == 'refs/heads/main' || github.event.inputs.push_latest == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "Tagging as latest..."
+          flyctl auth docker
+
+          SOURCE_IMAGE="${{ steps.build.outputs.image-url }}"
+          LATEST_IMAGE="registry.fly.io/sindri-registry:latest"
+
+          docker pull ${SOURCE_IMAGE}
+          docker tag ${SOURCE_IMAGE} ${LATEST_IMAGE}
+          docker push ${LATEST_IMAGE}
+
+          echo "✅ Latest tag pushed: ${LATEST_IMAGE}"
+
+      - name: Output summary
+        run: |
+          echo "## 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image URL:** \`${{ steps.build.outputs.image-url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ steps.build.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.event.inputs.push_latest }}" = "true" ]; then
+            echo "**Latest:** Yes ✅" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Latest:** No" >> $GITHUB_STEP_SUMMARY
+          fi

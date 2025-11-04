@@ -166,13 +166,11 @@ mkdir src public
    ```
 
 2. Build Settings:
-
    - File → Settings → Build → Compiler
    - Build process heap size: 2048 MB
    - Enable "Compile independent modules in parallel"
 
 3. **File Exclusions:**
-
    - Add to compiler exclusions: `node_modules`, `dist`, `build`, `__pycache__`, `.venv`
 
 ### Connection Optimization
@@ -259,12 +257,10 @@ mkdir src public
    ```
 
 2. **Port Forwarding**
-
    - IDE auto-forwards common development ports
    - Manual forwarding: Tools → Deployment → Configuration
 
 3. **File Operations**
-
    - All files on remote VM, changes are immediate
    - No local synchronization needed
 

@@ -1,0 +1,376 @@
+#!/bin/bash
+# nodejs-devtools.extension - Node.js development tools via mise npm backend
+# Extension API v1.0
+#
+# This extension installs TypeScript, ESLint, Prettier, and other Node.js development tools
+# using mise npm backend for unified tool management.
+# Requires the nodejs extension to be installed first.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="nodejs-devtools"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="TypeScript, ESLint, Prettier, and Node.js development tools via mise npm backend"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Hard requirement: nodejs extension must be installed (provides Node.js/npm)
+  if ! command_exists node; then
+    print_error "Node.js is required but not installed"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
+  if ! command_exists npm; then
+    print_error "npm is required but not found"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
+  # Hard requirement: mise must be available
+  check_mise_prerequisite || return 1
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Node.js development tools via mise..."
+
+  # Install via mise using shared helper
+  install_mise_config "nodejs-devtools" || return 1
+
+  # Verify mise reshim to ensure binaries are available
+  activate_mise_environment
+  if mise reshim; then
+    print_debug "mise reshim completed"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring development tools..."
+
+  # Create default config templates
+  local templates_dir="/workspace/templates"
+  mkdir -p "$templates_dir"
+
+  # Prettier config
+  if [[ ! -f "$templates_dir/.prettierrc" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.prettierrc.template" > "$templates_dir/.prettierrc"
+    print_success "Created Prettier config template"
+  fi
+
+  # ESLint config
+  if [[ ! -f "$templates_dir/.eslintrc.json" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.eslintrc.template" > "$templates_dir/.eslintrc.json"
+    print_success "Created ESLint config template"
+  fi
+
+  # TypeScript config template
+  if [[ ! -f "$templates_dir/tsconfig.json" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.tsconfig.template" > "$templates_dir/tsconfig.json"
+    print_success "Created TypeScript config template"
+  fi
+
+  # Create SSH wrappers for tools
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    for tool in tsc ts-node nodemon prettier eslint goalie; do
+      if command_exists "$tool"; then
+        create_tool_wrapper "$tool" "$(which $tool)"
+      fi
+    done
+  fi
+
+  print_success "Development tools configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Node.js development tools..."
+
+  # Ensure mise is activated for current session
+  activate_mise_environment
+
+  local all_valid=true
+
+  # Check each required npm tool
+  local tools=(
+    "tsc:TypeScript compiler"
+    "ts-node:TypeScript execution"
+    "nodemon:Auto-reload utility"
+    "prettier:Code formatter"
+    "eslint:Linter"
+    "goalie:AI research assistant"
+  )
+
+  for tool_spec in "${tools[@]}"; do
+    IFS=':' read -r cmd name <<< "$tool_spec"
+    if command_exists "$cmd"; then
+      local version=$($cmd --version 2>/dev/null | head -n1 || echo "installed")
+      print_success "$name: $version"
+    else
+      print_warning "$name: Not installed"
+      all_valid=false
+    fi
+  done
+
+  # Verify mise is tracking these npm tools
+  print_status "Checking mise-managed npm tools..."
+  if command_exists mise; then
+    local mise_tools=$(mise ls 'npm:*' 2>/dev/null | grep -c "npm:" || echo "0")
+    if [[ $mise_tools -gt 0 ]]; then
+      print_success "Found $mise_tools npm tools managed by mise"
+    else
+      print_warning "No npm tools found in mise ls output"
+      all_valid=false
+    fi
+  fi
+
+  # Test TypeScript compilation
+  if command_exists tsc; then
+    local test_ts=$(mktemp --suffix=.ts)
+    echo "const x: number = 42; console.log(x);" > "$test_ts"
+    if tsc --noEmit "$test_ts" 2>/dev/null; then
+      print_success "TypeScript compilation test passed"
+    else
+      print_warning "TypeScript compilation test failed"
+    fi
+    rm -f "$test_ts"
+  fi
+
+  # Test Prettier formatting
+  if command_exists prettier; then
+    local test_js=$(mktemp --suffix=.js)
+    echo "const x=1;const y=2;" > "$test_js"
+    if prettier --write "$test_js" >/dev/null 2>&1; then
+      print_success "Prettier formatting test passed"
+    else
+      print_warning "Prettier formatting test failed"
+    fi
+    rm -f "$test_js"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_warning "Some tools are missing"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+  echo "Version Manager: mise (npm backend)"
+  echo ""
+
+  # Ensure mise is activated for current session
+  activate_mise_environment
+
+  # Check installation status
+  if ! command_exists tsc; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED (mise-powered)"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed npm development tools:"
+
+  local tools=(
+    "typescript:tsc"
+    "ts-node:ts-node"
+    "nodemon:nodemon"
+    "prettier:prettier"
+    "eslint:eslint"
+    "goalie:goalie"
+  )
+
+  local installed_count=0
+  for tool_spec in "${tools[@]}"; do
+    IFS=':' read -r name cmd <<< "$tool_spec"
+    if command_exists "$cmd"; then
+      local version=$($cmd --version 2>/dev/null | head -n1 || echo "installed")
+      echo "  ✓ $name: $version"
+      ((installed_count++))
+    else
+      echo "  ✗ $name: Not installed"
+    fi
+  done
+
+  echo ""
+  print_status "Summary: $installed_count/${#tools[@]} tools installed"
+
+  # Show mise-managed npm tools
+  if command_exists mise; then
+    echo ""
+    print_status "mise-managed npm tools:"
+    mise ls 'npm:*' 2>/dev/null | sed 's/^/  /' || echo "  (none found)"
+  fi
+
+  # Show available mise tasks
+  if command_exists mise; then
+    echo ""
+    print_status "Available mise tasks:"
+    if mise tasks ls 2>/dev/null | grep -E '(format|lint|typecheck)' >/dev/null; then
+      echo "  • mise run format     - Format code with Prettier"
+      echo "  • mise run lint       - Lint code with ESLint"
+      echo "  • mise run typecheck  - Type check with TypeScript"
+    else
+      echo "  (no tasks configured)"
+    fi
+  fi
+
+  # Show template locations
+  if [[ -d "/workspace/templates" ]]; then
+    echo ""
+    print_status "Config templates: /workspace/templates"
+  fi
+
+  # Show mise config location
+  local toml_dest="$HOME/.config/mise/conf.d/nodejs-devtools.toml"
+  if [[ -f "$toml_dest" ]]; then
+    echo ""
+    print_status "mise config: $toml_dest"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Node.js development tools..."
+
+  # Ensure mise is activated for current session
+  activate_mise_environment
+
+  # Remove mise configuration using shared helper
+  remove_mise_config "nodejs-devtools"
+
+  # Uninstall npm packages via mise
+  if command_exists mise; then
+    print_status "Uninstalling npm packages via mise..."
+    local npm_packages=(
+      "npm:typescript"
+      "npm:ts-node"
+      "npm:nodemon"
+      "npm:prettier"
+      "npm:eslint"
+      "npm:@typescript-eslint/parser"
+      "npm:@typescript-eslint/eslint-plugin"
+      "npm:goalie"
+    )
+
+    for package in "${npm_packages[@]}"; do
+      if mise uninstall "$package" 2>/dev/null; then
+        print_success "Uninstalled $package"
+      else
+        print_debug "Package $package not installed or already removed"
+      fi
+    done
+  fi
+
+  # Optionally remove template configs
+  echo ""
+  read -p "Remove config templates from /workspace/templates? (y/N): " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    rm -f /workspace/templates/.prettierrc
+    rm -f /workspace/templates/.eslintrc.json
+    rm -f /workspace/templates/tsconfig.json
+    print_success "Config templates removed"
+  else
+    print_status "Config templates preserved"
+  fi
+
+  # Remove SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    for tool in tsc ts-node nodemon prettier eslint goalie; do
+      # Wrapper removal would be handled by ssh-environment extension
+      print_debug "Note: SSH wrappers for $tool should be cleaned up"
+    done
+  fi
+
+  print_success "Node.js development tools uninstalled"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    activate_mise_environment
+
+    # Get current versions
+    print_status "Current versions:"
+    mise ls 2>/dev/null | grep -E "typescript|eslint|prettier|nodemon|goalie" || echo "  No tools found"
+    echo ""
+
+    # Upgrade via mise
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Node.js dev tools upgraded successfully"
+
+        echo ""
+        print_status "Updated versions:"
+        mise ls | grep -E "typescript|eslint|prettier|nodemon|goalie"
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

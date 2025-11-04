@@ -1,0 +1,433 @@
+name: Per-Extension Tests
+
+on:
+  workflow_call:
+    inputs:
+      extension_name:
+        description: "Test specific extension (optional)"
+        required: false
+        default: ""
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      skip_idempotency:
+        description: "Skip idempotency tests"
+        required: false
+        default: false
+        type: boolean
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  per-extension-tests:
+    name: Test Extension - ${{ matrix.extension.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        extension:
+          # Core extensions (always needed)
+          - { name: "workspace-structure", commands: "mkdir,ls", key_tool: "mkdir", timeout: "10m" }
+          - { name: "ssh-environment", commands: "ssh,sshd", key_tool: "ssh", timeout: "15m" }
+          - { name: "mise-config", commands: "mise", key_tool: "mise", timeout: "10m" }
+          # mise-powered language extensions (faster with mise)
+          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m", depends_on: "mise-config" }
+          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m", depends_on: "mise-config" }
+          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m", depends_on: "mise-config" }
+          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m", depends_on: "mise-config" }
+          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "mise-config,nodejs" }
+          # Claude AI extensions
+          - { name: "claude", commands: "claude", key_tool: "claude", timeout: "15m" }
+          - { name: "claude-marketplace", commands: "claude", key_tool: "claude", timeout: "15m", depends_on: "claude" }
+          - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs" }
+          # Traditional extensions (unchanged)
+          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2 }
+          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }
+          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m" }
+          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m" }
+          # Infrastructure
+          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
+          - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5 }
+          - { name: "cloud-tools", commands: "aws", key_tool: "aws", timeout: "30m", status_timeout: 5 }
+          - { name: "ai-tools", commands: "codex,gemini", key_tool: "codex", timeout: "30m", depends_on: "nodejs" }
+          # Utilities
+          - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5 }
+          - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs" }
+          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5 }
+          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m" }
+          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m" }
+          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m" }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Check if extension should be tested
+        id: should-test
+        run: |
+          # Skip if workflow_dispatch with specific extension that doesn't match
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+             [ -n "${{ github.event.inputs.extension_name }}" ] && \
+             [ "${{ github.event.inputs.extension_name }}" != "${{ matrix.extension.name }}" ]; then
+            echo "should_test=false" >> $GITHUB_OUTPUT
+            echo "Skipping ${{ matrix.extension.name }} - not requested"
+          else
+            echo "should_test=true" >> $GITHUB_OUTPUT
+            echo "Testing ${{ matrix.extension.name }}"
+          fi
+
+      # NEW: Using composite action for setup
+      - name: Setup Fly.io test environment
+        if: steps.should-test.outputs.should_test == 'true'
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: ${{ matrix.extension.name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      # NEW: Using composite action for deployment
+      - name: Deploy test environment
+        if: steps.should-test.outputs.should_test == 'true'
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # NEW: Using composite action for waiting
+      - name: Wait for deployment
+        if: steps.should-test.outputs.should_test == 'true'
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "300"
+
+      - name: Wait for VM network initialization
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Waiting for VM network stack initialization..."
+          max_attempts=12
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts: Testing network connectivity..."
+
+            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+              # Test basic network connectivity
+              if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1 && \
+                 ping -c 1 -W 2 archive.ubuntu.com > /dev/null 2>&1; then
+                echo \"✅ Network connectivity verified\"
+                exit 0
+              else
+                echo \"⚠️  Network not ready yet\"
+                exit 1
+              fi
+            '"; then
+              echo "✅ VM network stack ready"
+              break
+            else
+              if [ $attempt -lt $max_attempts ]; then
+                echo "⏳ Waiting 5s before retry..."
+                sleep 5
+                attempt=$((attempt + 1))
+              else
+                echo "❌ VM network stack did not become ready in time"
+                echo "Continuing anyway (may cause package installation failures)..."
+              fi
+            fi
+          done
+
+      # Keep these steps as they're extension-specific
+      - name: Verify CI extension manifest
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          flyctl ssh sftp put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-manifest.sh"
+
+          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
+
+      - name: Add extension to manifest
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension_name="${{ matrix.extension.name }}"
+          depends_on="${{ matrix.extension.depends_on }}"
+
+          echo "Adding $extension_name to manifest"
+
+          flyctl ssh sftp put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/add-extension.sh"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            bash /tmp/add-extension.sh $extension_name $depends_on
+          '"
+
+      - name: Install extension using install-all
+        timeout-minutes: 30
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          timeout="${{ matrix.extension.timeout }}"
+
+          echo "Running extension-manager install-all for ${{ matrix.extension.name }} extension (timeout: $timeout)..."
+
+          max_config_attempts=2
+          config_attempt=1
+
+          while [ $config_attempt -le $max_config_attempts ]; do
+            echo "Configuration attempt $config_attempt/$max_config_attempts..."
+
+            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+              export CI_MODE=true
+              echo \"=== Starting extension installation ===\"
+              echo \"Extension: ${{ matrix.extension.name }}\"
+              echo \"Timeout: $timeout\"
+              echo \"\"
+
+              if timeout --kill-after=60s $timeout bash -c \"cd /workspace/scripts/lib && bash extension-manager.sh install-all\" 2>&1 | tee /tmp/configure.log; then
+                config_exit_code=\${PIPESTATUS[0]}
+
+                if [ \$config_exit_code -eq 0 ]; then
+                  echo \"\"
+                  echo \"✅ Configuration completed successfully\"
+                  echo \"\"
+
+                  if grep -q \"Extension setup completed\" /tmp/configure.log || \
+                     grep -q \"Configuration complete\" /tmp/configure.log; then
+                    echo \"✅ Configuration markers found\"
+                  else
+                    echo \"⚠️  No completion markers found, but no errors detected\"
+                  fi
+
+                  echo \"⏳ Waiting for SSH environment to stabilize (15 seconds)...\"
+                  sleep 15
+
+                  if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+                    echo \"✅ SSH environment file present\"
+                  else
+                    echo \"⚠️  SSH environment file not found\"
+                  fi
+
+                  exit 0
+                else
+                  echo \"\"
+                  echo \"❌ Configuration exited with code: \$config_exit_code\"
+                  echo \"Last 30 lines of output:\"
+                  tail -30 /tmp/configure.log
+                  exit 1
+                fi
+              else
+                timeout_exit_code=\$?
+                echo \"\"
+
+                if [ \$timeout_exit_code -eq 124 ]; then
+                  echo \"❌ Configuration timed out after $timeout\"
+                elif [ \$timeout_exit_code -eq 137 ]; then
+                  echo \"❌ Configuration was killed (timeout kill signal)\"
+                else
+                  echo \"❌ Configuration failed with exit code: \$timeout_exit_code\"
+                fi
+
+                echo \"\"
+                echo \"Last 50 lines of output:\"
+                tail -50 /tmp/configure.log
+
+                echo \"\"
+                echo \"=== Error Analysis ===\"
+                if grep -i \"error\|failed\|timeout\" /tmp/configure.log | tail -10; then
+                  echo \"(Errors found in log)\"
+                else
+                  echo \"No obvious errors in log\"
+                fi
+
+                echo \"\"
+                echo \"=== Timeout Diagnostics ===\"
+                echo \"Running processes (top 20):\"
+                ps aux | head -20 || echo \"Failed to get process list\"
+
+                echo \"\"
+                echo \"Disk space:\"
+                df -h || echo \"Failed to get disk space\"
+
+                echo \"\"
+                echo \"Memory usage:\"
+                free -h || echo \"Failed to get memory usage\"
+
+                echo \"\"
+                echo \"Load average:\"
+                uptime || echo \"Failed to get load average\"
+
+                exit 1
+              fi
+            '"; then
+              echo "✅ extension-manager install-all completed successfully"
+              break
+            else
+              exit_code=$?
+              config_attempt=$((config_attempt + 1))
+
+              if [ $config_attempt -le $max_config_attempts ]; then
+                echo "⚠️  Configuration attempt failed with exit code $exit_code"
+                echo "Checking app status before retry..."
+                flyctl status --app $app_name || true
+                echo "Waiting 30s before retry..."
+                sleep 30
+              else
+                echo "❌ extension-manager install-all failed after $max_config_attempts attempts"
+                echo "Retrieving app logs for diagnosis (with 30s timeout)..."
+                timeout 30s flyctl logs --app $app_name --limit 200 || {
+                  echo "⚠️  Log retrieval timed out or failed"
+                  echo "Attempting to get machine status instead..."
+                  flyctl status --app $app_name || echo "Status check also failed"
+                }
+                exit 1
+              fi
+            fi
+          done
+
+      # NEW: Using extracted script for command verification
+      - name: Verify commands available
+        timeout-minutes: 2
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          commands="${{ matrix.extension.commands }}"
+
+          echo "Verifying commands: $commands"
+
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-commands.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            bash /tmp/verify-commands.sh \"$commands\"
+          '"
+
+      # NEW: Using extracted script for key functionality testing
+      - name: Test key functionality
+        timeout-minutes: ${{ matrix.extension.key_test_timeout || 2 }}
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          key_tool="${{ matrix.extension.key_tool }}"
+
+          echo "Testing key functionality: $key_tool (timeout: ${{ matrix.extension.key_test_timeout || 2 }} minutes)..."
+
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-key-functionality.sh"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            bash /tmp/test-key-functionality.sh $key_tool
+          '"
+
+      - name: Test enhanced status() output
+        timeout-minutes: ${{ matrix.extension.status_timeout || 2 }}
+        if: steps.should-test.outputs.should_test == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension_name="${{ matrix.extension.name }}"
+
+          echo "Testing enhanced status() output for $extension_name (timeout: ${{ matrix.extension.status_timeout || 2 }} minutes)..."
+
+          status_output=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            bash extension-manager.sh status $extension_name
+          '")
+
+          echo "$status_output"
+
+          if echo "$status_output" | grep -q "Extension:"; then
+            echo "✅ Status shows extension metadata"
+          else
+            echo "❌ Status missing extension metadata"
+            exit 1
+          fi
+
+          if echo "$status_output" | grep -q "Status:"; then
+            echo "✅ Status shows installation status"
+          else
+            echo "❌ Status missing installation status"
+            exit 1
+          fi
+
+          echo "✅ Enhanced status() output verified"
+
+      # NEW: Using extracted script for idempotency testing
+      - name: Test idempotency
+        timeout-minutes: 10
+        if: steps.should-test.outputs.should_test == 'true' && inputs.skip_idempotency != true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing idempotency..."
+
+          flyctl ssh sftp put .github/scripts/extension-tests/test-idempotency.sh /tmp/test-idempotency.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-idempotency.sh"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            bash /tmp/test-idempotency.sh
+          '"
+
+      # NEW: Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

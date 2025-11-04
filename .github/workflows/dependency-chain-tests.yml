@@ -1,0 +1,248 @@
+name: Dependency Chain Tests
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  dependency-chain-tests:
+    name: Test Dependency Chain Resolution
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: "deps"
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: "4096"
+          vm-cpu-kind: "shared"
+          vm-cpu-count: "2"
+          volume-size: "15"
+
+      # Using composite action for deployment
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "600"
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # Using composite action for waiting
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "420"
+          expected-status: "started"
+
+      - name: Copy test fixture to VM
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Copying test fixture to VM via SFTP..."
+          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-only-top-level.conf /tmp/manifest-top-level.conf --app $app_name
+
+          echo "Setting permissions for developer user..."
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-top-level.conf"
+
+          echo "Verifying file access as developer user..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+            ls -lh /tmp/manifest-top-level.conf &&
+            wc -l /tmp/manifest-top-level.conf &&
+            echo \"✓ Fixture verified and accessible\"
+          '"
+
+      - name: Test transitive dependency installation
+        timeout-minutes: 25
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing transitive dependencies: nodejs-devtools -> nodejs -> mise-config..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Using test fixture with only top-level extension...\"
+            cp /tmp/manifest-top-level.conf \$manifest
+
+            echo \"\"
+            echo \"=== Manifest (only top-level extension) ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Running: extension-manager install-all\"
+            if timeout 20m bash extension-manager.sh install-all 2>&1 | tee /tmp/install.log; then
+              echo \"\"
+              echo \"✅ install-all completed\"
+
+              echo \"\"
+              echo \"=== Manifest after install ===\"
+              cat \$manifest
+
+              echo \"\"
+              echo \"Verifying dependency chain was installed...\"
+              for dep in mise-config nodejs nodejs-devtools; do
+                if grep -q \"^\$dep\" \$manifest; then
+                  echo \"✅ \$dep in manifest\"
+                else
+                  echo \"❌ \$dep missing from manifest\"
+                  exit 1
+                fi
+              done
+            else
+              echo \"❌ install-all failed\"
+              tail -50 /tmp/install.log
+              exit 1
+            fi
+          '"
+
+      - name: Test playwright dependency on nodejs
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing playwright → nodejs dependency error handling..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Creating minimal manifest with only protected extensions...\"
+            echo \"workspace-structure\" > \$manifest
+            echo \"mise-config\" >> \$manifest
+            echo \"ssh-environment\" >> \$manifest
+
+            echo \"\"
+            echo \"=== Manifest before test ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Attempting to install playwright without nodejs (should fail)...\"
+            set +e  # Don'\''t exit on error
+            timeout 5m bash extension-manager.sh install playwright 2>&1 | tee /tmp/playwright_test.log
+            install_exit=\${PIPESTATUS[0]}
+            set -e
+
+            if [ \$install_exit -eq 0 ]; then
+              echo \"❌ Installation succeeded when it should have failed (nodejs prerequisite missing)\"
+              cat /tmp/playwright_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Installation correctly failed (exit code: \$install_exit)\"
+            echo \"Verifying error message quality...\"
+
+            if grep -qi \"node.*required\|install.*nodejs\" /tmp/playwright_test.log; then
+              echo \"✅ Clear error message shown about nodejs prerequisite\"
+            else
+              echo \"❌ Error message unclear or missing prerequisite information\"
+              cat /tmp/playwright_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Dependency prerequisite check working correctly\"
+          '"
+
+      - name: Test monitoring dependency on python
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing monitoring → python dependency error handling..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            echo \"Creating minimal manifest with only protected extensions...\"
+            echo \"workspace-structure\" > \$manifest
+            echo \"mise-config\" >> \$manifest
+            echo \"ssh-environment\" >> \$manifest
+
+            echo \"\"
+            echo \"=== Manifest before test ===\"
+            cat \$manifest
+
+            echo \"\"
+            echo \"Attempting to install monitoring without python (should fail)...\"
+            set +e  # Don'\''t exit on error
+            timeout 5m bash extension-manager.sh install monitoring 2>&1 | tee /tmp/monitoring_test.log
+            install_exit=\${PIPESTATUS[0]}
+            set -e
+
+            if [ \$install_exit -eq 0 ]; then
+              echo \"❌ Installation succeeded when it should have failed (python prerequisite missing)\"
+              cat /tmp/monitoring_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Installation correctly failed (exit code: \$install_exit)\"
+            echo \"Verifying error message quality...\"
+
+            if grep -qi \"python.*required\|install.*python\" /tmp/monitoring_test.log; then
+              echo \"✅ Clear error message shown about python prerequisite\"
+            else
+              echo \"❌ Error message unclear or missing prerequisite information\"
+              cat /tmp/monitoring_test.log
+              exit 1
+            fi
+
+            echo \"\"
+            echo \"✅ Dependency prerequisite check working correctly\"
+          '"
+
+      # Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

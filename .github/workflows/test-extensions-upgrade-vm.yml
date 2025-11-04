@@ -1,0 +1,85 @@
+name: Test Extensions Upgrade VM
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  test-extensions-upgrade-vm:
+    name: Integration Tests - VM Upgrade Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-vm]')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy test VM
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          APP_NAME="test-ext-v2-${{ github.run_id }}"
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          CI_MODE=true ./scripts/vm-setup.sh --app-name "$APP_NAME"
+
+      - name: Install all extensions
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl ssh console -a "$APP_NAME" -C "extension-manager install-all"
+
+      - name: Test upgrade-all dry-run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-all --dry-run"
+
+      - name: Test upgrade-all actual
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-all"
+
+      - name: Validate all extensions
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl ssh console -a "$APP_NAME" -C "extension-manager validate-all"
+
+      - name: Test upgrade history
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-history"
+
+      - name: Teardown test VM
+        if: always()
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          ./scripts/vm-teardown.sh "$APP_NAME"

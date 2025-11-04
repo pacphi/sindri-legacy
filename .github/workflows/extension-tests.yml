@@ -2,1390 +2,364 @@ name: Extension System Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
-      # VM configuration
-      - 'scripts/vm-configure.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
+      - "docker/lib/upgrade-history.sh"
+      - "docker/lib/upgrade-notifier.sh"
       # Workflow itself
-      - '.github/workflows/extension-tests.yml'
+      - ".github/workflows/extension-tests.yml"
+      - ".github/workflows/*.yml"
+      # Actions
+      - ".github/actions/**"
+      # Test scripts
+      - ".github/scripts/extension-tests/**"
+
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       # Deployment configuration
-      - 'fly.toml'
-      - 'Dockerfile'
+      - "fly.toml"
+      - "Dockerfile"
       # CI scripts
-      - 'scripts/prepare-fly-config.sh'
-      - 'scripts/lib/fly-common.sh'
+      - "scripts/prepare-fly-config.sh"
+      - "scripts/lib/fly-common.sh"
       # Extension system
-      - 'docker/lib/extensions.d/**'
-      - 'docker/lib/extension-manager.sh'
-      - 'docker/lib/common.sh'
-      - 'docker/lib/extensions-common.sh'
-      # VM configuration
-      - 'scripts/vm-configure.sh'
+      - "docker/lib/extensions.d/**"
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      - "docker/lib/extensions-common.sh"
+      - "docker/lib/upgrade-history.sh"
+      - "docker/lib/upgrade-notifier.sh"
       # Workflow itself
-      - '.github/workflows/extension-tests.yml'
+      - ".github/workflows/extension-tests.yml"
+      # Actions
+      - ".github/actions/**"
+      # Test scripts
+      - ".github/scripts/extension-tests/**"
+
   workflow_dispatch:
     inputs:
       extension_name:
-        description: 'Test specific extension (e.g., rust, golang, ai-tools)'
+        description: "Test specific extension (e.g., rust, golang, ai-tools)"
         required: false
         type: string
       skip_cleanup:
-        description: 'Skip cleanup for debugging'
+        description: "Skip cleanup for debugging"
         required: false
         default: false
         type: boolean
       skip_idempotency:
-        description: 'Skip idempotency tests (faster, but less thorough)'
+        description: "Skip idempotency tests (faster, but less thorough)"
         required: false
         default: false
         type: boolean
-
-env:
-  TEST_APP_PREFIX: "ext-test"
-  REGION: "sjc"
-  FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
 
 jobs:
   # ============================================================================
-  # Job 1: Extension Manager Validation
+  # Setup Configuration
   # ============================================================================
+
+  setup-config:
+    name: Setup Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      extension_name: ${{ steps.config.outputs.extension_name }}
+      skip_cleanup: ${{ steps.config.outputs.skip_cleanup }}
+      skip_idempotency: ${{ steps.config.outputs.skip_idempotency }}
+      test_app_prefix: ${{ steps.config.outputs.test_app_prefix }}
+      region: ${{ steps.config.outputs.region }}
+    steps:
+      - name: Set configuration
+        id: config
+        run: |
+          # Define defaults once - handles both workflow_dispatch and push/PR triggers
+          echo "extension_name=${{ github.event.inputs.extension_name || '' }}" >> $GITHUB_OUTPUT
+          echo "skip_cleanup=${{ github.event.inputs.skip_cleanup == 'true' }}" >> $GITHUB_OUTPUT
+          echo "skip_idempotency=${{ github.event.inputs.skip_idempotency == 'true' }}" >> $GITHUB_OUTPUT
+          echo "test_app_prefix=${{ github.event.inputs.test_app_prefix || 'ext-test' }}" >> $GITHUB_OUTPUT
+          echo "region=${{ github.event.inputs.region || 'sjc' }}" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # Build Docker Image
+  # ============================================================================
+
+  build-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: setup-config
+    outputs:
+      image-url: ${{ steps.final.outputs.image-url }}
+      should-use-image: ${{ steps.check.outputs.should-use }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Check if build needed
+        id: check
+        run: |
+          # Get list of changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+            # workflow_dispatch - always build
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if Dockerfile or docker/* changed
+          if echo "$CHANGED_FILES" | grep -qE '^(Dockerfile|docker/)'; then
+            echo "Docker files changed, rebuild needed"
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+          else
+            echo "Docker files unchanged, reusing latest image"
+            echo "should-build=false" >> $GITHUB_OUTPUT
+            echo "should-use=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate tag
+        id: gen-tag
+        if: steps.check.outputs.should-build == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            TAG="pr-${PR_NUMBER}-${GITHUB_SHA:0:7}"
+          else
+            BRANCH=${GITHUB_REF#refs/heads/}
+            BRANCH=${BRANCH//\//-}
+            TAG="${BRANCH}-${GITHUB_SHA:0:7}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push new image
+        id: build
+        if: steps.check.outputs.should-build == 'true'
+        uses: ./.github/actions/build-push-image
+        with:
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          tag: ${{ steps.gen-tag.outputs.tag }}
+
+      - name: Get existing image
+        id: get-existing
+        if: steps.check.outputs.should-build == 'false'
+        run: |
+          IMAGE_URL="registry.fly.io/sindri-registry:latest"
+          echo "url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+          echo "Using existing image: ${IMAGE_URL}"
+
+      - name: Set final image URL
+        id: final
+        run: |
+          if [ "${{ steps.check.outputs.should-build }}" = "true" ]; then
+            IMAGE_URL="${{ steps.build.outputs.image-url }}"
+          else
+            IMAGE_URL="${{ steps.get-existing.outputs.url }}"
+          fi
+          echo "image-url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+          echo "Final image URL: ${IMAGE_URL}"
+
+  # ============================================================================
+  # Validation Jobs
+  # ============================================================================
+
   extension-manager-validation:
-    name: Validate Extension Manager
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    name: Extension Manager Validation
+    uses: ./.github/workflows/manager-validation.yml
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Validate extension-manager.sh syntax
-        run: |
-          echo "Running shellcheck on extension-manager.sh..."
-          shellcheck docker/lib/extension-manager.sh
-
-      - name: Test extension-manager list command
-        run: |
-          echo "Testing extension-manager list command..."
-          cd docker/lib
-          bash extension-manager.sh list
-
-      - name: Test extension name extraction
-        run: |
-          echo "Testing extension name extraction..."
-          cd docker/lib
-
-          # Test with new non-numbered filename format
-          test_file="extensions.d/rust.sh.example"
-          if [[ -f "$test_file" ]]; then
-            # Extract name using the same logic as extension-manager
-            name=$(basename "$test_file" .sh.example | sed 's/^[0-9]*-//')
-            echo "Extracted name from $test_file: $name"
-
-            if [[ "$name" != "rust" ]]; then
-              echo "ERROR: Expected 'rust', got '$name'"
-              exit 1
-            fi
-            echo "✅ New naming convention works"
-          else
-            echo "⚠️  New format file not found, checking legacy format..."
-            # Fallback to test legacy format if it exists
-            test_file="extensions.d/10-rust.sh.example"
-            if [[ -f "$test_file" ]]; then
-              name=$(basename "$test_file" .sh.example | sed 's/^[0-9]*-//')
-              echo "Extracted name from legacy file: $name"
-              if [[ "$name" != "rust" ]]; then
-                echo "ERROR: Expected 'rust', got '$name'"
-                exit 1
-              fi
-              echo "✅ Legacy naming convention still supported"
-            else
-              echo "ERROR: No test files found"
-              exit 1
-            fi
-          fi
-
-          echo "✅ Extension name extraction working correctly"
-
-      - name: Test manifest file operations
-        run: |
-          echo "Testing manifest file operations..."
-          cd docker/lib
-
-          # Create a test manifest
-          test_manifest="extensions.d/test-active-extensions.conf"
-          cat > "$test_manifest" << 'EOF'
-          # Test manifest
-          workspace-structure
-          nodejs
-          # python
-          rust
-          EOF
-
-          echo "✅ Test manifest created"
-
-          # Test parsing the manifest (count non-comment lines)
-          active_count=$(grep -v '^[[:space:]]*#' "$test_manifest" | grep -v '^[[:space:]]*$' | wc -l)
-          echo "Active extensions in test manifest: $active_count"
-
-          if [[ "$active_count" -eq 3 ]]; then
-            echo "✅ Manifest parsing correct (workspace-structure, nodejs, rust = 3)"
-          else
-            echo "❌ Manifest parsing failed: expected 3, got $active_count"
-            exit 1
-          fi
-
-          # Cleanup
-          rm -f "$test_manifest"
-          echo "✅ Manifest file operations working correctly"
-
-      - name: Report validation results
-        if: always()
-        run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ Extension manager validation passed"
-            echo "## ✅ Extension Manager Validation" >> $GITHUB_STEP_SUMMARY
-            echo "All extension manager validation checks passed successfully." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Extension manager validation failed"
-            echo "## ❌ Extension Manager Validation Failed" >> $GITHUB_STEP_SUMMARY
-            echo "Extension manager validation encountered errors. Check logs for details." >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # ============================================================================
-  # Job 2: Extension Syntax Validation
-  # ============================================================================
   extension-syntax-validation:
-    name: Validate Extension Scripts
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Validate all extension scripts
-        run: |
-          echo "Validating all extension scripts with shellcheck..."
-
-          failed_scripts=()
-
-          for script in docker/lib/extensions.d/*.sh.example docker/lib/extensions.d/*.sh; do
-            # Skip if file doesn't exist (in case no .sh files)
-            [[ ! -f "$script" ]] && continue
-
-            echo "Checking $script..."
-            if ! shellcheck -x "$script"; then
-              failed_scripts+=("$script")
-            fi
-          done
-
-          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
-            echo "❌ Shellcheck failed for:"
-            printf '%s\n' "${failed_scripts[@]}"
-            exit 1
-          fi
-
-          echo "✅ All extension scripts pass shellcheck"
-
-      - name: Verify common.sh sourcing
-        run: |
-          echo "Verifying all extensions source common.sh..."
-
-          missing_source=()
-
-          for script in docker/lib/extensions.d/*.sh.example; do
-            [[ ! -f "$script" ]] && continue
-
-            # Check if script sources common.sh
-            if ! grep -q "source.*common\.sh" "$script"; then
-              missing_source+=("$script")
-            fi
-          done
-
-          if [[ ${#missing_source[@]} -gt 0 ]]; then
-            echo "⚠️  Extensions missing common.sh source:"
-            printf '%s\n' "${missing_source[@]}"
-            echo "This is a warning - extensions may have alternative sourcing"
-          else
-            echo "✅ All extensions properly source common.sh"
-          fi
-
-      - name: Verify shebang presence
-        run: |
-          echo "Verifying all extensions have proper shebang..."
-
-          missing_shebang=()
-
-          for script in docker/lib/extensions.d/*.sh.example docker/lib/extensions.d/*.sh; do
-            [[ ! -f "$script" ]] && continue
-
-            # Check for shebang on first line
-            if ! head -n 1 "$script" | grep -q "^#!/bin/bash"; then
-              missing_shebang+=("$script")
-            fi
-          done
-
-          if [[ ${#missing_shebang[@]} -gt 0 ]]; then
-            echo "❌ Extensions missing proper shebang:"
-            printf '%s\n' "${missing_shebang[@]}"
-            exit 1
-          fi
-
-          echo "✅ All extensions have proper shebang"
-
-      - name: Check for error handling
-        run: |
-          echo "Checking for basic error handling patterns..."
-
-          for script in docker/lib/extensions.d/*.sh.example; do
-            [[ ! -f "$script" ]] && continue
-
-            script_name=$(basename "$script")
-
-            # Check if script uses print functions (good practice)
-            if grep -q "print_" "$script"; then
-              echo "✅ $script_name uses print functions"
-            else
-              echo "⚠️  $script_name doesn't use print functions"
-            fi
-          done
-
-      - name: Verify Extension API v1.0 functions
-        run: |
-          echo "Verifying Extension API v1.0 standard functions..."
-
-          failed_extensions=()
-          required_functions=("prerequisites" "install" "configure" "validate" "status" "remove")
-
-          # Skip template and post-cleanup as they may have different requirements
-          skip_patterns="template.sh.example|post-cleanup.sh.example"
-
-          for script in docker/lib/extensions.d/*.sh.example; do
-            [[ ! -f "$script" ]] && continue
-
-            script_name=$(basename "$script")
-
-            # Skip special cases
-            if echo "$script_name" | grep -qE "$skip_patterns"; then
-              echo "⏭️  Skipping $script_name (special extension)"
-              continue
-            fi
-
-            echo ""
-            echo "Checking $script_name..."
-
-            missing_functions=()
-            for func in "${required_functions[@]}"; do
-              # Check if function is defined
-              if grep -qE "^[[:space:]]*${func}\(\)[[:space:]]*\{" "$script" || \
-                 grep -qE "^[[:space:]]*function[[:space:]]+${func}[[:space:]]*\{" "$script"; then
-                echo "  ✅ $func() found"
-              else
-                echo "  ❌ $func() missing"
-                missing_functions+=("$func")
-              fi
-            done
-
-            if [[ ${#missing_functions[@]} -gt 0 ]]; then
-              echo "  ❌ Missing functions in $script_name: ${missing_functions[*]}"
-              failed_extensions+=("$script_name")
-            else
-              echo "  ✅ All Extension API v1.0 functions present"
-            fi
-          done
-
-          echo ""
-          if [[ ${#failed_extensions[@]} -gt 0 ]]; then
-            echo "❌ Extensions with missing API functions:"
-            printf '%s\n' "${failed_extensions[@]}"
-            echo ""
-            echo "⚠️  All extensions should implement Extension API v1.0:"
-            echo "   - prerequisites()"
-            echo "   - install()"
-            echo "   - configure()"
-            echo "   - validate()"
-            echo "   - status()"
-            echo "   - remove()"
-            exit 1
-          else
-            echo "✅ All extensions implement Extension API v1.0 correctly"
-          fi
-
-      - name: Report validation results
-        if: always()
-        run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ Extension syntax validation passed"
-            echo "## ✅ Extension Syntax Validation" >> $GITHUB_STEP_SUMMARY
-            echo "All extensions pass syntax validation and implement Extension API v1.0." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Extension syntax validation failed"
-            echo "## ❌ Extension Syntax Validation Failed" >> $GITHUB_STEP_SUMMARY
-            echo "Some extensions failed syntax validation or are missing required API functions." >> $GITHUB_STEP_SUMMARY
-            echo "Check the logs above for specific errors." >> $GITHUB_STEP_SUMMARY
-          fi
+    name: Extension Syntax Validation
+    uses: ./.github/workflows/syntax-validation.yml
 
   # ============================================================================
-  # Job 3: Per-Extension Tests (Matrix)
+  # Per-Extension Tests (Matrix)
   # ============================================================================
+
   per-extension-tests:
-    name: Test Extension - ${{ matrix.extension.name }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        extension:
-          # Core extensions (always needed)
-          - { name: 'workspace-structure', commands: 'mkdir,ls', key_tool: 'mkdir', timeout: '15m' }
-          - { name: 'ssh-environment', commands: 'ssh,sshd', key_tool: 'ssh', timeout: '15m' }
-          - { name: 'nodejs', commands: 'node,npm,nvm', key_tool: 'node', timeout: '20m' }
-          # Claude AI extensions
-          - { name: 'nodejs-devtools', commands: 'tsc,eslint,prettier,nodemon', key_tool: 'tsc', timeout: '20m', depends_on: 'nodejs' }
-          - { name: 'claude-config', commands: 'claude', key_tool: 'claude', timeout: '15m', depends_on: 'nodejs' }
-          # Language runtimes
-          - { name: 'python', commands: 'python3,pip3,uv', key_tool: 'python3', timeout: '30m' }
-          - { name: 'rust', commands: 'rustc,cargo', key_tool: 'rustc', timeout: '30m' }
-          - { name: 'golang', commands: 'go', key_tool: 'go', timeout: '30m' }
-          - { name: 'ruby', commands: 'ruby,gem,bundle', key_tool: 'ruby', timeout: '30m' }
-          - { name: 'php', commands: 'php,composer', key_tool: 'php', timeout: '30m' }
-          - { name: 'jvm', commands: 'java,sdk', key_tool: 'java', timeout: '30m' }
-          - { name: 'dotnet', commands: 'dotnet', key_tool: 'dotnet', timeout: '30m' }
-          # Infrastructure
-          - { name: 'docker', commands: 'docker', key_tool: 'docker', timeout: '30m' }
-          - { name: 'infra-tools', commands: 'terraform,ansible', key_tool: 'terraform', timeout: '30m' }
-          - { name: 'cloud-tools', commands: 'aws', key_tool: 'aws', timeout: '30m' }
-          - { name: 'ai-tools', commands: 'codex,gemini', key_tool: 'codex', timeout: '30m', depends_on: 'nodejs' }
-          # Utilities
-          - { name: 'playwright', commands: 'playwright', key_tool: 'playwright', timeout: '25m', depends_on: 'nodejs' }
-          - { name: 'monitoring', commands: 'claude-monitor,uv', key_tool: 'claude-monitor', timeout: '20m', depends_on: 'python,nodejs' }
-          - { name: 'tmux-workspace', commands: 'tmux', key_tool: 'tmux', timeout: '15m' }
-
-    steps:
-      - name: Check if extension should be tested
-        id: should-test
-        run: |
-          # Skip if workflow_dispatch with specific extension that doesn't match
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
-             [ -n "${{ github.event.inputs.extension_name }}" ] && \
-             [ "${{ github.event.inputs.extension_name }}" != "${{ matrix.extension.name }}" ]; then
-            echo "should_test=false" >> $GITHUB_OUTPUT
-            echo "Skipping ${{ matrix.extension.name }} - not requested"
-          else
-            echo "should_test=true" >> $GITHUB_OUTPUT
-            echo "Testing ${{ matrix.extension.name }}"
-          fi
-
-      - name: Checkout code
-        if: steps.should-test.outputs.should_test == 'true'
-        uses: actions/checkout@v5
-
-      - name: Install Fly CLI
-        if: steps.should-test.outputs.should_test == 'true'
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Generate test app name
-        if: steps.should-test.outputs.should_test == 'true'
-        id: app-name
-        run: |
-          timestamp=$(date +%s)
-          app_name="${TEST_APP_PREFIX}-${{ matrix.extension.name }}-${timestamp}"
-          echo "app_name=$app_name" >> $GITHUB_OUTPUT
-          echo "Test app name: $app_name"
-
-      - name: Create test SSH key
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          ssh-keygen -t ed25519 -f test_key -N "" -C "ext-test"
-          chmod 600 test_key
-          chmod 644 test_key.pub
-
-      - name: Prepare fly.toml for testing
-        if: steps.should-test.outputs.should_test == 'true'
-        env:
-          APP_NAME: ${{ steps.app-name.outputs.app_name }}
-          VOLUME_NAME: "test_data"
-          VOLUME_SIZE: "20"
-          VM_MEMORY: "8192"
-          CPU_KIND: "performance"
-          CPU_COUNT: "4"
-          CI_MODE: "true"
-        run: |
-          ./scripts/prepare-fly-config.sh --ci-mode
-
-      - name: Deploy test environment
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          echo "Deploying test environment for ${{ matrix.extension.name }}..."
-
-          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || echo "App may already exist"
-
-          flyctl volumes create test_data \
-            --app ${{ steps.app-name.outputs.app_name }} \
-            --region ${REGION} \
-            --size 20 \
-            --no-encryption \
-            --yes
-
-          ssh_key_content=$(cat test_key.pub)
-          flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
-            --app ${{ steps.app-name.outputs.app_name }}
-          flyctl secrets set CI_MODE="true" \
-            --app ${{ steps.app-name.outputs.app_name }}
-
-          # Deploy with retry logic
-          max_attempts=3
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "Deployment attempt $attempt of $max_attempts..."
-            if flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 120s --yes; then
-              echo "✅ Deployment successful"
-              break
-            else
-              if [ $attempt -lt $max_attempts ]; then
-                wait_time=$((30 * attempt))
-                echo "⚠️  Deployment failed, retrying in ${wait_time}s..."
-                sleep $wait_time
-                attempt=$((attempt + 1))
-              else
-                echo "❌ Deployment failed after $max_attempts attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Wait for deployment
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          timeout=240
-          elapsed=0
-          interval=15
-
-          while [ $elapsed -lt $timeout ]; do
-            status_output=$(flyctl status --app $app_name 2>&1)
-
-            if echo "$status_output" | grep -q "started"; then
-              echo "✅ Deployment successful"
-              sleep 30  # Extra time for system to stabilize
-              break
-            elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
-              echo "❌ Deployment failed"
-              flyctl logs --app $app_name
-              exit 1
-            fi
-
-            sleep $interval
-            elapsed=$((elapsed + interval))
-          done
-
-      - name: Activate extension and dependencies
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          extension_name="${{ matrix.extension.name }}"
-          depends_on="${{ matrix.extension.depends_on || '' }}"
-
-          echo "Activating $extension_name extension..."
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
-            cd /workspace/scripts/lib
-
-            # Activate dependencies first if specified (supports comma-separated list)
-            if [ -n \"$depends_on\" ]; then
-              echo \"Activating dependencies: $depends_on\"
-              IFS=\",\" read -ra DEPS <<< \"$depends_on\"
-              for dep in \"\${DEPS[@]}\"; do
-                dep=\$(echo \"\$dep\" | xargs)  # Trim whitespace
-                echo \"Activating dependency: \$dep\"
-                if bash extension-manager.sh activate \$dep; then
-                  echo \"✅ Dependency \$dep activated\"
-                else
-                  echo \"❌ Dependency \$dep activation failed\"
-                  exit 1
-                fi
-              done
-            fi
-
-            # Activate the main extension
-            if bash extension-manager.sh activate $extension_name; then
-              echo \"✅ Extension activated successfully\"
-            else
-              echo \"❌ Extension activation failed\"
-              exit 1
-            fi
-
-            # Show active extensions in manifest
-            echo \"\"
-            echo \"=== Active Extensions ===\"
-            if [ -f extensions.d/active-extensions.conf ]; then
-              grep -v \"^[[:space:]]*#\" extensions.d/active-extensions.conf | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
-            else
-              echo \"❌ Manifest file not found\"
-              exit 1
-            fi
-          '"
-
-      - name: Run vm-configure with extension
-        timeout-minutes: 35
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          timeout="${{ matrix.extension.timeout }}"
-
-          echo "Running vm-configure.sh with ${{ matrix.extension.name }} extension (timeout: $timeout)..."
-
-          # Enhanced configuration with better error handling and timeout management
-          max_config_attempts=2
-          config_attempt=1
-
-          while [ $config_attempt -le $max_config_attempts ]; do
-            echo "Configuration attempt $config_attempt/$max_config_attempts..."
-
-            if flyctl ssh console --app $app_name --command "/bin/bash -c '
-              export CI_MODE=true
-              echo \"=== Starting extension installation ===\"
-              echo \"Extension: ${{ matrix.extension.name }}\"
-              echo \"Timeout: $timeout\"
-              echo \"\"
-
-              # Run with enhanced timeout and logging
-              if timeout --kill-after=60s $timeout /workspace/scripts/vm-configure.sh --extensions-only 2>&1 | tee /tmp/configure.log; then
-                config_exit_code=\${PIPESTATUS[0]}
-
-                if [ \$config_exit_code -eq 0 ]; then
-                  echo \"\"
-                  echo \"✅ Configuration completed successfully\"
-                  echo \"\"
-
-                  # Verify configuration success markers
-                  if grep -q \"Extension setup completed\" /tmp/configure.log || \
-                     grep -q \"Configuration complete\" /tmp/configure.log; then
-                    echo \"✅ Configuration markers found\"
-                  else
-                    echo \"⚠️  No completion markers found, but no errors detected\"
-                  fi
-
-                  # Wait for SSH daemon reload to settle
-                  echo \"⏳ Waiting for SSH environment to stabilize (15 seconds)...\"
-                  sleep 15
-
-                  # Verify SSH environment is properly configured
-                  if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-                    echo \"✅ SSH environment file present\"
-                  else
-                    echo \"⚠️  SSH environment file not found\"
-                  fi
-
-                  exit 0
-                else
-                  echo \"\"
-                  echo \"❌ Configuration exited with code: \$config_exit_code\"
-                  echo \"Last 30 lines of output:\"
-                  tail -30 /tmp/configure.log
-                  exit 1
-                fi
-              else
-                timeout_exit_code=\$?
-                echo \"\"
-
-                if [ \$timeout_exit_code -eq 124 ]; then
-                  echo \"❌ Configuration timed out after $timeout\"
-                elif [ \$timeout_exit_code -eq 137 ]; then
-                  echo \"❌ Configuration was killed (timeout kill signal)\"
-                else
-                  echo \"❌ Configuration failed with exit code: \$timeout_exit_code\"
-                fi
-
-                echo \"\"
-                echo \"Last 50 lines of output:\"
-                tail -50 /tmp/configure.log
-
-                # Check for specific error patterns
-                echo \"\"
-                echo \"=== Error Analysis ===\"
-                if grep -i \"error\|failed\|timeout\" /tmp/configure.log | tail -10; then
-                  echo \"(Errors found in log)\"
-                else
-                  echo \"No obvious errors in log\"
-                fi
-
-                exit 1
-              fi
-            '"; then
-              echo "✅ vm-configure.sh completed successfully"
-              break
-            else
-              exit_code=$?
-              config_attempt=$((config_attempt + 1))
-
-              if [ $config_attempt -le $max_config_attempts ]; then
-                echo "⚠️  Configuration attempt failed with exit code $exit_code"
-                echo "Checking app status before retry..."
-                flyctl status --app $app_name || true
-                echo "Waiting 30s before retry..."
-                sleep 30
-              else
-                echo "❌ vm-configure.sh failed after $max_config_attempts attempts"
-                echo "Retrieving app logs for diagnosis..."
-                flyctl logs --app $app_name
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Verify commands available
-        timeout-minutes: 1
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          commands="${{ matrix.extension.commands }}"
-
-          echo "Verifying commands are available: $commands"
-
-          # Enhanced verification with retry logic and better error handling
-          max_retries=5
-          retry_count=0
-
-          while [ $retry_count -lt $max_retries ]; do
-            echo "Verification attempt $((retry_count + 1))/$max_retries..."
-
-            if flyctl ssh console --app $app_name --command "/bin/bash -lc '
-              # Source environment to ensure all paths are loaded
-              if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-                source /etc/profile.d/00-ssh-environment.sh
-              fi
-
-              # Additional environment setup for non-interactive sessions
-              if [ -f ~/.bashrc ]; then
-                source ~/.bashrc
-              fi
-
-              commands=\"$commands\"
-              IFS=\",\" read -ra CMD_ARRAY <<< \"\$commands\"
-              failed_commands=()
-
-              echo \"=== Command Verification ===\"
-              echo \"Current PATH: \$PATH\"
-              echo \"\"
-
-              for cmd in \"\${CMD_ARRAY[@]}\"; do
-                echo \"Checking command: \$cmd\"
-
-                # Try multiple methods to find the command
-                if command -v \"\$cmd\" >/dev/null 2>&1; then
-                  echo \"✅ \$cmd available at: \$(command -v \"\$cmd\")\"
-                  timeout 5 \"\$cmd\" --version 2>/dev/null || timeout 5 \"\$cmd\" version 2>/dev/null || echo \"  (version check not supported)\"
-                elif which \"\$cmd\" >/dev/null 2>&1; then
-                  echo \"✅ \$cmd available at: \$(which \"\$cmd\")\"
-                  timeout 5 \"\$cmd\" --version 2>/dev/null || timeout 5 \"\$cmd\" version 2>/dev/null || echo \"  (version check not supported)\"
-                elif [ -x \"/usr/local/bin/\$cmd\" ]; then
-                  echo \"✅ \$cmd available at: /usr/local/bin/\$cmd\"
-                  timeout 5 \"/usr/local/bin/\$cmd\" --version 2>/dev/null || echo \"  (version check not supported)\"
-                else
-                  echo \"❌ \$cmd not found in PATH\"
-                  echo \"  Searching for \$cmd...\"
-                  find /usr/local /opt /home -name \"\$cmd\" -type f 2>/dev/null | head -5 || true
-                  failed_commands+=(\"\$cmd\")
-                fi
-                echo \"\"
-              done
-
-              if [ \${#failed_commands[@]} -gt 0 ]; then
-                echo \"❌ Missing commands: \${failed_commands[*]}\"
-                echo \"\"
-                echo \"=== Debug Info ===\"
-                echo \"Available executables in common locations:\"
-                ls -la /usr/local/bin/ 2>/dev/null | head -20 || true
-                echo \"\"
-                echo \"Environment variables:\"
-                env | grep -E \"PATH|HOME|USER\" || true
-                exit 1
-              fi
-
-              echo \"✅ All commands available and verified\"
-              exit 0
-            '"; then
-              echo "✅ Command verification successful"
-              break
-            else
-              retry_count=$((retry_count + 1))
-              if [ $retry_count -lt $max_retries ]; then
-                wait_time=$((15 * retry_count))
-                echo "⚠️  Verification failed, retrying in ${wait_time}s..."
-                sleep $wait_time
-              else
-                echo "❌ Command verification failed after $max_retries attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Diagnose environment on failure
-        timeout-minutes: 3
-        if: failure() && steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          echo "🔍 Environment diagnostics (max 3 minutes)..."
-          timeout 150 flyctl ssh console --app $app_name --command "/bin/bash -lc '
-            echo \"===========================================\"
-            echo \"   ENVIRONMENT DIAGNOSTICS\"
-            echo \"===========================================\"
-            echo \"\"
-
-            echo \"=== Basic System Information ===\"
-            echo \"Current user: \$(whoami)\"
-            echo \"User home: \$HOME\"
-            echo \"Current directory: \$(pwd)\"
-            echo \"Shell: \$SHELL\"
-            echo \"\"
-
-            echo \"=== PATH Configuration ===\"
-            echo \"Current PATH:\"
-            echo \"\$PATH\" | tr \":\" \"\\n\" | nl
-            echo \"\"
-
-            echo \"=== Environment Variables ===\"
-            echo \"BASH_ENV: \$BASH_ENV\"
-            echo \"CI_MODE: \$CI_MODE\"
-            env | grep -E \"PATH|HOME|USER|SHELL|BASH\" | sort
-            echo \"\"
-
-            echo \"=== Profile and RC Files ===\"
-            for file in /etc/profile ~/.profile ~/.bashrc ~/.bash_profile; do
-              if [ -f \"\$file\" ]; then
-                echo \"✅ \$file exists\"
-              else
-                echo \"❌ \$file not found\"
-              fi
-            done
-            echo \"\"
-
-            echo \"=== Profile.d Scripts ===\"
-            if [ -d /etc/profile.d/ ]; then
-              echo \"Profile.d files:\"
-              ls -lh /etc/profile.d/ | tail -20
-            else
-              echo \"❌ /etc/profile.d/ directory not found\"
-            fi
-            echo \"\"
-
-            echo \"=== SSH Environment Configuration ===\"
-            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-              echo \"✅ SSH environment file exists\"
-              echo \"Full content:\"
-              cat /etc/profile.d/00-ssh-environment.sh
-            else
-              echo \"❌ SSH environment file not found\"
-            fi
-            echo \"\"
-
-            echo \"=== SSH Daemon Configuration ===\"
-            if [ -f /etc/ssh/sshd_config.d/99-bash-env.conf ]; then
-              echo \"✅ SSH daemon env config exists\"
-              cat /etc/ssh/sshd_config.d/99-bash-env.conf
-            else
-              echo \"❌ SSH daemon env config not found\"
-            fi
-            echo \"\"
-
-            echo \"=== Extension Manager Status ===\"
-            if [ -f /workspace/scripts/lib/extension-manager.sh ]; then
-              echo \"✅ Extension manager found\"
-              cd /workspace/scripts/lib && bash extension-manager.sh list
-            else
-              echo \"❌ Extension manager not found\"
-            fi
-            echo \"\"
-
-            echo \"=== Active Extensions ===\"
-            if [ -d /workspace/scripts/extensions.d ]; then
-              echo \"Activated extensions:\"
-              ls -lh /workspace/scripts/extensions.d/*.sh 2>/dev/null || echo \"No active extensions\"
-            elif [ -d /workspace/scripts/lib/extensions.d ]; then
-              echo \"Activated extensions:\"
-              ls -lh /workspace/scripts/lib/extensions.d/*.sh 2>/dev/null || echo \"No active extensions\"
-            else
-              echo \"❌ Extensions directory not found\"
-            fi
-            echo \"\"
-
-            echo \"=== Installed Tools and Wrappers ===\"
-            echo \"Tools in /usr/local/bin:\"
-            ls -lh /usr/local/bin/ 2>/dev/null | grep -E \"(go|cargo|rustc|ruby|java|sdk|python|php|docker|terraform|aws|ollama)\" || echo \"No tool wrappers found\"
-            echo \"\"
-
-            echo \"=== Extension-Specific Tool Check ===\"
-            tool=\"${{ matrix.extension.key_tool }}\"
-            echo -n \"Checking \$tool: \"
-            if command -v \$tool >/dev/null 2>&1; then
-              echo \"Found at \$(command -v \$tool)\"
-              timeout 5 \$tool --version 2>/dev/null || timeout 5 \$tool version 2>/dev/null || echo \"  (version check not supported)\"
-            else
-              echo \"Not found in PATH\"
-            fi
-            echo \"\"
-
-            echo \"=== Recent Configuration Logs ===\"
-            if [ -f /tmp/configure.log ]; then
-              echo \"Last 50 lines of configuration log:\"
-              tail -50 /tmp/configure.log
-            else
-              echo \"No configuration log found\"
-            fi
-            echo \"\"
-
-            echo \"=== System Resources ===\"
-            echo \"Disk usage:\"
-            df -h / /workspace 2>/dev/null || true
-            echo \"\"
-            echo \"Memory usage:\"
-            free -h 2>/dev/null || true
-            echo \"\"
-
-            echo \"===========================================\"
-            echo \"   END DIAGNOSTICS\"
-            echo \"===========================================\"
-          '" || echo "⚠️  Diagnostics timed out after 150 seconds"
-
-          echo ""
-          echo "Retrieving last 100 lines of application logs..."
-          timeout 30 flyctl logs --app $app_name || echo "Failed to retrieve logs or timed out"
-
-      - name: Test key functionality
-        timeout-minutes: 5
-        if: steps.should-test.outputs.should_test == 'true'
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          key_tool="${{ matrix.extension.key_tool }}"
-
-          echo "Testing key functionality for $key_tool..."
-
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
-            # Source SSH environment for non-interactive sessions
-            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-              source /etc/profile.d/00-ssh-environment.sh
-            fi
-
-            case \"$key_tool\" in
-              mkdir)
-                echo \"Testing workspace-structure...\"
-                # Verify directory structure created
-                for dir in src tests docs scripts bin; do
-                  if [ -d \"/workspace/\$dir\" ]; then
-                    echo \"✅ /workspace/\$dir exists\"
-                  else
-                    echo \"⚠️  /workspace/\$dir not found (may not be created yet)\"
-                  fi
-                done
-                ;;
-              ssh)
-                echo \"Testing SSH environment configuration...\"
-                # Verify SSH daemon env config exists (BASH_ENV setup)
-                if [ -f /etc/ssh/sshd_config.d/99-bash-env.conf ]; then
-                  echo \"✅ SSH daemon environment config present\"
-                  # Verify BASH_ENV is configured
-                  if grep -q \"BASH_ENV\" /etc/ssh/sshd_config.d/99-bash-env.conf; then
-                    echo \"✅ BASH_ENV configured for non-interactive sessions\"
-                  else
-                    echo \"⚠️  BASH_ENV configuration not found\"
-                  fi
-                else
-                  echo \"❌ SSH daemon environment config not found\"
-                  exit 1
-                fi
-                # Also check if profile.d environment file exists (optional)
-                if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-                  echo \"✅ SSH environment profile.d file present\"
-                else
-                  echo \"⚠️  SSH environment profile.d file not present (may be configured differently)\"
-                fi
-                ;;
-              node)
-                echo \"Testing Node.js...\"
-                node --version
-                npm --version
-                nvm --version || echo \"⚠️  nvm not in PATH (may need login shell)\"
-                # Test NPM global install location
-                npm config get prefix
-                ;;
-              tsc)
-                echo \"Testing TypeScript and dev tools...\"
-                npx tsc --version
-                npx eslint --version
-                npx prettier --version
-                npx nodemon --version
-                ;;
-              claude)
-                echo \"Testing Claude Code CLI...\"
-                # Check if claude command exists
-                if command -v claude >/dev/null 2>&1; then
-                  claude --version || echo \"Claude CLI installed\"
-                else
-                  echo \"⚠️  Claude CLI not in PATH yet\"
-                fi
-                ;;
-              playwright)
-                echo \"Testing Playwright...\"
-                npx playwright --version
-                ;;
-              claude-monitor)
-                echo \"Testing monitoring tools...\"
-                if command -v claude-monitor >/dev/null 2>&1; then
-                  claude-monitor --version || echo \"claude-monitor installed\"
-                else
-                  echo \"⚠️  claude-monitor not in PATH yet\"
-                fi
-                ;;
-              tmux)
-                echo \"Testing Tmux...\"
-                tmux -V
-                if [ -f ~/.tmux.conf ] || [ -f /workspace/config/tmux.conf ]; then
-                  echo \"✅ Tmux configuration found\"
-                else
-                  echo \"⚠️  Tmux config not found\"
-                fi
-                ;;
-              rustc)
-                echo \"Testing Rust compilation...\"
-                echo \"fn main() { println!(\\\"Hello\\\"); }\" > /tmp/test.rs
-                rustc /tmp/test.rs -o /tmp/test && /tmp/test
-                ;;
-              go)
-                echo \"Testing Go compilation...\"
-                echo \"package main; import \\\"fmt\\\"; func main() { fmt.Println(\\\"Hello\\\") }\" > /tmp/test.go
-                go run /tmp/test.go
-                ;;
-              python3)
-                echo \"Testing Python execution...\"
-                python3 -c \"print('Hello')\"
-                pip3 --version
-                uv --version || echo \"⚠️  uv not installed\"
-                ;;
-              java)
-                echo \"Testing Java...\"
-                java -version
-                ;;
-              php)
-                echo \"Testing PHP...\"
-                php -r \"echo 'Hello';\"
-                ;;
-              ruby)
-                echo \"Testing Ruby...\"
-                ruby -e \"puts 'Hello'\"
-                ;;
-              dotnet)
-                echo \"Testing .NET...\"
-                dotnet --info
-                ;;
-              docker)
-                echo \"Testing Docker...\"
-                timeout 10 docker --version
-                timeout 10 docker-compose --version 2>/dev/null || timeout 10 docker compose version 2>/dev/null
-                ;;
-              terraform)
-                echo \"Testing Terraform...\"
-                terraform version
-                ;;
-              aws)
-                echo \"Testing AWS CLI...\"
-                aws --version
-                ;;
-              ollama)
-                echo \"Testing Ollama...\"
-                ollama --version
-                ;;
-              *)
-                echo \"⚠️  No specific test for $key_tool\"
-                ;;
-            esac
-
-            echo \"✅ Key functionality test passed\"
-          '"
-
-      - name: Test idempotency
-        timeout-minutes: 10
-        if: steps.should-test.outputs.should_test == 'true' && inputs.skip_idempotency != true
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          echo "Testing idempotency (running vm-configure.sh again)..."
-
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
-            echo \"Running configuration a second time...\"
-            if /workspace/scripts/vm-configure.sh --extensions-only 2>&1 | tee /tmp/configure2.log; then
-              # Check for error indicators in output
-              if grep -qi \"error\|failed\" /tmp/configure2.log; then
-                echo \"⚠️  Warnings or errors detected on second run\"
-                grep -i \"error\|failed\" /tmp/configure2.log || true
-              else
-                echo \"✅ Second run completed without errors\"
-              fi
-            else
-              echo \"❌ Second run failed\"
-              exit 1
-            fi
-          '"
-
-      - name: Cleanup test resources
-        if: always() && !inputs.skip_cleanup
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for machine in $machines; do
-            [[ -z "$machine" ]] && continue
-            flyctl machine stop $machine --app $app_name || true
-            sleep 3
-            flyctl machine destroy $machine --app $app_name --force || true
-          done
-
-          volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for volume in $volumes; do
-            [[ -z "$volume" ]] && continue
-            flyctl volumes destroy $volume --app $app_name --yes || true
-          done
-
-          flyctl apps destroy $app_name --yes || true
-          rm -f test_key test_key.pub
+    name: Per-Extension Tests
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/per-extension.yml
+    with:
+      extension_name: ${{ needs.setup-config.outputs.extension_name }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      skip_idempotency: ${{ fromJSON(needs.setup-config.outputs.skip_idempotency) }}
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
-  # Job 4: Extension Combinations
+  # Extension API Tests
   # ============================================================================
+
+  extension-api-tests:
+    name: Extension API Compliance
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/api-compliance.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
+  # Protected Extensions Tests
+  # ============================================================================
+
+  protected-extensions-tests:
+    name: Protected Extensions
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/protected-extensions-tests.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
+  # Manifest Operations Tests
+  # ============================================================================
+
+  manifest-operations-tests:
+    name: Manifest Operations
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/manifest-operations-tests.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
+  # Dependency Chain Tests
+  # ============================================================================
+
+  dependency-chain-tests:
+    name: Dependency Chains
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/dependency-chain-tests.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
+  # Extension Combinations Tests
+  # ============================================================================
+
   extension-combinations:
-    name: Test Combination - ${{ matrix.combination.name }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    permissions:
-      contents: read
-    # Only run on workflow_dispatch or when explicitly requested via commit message
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-combinations]')
-
-    strategy:
-      fail-fast: false
-      matrix:
-        combination:
-          - { name: 'core-stack', extensions: 'workspace-structure,nodejs,ssh-environment', description: 'Core Infrastructure' }
-          - { name: 'full-node', extensions: 'workspace-structure,nodejs,nodejs-devtools,claude-config', description: 'Complete Node.js Development Stack' }
-          - { name: 'fullstack', extensions: 'workspace-structure,nodejs,python,docker,cloud-tools', description: 'Python + Docker + Cloud' }
-          - { name: 'systems', extensions: 'workspace-structure,rust,golang,docker', description: 'Rust + Go + Docker' }
-          - { name: 'enterprise', extensions: 'workspace-structure,nodejs,jvm,docker,infra-tools', description: 'JVM + Docker + Infrastructure' }
-          - { name: 'ai-dev', extensions: 'workspace-structure,nodejs,python,ai-tools,monitoring', description: 'Python + AI Tools + Monitoring' }
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Generate test app name
-        id: app-name
-        run: |
-          timestamp=$(date +%s)
-          app_name="${TEST_APP_PREFIX}-combo-${{ matrix.combination.name }}-${timestamp}"
-          echo "app_name=$app_name" >> $GITHUB_OUTPUT
-
-      - name: Create test SSH key
-        run: |
-          ssh-keygen -t ed25519 -f test_key -N "" -C "ext-test"
-          chmod 600 test_key
-          chmod 644 test_key.pub
-
-      - name: Prepare fly.toml for testing
-        env:
-          APP_NAME: ${{ steps.app-name.outputs.app_name }}
-          VOLUME_NAME: "test_data"
-          VOLUME_SIZE: "20"
-          VM_MEMORY: "16384"
-          CPU_KIND: "performance"
-          CPU_COUNT: "4"
-          CI_MODE: "true"
-        run: |
-          ./scripts/prepare-fly-config.sh --ci-mode
-
-      - name: Deploy test environment
-        run: |
-          flyctl apps create ${{ steps.app-name.outputs.app_name }} --org personal || true
-
-          flyctl volumes create test_data \
-            --app ${{ steps.app-name.outputs.app_name }} \
-            --region ${REGION} \
-            --size 20 \
-            --no-encryption \
-            --yes
-
-          ssh_key_content=$(cat test_key.pub)
-          flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
-            --app ${{ steps.app-name.outputs.app_name }}
-          flyctl secrets set CI_MODE="true" \
-            --app ${{ steps.app-name.outputs.app_name }}
-
-          # Deploy with retry logic
-          max_attempts=3
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            echo "Deployment attempt $attempt of $max_attempts..."
-            if flyctl deploy --app ${{ steps.app-name.outputs.app_name }} --strategy immediate --wait-timeout 180s --yes; then
-              echo "✅ Deployment successful"
-              break
-            else
-              if [ $attempt -lt $max_attempts ]; then
-                wait_time=$((30 * attempt))
-                echo "⚠️  Deployment failed, retrying in ${wait_time}s..."
-                sleep $wait_time
-                attempt=$((attempt + 1))
-              else
-                echo "❌ Deployment failed after $max_attempts attempts"
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Wait for deployment
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          timeout=300
-          elapsed=0
-          interval=20
-
-          while [ $elapsed -lt $timeout ]; do
-            status_output=$(flyctl status --app $app_name 2>&1)
-
-            if echo "$status_output" | grep -q "started"; then
-              echo "✅ Deployment successful"
-              sleep 45
-              break
-            fi
-
-            sleep $interval
-            elapsed=$((elapsed + interval))
-          done
-
-      - name: Activate extension combination
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          extensions="${{ matrix.combination.extensions }}"
-
-          echo "Activating extensions: $extensions"
-
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
-            cd /workspace/scripts/lib
-            failed_extensions=()
-
-            # Split extensions inside SSH session where the array will be used
-            IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
-
-            for ext in \"\${EXT_ARRAY[@]}\"; do
-              ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
-              echo \"Activating: \$ext\"
-              if bash extension-manager.sh activate \$ext; then
-                echo \"✅ \$ext activated\"
-              else
-                echo \"❌ \$ext activation failed\"
-                failed_extensions+=(\"\$ext\")
-              fi
-            done
-
-            if [ \${#failed_extensions[@]} -gt 0 ]; then
-              echo \"❌ Failed to activate: \${failed_extensions[*]}\"
-              exit 1
-            fi
-
-            echo \"✅ All extensions activated\"
-          '"
-
-      - name: Run vm-configure with extensions
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          echo "Running vm-configure.sh with extension combination..."
-
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
-            if timeout 60m /workspace/scripts/vm-configure.sh --extensions-only 2>&1 | tee /tmp/configure-combo.log; then
-              echo \"✅ Configuration completed\"
-            else
-              echo \"❌ Configuration failed\"
-              tail -100 /tmp/configure-combo.log
-              exit 1
-            fi
-          '"
-
-      - name: Verify no conflicts
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          echo "Checking for conflicts or errors..."
-
-          flyctl ssh console --app $app_name --command "/bin/bash -c '
-            if [ -f /tmp/configure-combo.log ]; then
-              # Check for common conflict indicators
-              if grep -qi \"conflict\|collision\|duplicate\" /tmp/configure-combo.log; then
-                echo \"⚠️  Potential conflicts detected\"
-                grep -i \"conflict\|collision\|duplicate\" /tmp/configure-combo.log
-              else
-                echo \"✅ No conflicts detected\"
-              fi
-            fi
-          '"
-
-      - name: Test cross-extension functionality
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-          combo="${{ matrix.combination.name }}"
-
-          echo "Testing cross-extension functionality for $combo..."
-
-          flyctl ssh console --app $app_name --command "/bin/bash -lc '
-            # Source SSH environment for non-interactive sessions
-            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
-              source /etc/profile.d/00-ssh-environment.sh
-            fi
-
-            case \"$combo\" in
-              core-stack)
-                echo \"Testing Core Infrastructure...\"
-                # Verify workspace structure
-                test -d /workspace/src && echo \"✅ Workspace structure created\"
-                # Verify SSH environment
-                test -f /etc/profile.d/00-ssh-environment.sh && echo \"✅ SSH environment configured\"
-                # Verify Node.js
-                node --version && npm --version && echo \"✅ Node.js available\"
-                ;;
-              full-node)
-                echo \"Testing Complete Node.js Stack...\"
-                node --version && npm --version
-                npx tsc --version
-                npx eslint --version
-                npx prettier --version
-                command -v claude >/dev/null 2>&1 && echo \"✅ Claude CLI available\" || echo \"⚠️  Claude CLI not in PATH\"
-                ;;
-              fullstack)
-                echo \"Testing Python + Docker + Cloud combination...\"
-                python3 --version && docker --version && node --version
-                ;;
-              systems)
-                echo \"Testing Rust + Go + Docker combination...\"
-                rustc --version && go version && docker --version
-                ;;
-              enterprise)
-                echo \"Testing JVM + Docker + Infrastructure combination...\"
-                java -version && terraform version && docker --version && node --version
-                ;;
-              ai-dev)
-                echo \"Testing Python + AI Tools + Monitoring combination...\"
-                python3 --version && node --version
-                ollama --version || echo \"⚠️  ollama not ready\"
-                command -v claude-monitor >/dev/null 2>&1 && echo \"✅ Monitoring available\" || echo \"⚠️  Monitoring not in PATH\"
-                ;;
-            esac
-
-            echo \"✅ Cross-extension functionality verified\"
-          '"
-
-      - name: Cleanup test resources
-        if: always() && !inputs.skip_cleanup
-        run: |
-          app_name="${{ steps.app-name.outputs.app_name }}"
-
-          machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for machine in $machines; do
-            [[ -z "$machine" ]] && continue
-            flyctl machine stop $machine --app $app_name || true
-            sleep 3
-            flyctl machine destroy $machine --app $app_name --force || true
-          done
-
-          volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
-          for volume in $volumes; do
-            [[ -z "$volume" ]] && continue
-            flyctl volumes destroy $volume --app $app_name --yes || true
-          done
-
-          flyctl apps destroy $app_name --yes || true
-          rm -f test_key test_key.pub
+    name: Extension Combinations
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/extension-combinations.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
-  # Job 5: Report Test Results
+  # Upgrade Tests
   # ============================================================================
+
+  test-extensions-metadata:
+    name: Extensions Metadata
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/test-extensions-metadata.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  test-extensions-upgrade-vm:
+    name: Extensions Upgrade VM
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/test-extensions-upgrade-vm.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
+  # Documentation Linting
+  # Validates markdown files for formatting and style consistency
+  # ============================================================================
+
+  test-documentation:
+    name: Lint Documentation
+    needs: [setup-config, extension-manager-validation, extension-syntax-validation]
+    uses: ./.github/workflows/test-documentation.yml
+
+  # ============================================================================
+  # Report Results
+  # ============================================================================
+
   report-results:
-    name: Report Test Results
-    runs-on: ubuntu-latest
-    needs: [extension-manager-validation, extension-syntax-validation]
+    name: Test Results Summary
     if: always()
-    permissions:
-      contents: read
-
-    steps:
-      - name: Generate test report
-        run: |
-          echo "# Extension System Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Testing manifest-based extension system (Extension API v1.0)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Critical Jobs Status" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Extension Manager Validation | ${{ needs.extension-manager-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Extension Syntax Validation | ${{ needs.extension-syntax-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Note: Individual extensions (including core extensions) are tested in the per-extension-tests matrix job._" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ needs.extension-manager-validation.result }}" = "success" ] && \
-             [ "${{ needs.extension-syntax-validation.result }}" = "success" ]; then
-            echo "## ✅ Overall Result: PASSED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "All critical extension system validation tests passed successfully!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Validated Features" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Manifest-based activation system" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Extension API v1.0 compliance" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Extension manager commands (activate, install, status, list)" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Script syntax and error handling" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Overall Result: FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Some validation tests failed. Please review the job logs for detailed error information." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Failed Jobs" >> $GITHUB_STEP_SUMMARY
-            [ "${{ needs.extension-manager-validation.result }}" != "success" ] && echo "- ❌ Extension Manager Validation" >> $GITHUB_STEP_SUMMARY
-            [ "${{ needs.extension-syntax-validation.result }}" != "success" ] && echo "- ❌ Extension Syntax Validation" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "_Workflow run: [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> $GITHUB_STEP_SUMMARY
+    needs:
+      - setup-config
+      - build-image
+      - extension-manager-validation
+      - extension-syntax-validation
+      - per-extension-tests
+      - extension-api-tests
+      - protected-extensions-tests
+      - manifest-operations-tests
+      - dependency-chain-tests
+      - extension-combinations
+      - test-extensions-metadata
+      - test-extensions-upgrade-vm
+      - test-documentation
+    uses: ./.github/workflows/report-results.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      manager_validation_result: ${{ needs.extension-manager-validation.result }}
+      syntax_validation_result: ${{ needs.extension-syntax-validation.result }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}

@@ -1,0 +1,139 @@
+name: "Deploy Fly.io Test App"
+description: "Creates and deploys a Fly.io app with volume and secrets for testing"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  region:
+    description: "Fly.io region"
+    required: false
+    default: "sjc"
+  volume-name:
+    description: "Volume name"
+    required: false
+    default: "test_data"
+  volume-size:
+    description: "Volume size in GB"
+    required: false
+    default: "20"
+  ssh-pubkey-path:
+    description: "Path to SSH public key file"
+    required: false
+    default: "test_key.pub"
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  org:
+    description: "Fly.io organization"
+    required: false
+    default: "personal"
+  max-deploy-attempts:
+    description: "Maximum deployment retry attempts"
+    required: false
+    default: "3"
+  deploy-timeout:
+    description: "Deployment timeout in seconds"
+    required: false
+    default: "300"
+  pre-built-image:
+    description: "Pre-built Docker image URL (e.g., registry.fly.io/app:tag). If provided, skips build."
+    required: false
+    default: ""
+
+outputs:
+  deployment-status:
+    description: "Deployment status (success or failure)"
+    value: ${{ steps.deploy.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create Fly.io app
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Creating Fly.io app: ${{ inputs.app-name }}"
+        flyctl apps create ${{ inputs.app-name }} --org ${{ inputs.org }} || echo "App may already exist"
+
+    - name: Create volume
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Creating volume: ${{ inputs.volume-name }}"
+        flyctl volumes create ${{ inputs.volume-name }} \
+          --app ${{ inputs.app-name }} \
+          --region ${{ inputs.region }} \
+          --size ${{ inputs.volume-size }} \
+          --no-encryption \
+          --yes
+
+    - name: Set secrets
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Setting secrets for app: ${{ inputs.app-name }}"
+        ssh_key_content=$(cat ${{ inputs.ssh-pubkey-path }})
+        flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
+          --app ${{ inputs.app-name }}
+        flyctl secrets set CI_MODE="true" \
+          --app ${{ inputs.app-name }}
+
+    - name: Deploy app with retry logic
+      id: deploy
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Deploying app: ${{ inputs.app-name }}"
+        max_attempts=${{ inputs.max-deploy-attempts }}
+        attempt=1
+
+        # Determine deployment command
+        if [ -n "${{ inputs.pre-built-image }}" ]; then
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Using pre-built image (fast deployment)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Image: ${{ inputs.pre-built-image }}"
+          echo ""
+
+          DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
+            --image ${{ inputs.pre-built-image }} \
+            --strategy immediate \
+            --wait-timeout ${{ inputs.deploy-timeout }}s \
+            --yes"
+        else
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Building from source (no pre-built image)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
+            --strategy immediate \
+            --wait-timeout ${{ inputs.deploy-timeout }}s \
+            --yes"
+        fi
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "Deployment attempt $attempt of $max_attempts..."
+
+          if eval $DEPLOY_CMD; then
+            echo "✅ Deployment successful"
+            echo "status=success" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            if [ $attempt -lt $max_attempts ]; then
+              wait_time=$((30 * attempt))
+              echo "⚠️  Deployment failed, retrying in ${wait_time}s..."
+              sleep $wait_time
+              attempt=$((attempt + 1))
+            else
+              echo "❌ Deployment failed after $max_attempts attempts"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+        done

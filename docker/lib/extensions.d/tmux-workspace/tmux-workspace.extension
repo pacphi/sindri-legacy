@@ -1,0 +1,414 @@
+#!/bin/bash
+# tmux-workspace.sh.example - Tmux workspace management
+# Extension API v1.0
+#
+# This extension installs and configures tmux for workspace management,
+# including configuration, helper scripts, and auto-start functionality.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="tmux-workspace"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Tmux workspace management with helper scripts"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"  # Installed via apt
+EXT_UPGRADE_STRATEGY="manual"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for sudo
+  if ! command_exists sudo; then
+    print_error "sudo is required but not installed"
+    return 1
+  fi
+
+  # Check disk space (~20MB for tmux and htop)
+  check_disk_space 50
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing tmux..."
+
+  # Check if already installed
+  if command_exists tmux; then
+    local tmux_version
+    tmux_version=$(tmux -V 2>/dev/null || echo "unknown")
+    print_warning "tmux is already installed: $tmux_version"
+    print_status "Skipping installation"
+    return 0
+  fi
+
+  # Install tmux and htop
+  print_status "Installing tmux and monitoring tools..."
+  sudo apt-get update -qq
+  if sudo apt-get install -y tmux htop; then
+    print_success "tmux and htop installed successfully"
+  else
+    print_error "Failed to install tmux"
+    return 1
+  fi
+
+  # Verify installation
+  if ! command_exists tmux; then
+    print_error "tmux installation failed - command not found after install"
+    return 1
+  fi
+
+  local tmux_version
+  tmux_version=$(tmux -V 2>/dev/null || echo "unknown")
+  print_success "tmux installed: $tmux_version"
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring tmux workspace..."
+
+  # Set up tmux configuration
+  local config_file="/workspace/config/tmux.conf"
+  local template_file="/docker/config/tmux.conf"
+
+  mkdir -p /workspace/config
+
+  if [[ -f "$template_file" ]]; then
+    print_status "Copying tmux configuration template..."
+    cp "$template_file" "$config_file"
+
+    # Link to home directory for tmux to find
+    ln -sf "$config_file" "$HOME/.tmux.conf"
+
+    print_success "Tmux configuration copied from template"
+  else
+    print_warning "Template not found at $template_file"
+    print_status "Using default tmux configuration"
+  fi
+
+  # Set up workspace launcher
+  local launcher_script="/workspace/scripts/tmux-workspace.sh"
+  local launcher_template="/docker/lib/tmux-workspace.sh"
+
+  mkdir -p /workspace/scripts
+
+  if [[ -f "$launcher_template" ]]; then
+    print_status "Copying tmux workspace launcher..."
+    cp "$launcher_template" "$launcher_script"
+    chmod +x "$launcher_script"
+    print_success "Tmux workspace launcher installed"
+  else
+    print_warning "Template not found at $launcher_template"
+  fi
+
+  # Set up helper functions
+  local helpers_script="/workspace/scripts/lib/tmux-helpers.sh"
+  local helpers_template="/docker/lib/tmux-helpers.sh"
+
+  mkdir -p /workspace/scripts/lib
+
+  if [[ -f "$helpers_template" ]]; then
+    print_status "Copying tmux helper functions..."
+    cp "$helpers_template" "$helpers_script"
+    chmod +x "$helpers_script"
+    print_success "Tmux helper functions installed"
+  else
+    print_warning "Template not found at $helpers_template"
+  fi
+
+  # Set up auto-start functionality
+  local auto_start_script="/workspace/scripts/tmux-auto-start.sh"
+  local auto_start_template="/docker/lib/tmux-auto-start.sh"
+
+  if [[ -f "$auto_start_template" ]]; then
+    print_status "Copying tmux auto-start script..."
+    cp "$auto_start_template" "$auto_start_script"
+    chmod +x "$auto_start_script"
+    print_success "Tmux auto-start script installed"
+
+    # Add auto-start to bashrc (commented out by default)
+    if ! grep -q "tmux-auto-start" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - auto-start (uncomment to enable)" >> "$HOME/.bashrc"
+      echo "# source /workspace/scripts/tmux-auto-start.sh" >> "$HOME/.bashrc"
+      print_success "Auto-start hook added to .bashrc (disabled by default)"
+    fi
+  else
+    print_warning "Template not found at $auto_start_template"
+  fi
+
+  # Create SSH wrapper
+  if command_exists tmux; then
+    local tmux_path=$(which tmux)
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "tmux" "$tmux_path"
+    fi
+  fi
+
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/tmux-workspace.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added tmux aliases to .bashrc"
+    fi
+  fi
+
+  print_success "Tmux workspace configuration completed"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating tmux installation..."
+
+  local all_valid=true
+
+  # Check tmux command
+  if ! command_exists tmux; then
+    print_error "tmux command not found"
+    all_valid=false
+  else
+    local tmux_version
+    tmux_version=$(tmux -V 2>/dev/null || echo "unknown")
+    print_success "tmux: $tmux_version"
+  fi
+
+  # Check htop command (optional)
+  if command_exists htop; then
+    print_success "htop: installed"
+  else
+    print_warning "htop not found (optional)"
+  fi
+
+  # Check configuration file
+  if [[ -f "$HOME/.tmux.conf" ]]; then
+    print_success "Configuration: $HOME/.tmux.conf"
+  else
+    print_warning "No tmux configuration found"
+  fi
+
+  # Check workspace scripts
+  local scripts=(
+    "/workspace/scripts/tmux-workspace.sh"
+    "/workspace/scripts/lib/tmux-helpers.sh"
+    "/workspace/scripts/tmux-auto-start.sh"
+  )
+
+  for script in "${scripts[@]}"; do
+    if [[ -f "$script" ]]; then
+      print_success "Script found: $(basename "$script")"
+    else
+      print_debug "Script not found: $script"
+    fi
+  done
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists tmux; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  local tmux_version
+  tmux_version=$(tmux -V 2>/dev/null || echo "unknown")
+  echo "  ✓ tmux: $tmux_version"
+
+  if command_exists htop; then
+    echo "  ✓ htop: installed"
+  fi
+
+  # Show configuration
+  echo ""
+  print_status "Configuration:"
+  if [[ -f "$HOME/.tmux.conf" ]]; then
+    local config_source
+    config_source=$(readlink -f "$HOME/.tmux.conf" 2>/dev/null || echo "$HOME/.tmux.conf")
+    echo "  ✓ $HOME/.tmux.conf"
+    if [[ "$config_source" != "$HOME/.tmux.conf" ]]; then
+      echo "    → $config_source"
+    fi
+  else
+    echo "  ✗ No tmux configuration found"
+  fi
+
+  # Show workspace scripts
+  echo ""
+  print_status "Workspace scripts:"
+  [[ -f "/workspace/scripts/tmux-workspace.sh" ]] && echo "  ✓ tmux-workspace.sh" || echo "  ✗ tmux-workspace.sh"
+  [[ -f "/workspace/scripts/lib/tmux-helpers.sh" ]] && echo "  ✓ tmux-helpers.sh" || echo "  ✗ tmux-helpers.sh"
+  [[ -f "/workspace/scripts/tmux-auto-start.sh" ]] && echo "  ✓ tmux-auto-start.sh" || echo "  ✗ tmux-auto-start.sh"
+
+  # Show running sessions
+  echo ""
+  print_status "Running sessions:"
+  if tmux list-sessions 2>/dev/null; then
+    # Sessions listed above
+    :
+  else
+    echo "  (no active sessions)"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # Tmux is a system package - no automatic upgrades
+  print_success "No upgrades needed for tmux workspace scripts"
+  print_status "To upgrade tmux: sudo apt-get upgrade tmux"
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling tmux workspace..."
+
+  # Check for dependent extensions
+  local dependent_exts=()
+  mapfile -t dependent_exts < <(check_dependent_extensions "tmux")
+
+  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
+    print_warning "The following active extensions depend on tmux and may stop working:"
+    for ext in "${dependent_exts[@]}"; do
+      echo "  - $ext"
+    done
+    echo ""
+  fi
+
+  # Check for running tmux sessions
+  if command_exists tmux && tmux list-sessions 2>/dev/null; then
+    print_warning "You have running tmux sessions!"
+    tmux list-sessions
+    echo ""
+    print_warning "These sessions will be killed if you continue"
+  fi
+
+  read -p "Continue with tmux removal? (y/N): " -r
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove tmux package
+  if command_exists tmux; then
+    print_status "Removing tmux package..."
+    if sudo apt-get remove -y tmux htop; then
+      print_success "tmux and htop removed"
+    else
+      print_error "Failed to remove tmux package"
+      return 1
+    fi
+
+    # Clean up unused dependencies
+    sudo apt-get autoremove -y 2>/dev/null || true
+  fi
+
+  # Remove configuration
+  if [[ -L "$HOME/.tmux.conf" ]] || [[ -f "$HOME/.tmux.conf" ]]; then
+    rm -f "$HOME/.tmux.conf"
+    print_success "Removed tmux configuration symlink"
+  fi
+
+  if [[ -f "/workspace/config/tmux.conf" ]]; then
+    read -p "Remove /workspace/config/tmux.conf? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -f "/workspace/config/tmux.conf"
+      print_success "Removed configuration file"
+    fi
+  fi
+
+  # Remove scripts
+  local scripts=(
+    "/workspace/scripts/tmux-workspace.sh"
+    "/workspace/scripts/lib/tmux-helpers.sh"
+    "/workspace/scripts/tmux-auto-start.sh"
+  )
+
+  for script in "${scripts[@]}"; do
+    if [[ -f "$script" ]]; then
+      rm -f "$script"
+      print_success "Removed: $(basename "$script")"
+    fi
+  done
+
+  # Remove bashrc modifications
+  if grep -q "# ${EXT_NAME} - auto-start" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - auto-start"
+    print_success "Removed auto-start hook from .bashrc"
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed tmux aliases from .bashrc"
+  fi
+
+  print_success "Tmux workspace uninstalled"
+
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

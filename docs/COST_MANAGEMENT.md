@@ -47,7 +47,7 @@ Understanding Fly.io's billing model helps optimize Sindri's infrastructure cost
 - VM running 50% time: ~$95.50/month
 - VM running 100% time: ~$189.00/month
 
-*Estimates include compute + storage + egress. Actual costs may vary based on usage patterns and region.*
+_Estimates include compute + storage + egress. Actual costs may vary based on usage patterns and region._
 
 ## Automatic Cost Optimization
 

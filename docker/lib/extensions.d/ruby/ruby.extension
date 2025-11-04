@@ -1,0 +1,366 @@
+#!/bin/bash
+# ruby.extension - Ruby development environment via mise
+# Extension API v1.0
+#
+# This extension installs Ruby 3.4.7 with Rails, Bundler, and development gems using mise.
+# mise provides unified version management with declarative configuration.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="ruby"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Ruby 3.4.7 via mise with Rails and Bundler"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for mise (required by this extension)
+  check_mise_prerequisite || return 1
+
+  # Check disk space (Ruby + Rails + gems need ~2GB)
+  check_disk_space 2500
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Ruby development environment via mise..."
+
+  # Install via mise using shared helper
+  install_mise_config "ruby" || return 1
+
+  # Activate mise for current session
+  activate_mise_environment
+
+  # Verify core Ruby is available
+  if ! command_exists ruby; then
+    print_error "ruby not found after mise install"
+    return 1
+  fi
+
+  print_success "Ruby $(ruby -v | awk '{print $2}') installed via mise"
+
+  # Install Bundler
+  print_status "Installing Bundler..."
+  gem install bundler 2>/dev/null || {
+    print_error "Failed to install Bundler"
+    return 1
+  }
+  print_success "Bundler installed: $(bundle -v 2>&1 | head -n1)"
+
+  # Check if running in CI mode - skip Rails, Sinatra, and development gems
+  if is_ci_mode; then
+    print_status "CI mode detected - skipping Rails, Sinatra, and development gems"
+    return 0
+  fi
+
+  # Install Rails
+  print_status "Installing Ruby on Rails..."
+  if gem install rails 2>/dev/null; then
+    print_success "Rails installed: $(rails -v 2>&1 | head -n1)"
+  else
+    print_warning "Failed to install Rails"
+  fi
+
+  # Install Sinatra
+  print_status "Installing Sinatra..."
+  gem install sinatra sinatra-contrib 2>/dev/null || print_warning "Failed to install Sinatra"
+
+  # Install Ruby development gems
+  print_status "Installing Ruby development gems..."
+  local ruby_gems=(
+    pry pry-byebug rubocop rubocop-rails rubocop-performance
+    reek brakeman bundler-audit solargraph rufo ruby-debug-ide debase
+    rspec minitest factory_bot faker database_cleaner simplecov yard
+    foreman whenever sidekiq puma unicorn
+  )
+
+  for gem in "${ruby_gems[@]}"; do
+    print_debug "Installing $gem..."
+    gem install "$gem" 2>/dev/null && print_debug "✓ $gem installed"
+  done
+
+  # Install PostgreSQL client for Rails database
+  print_status "Installing PostgreSQL client..."
+  sudo apt-get update -qq 2>/dev/null
+  sudo apt-get install -y postgresql-client libpq-dev 2>/dev/null || print_warning "PostgreSQL client install failed"
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Ruby environment..."
+
+  # Setup SSH wrapper for ruby/gem/bundle
+  if command_exists ruby; then
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "${EXT_NAME}" \
+        "eval \"\$(mise activate bash --shims)\""
+    fi
+
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "ruby" "$(which ruby)"
+      create_tool_wrapper "gem" "$(which gem)"
+      create_tool_wrapper "bundle" "$(which bundle)"
+      command_exists rails && create_tool_wrapper "rails" "$(which rails)"
+    fi
+  fi
+
+  # Create Ruby/Rails aliases
+  if ! grep -q "# Ruby aliases" "$HOME/.bashrc" 2>/dev/null; then
+    print_status "Creating Ruby and Rails aliases..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/ruby.bashrc-aliases.template" >> "$HOME/.bashrc"
+    print_success "Ruby aliases created"
+  fi
+
+  # Create Rubocop configuration
+  if [[ ! -f "$HOME/.rubocop.yml" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/ruby.rubocop-config.template" > "$HOME/.rubocop.yml"
+    print_success "Rubocop config created"
+  fi
+
+  # Create Gemfile template
+  if [[ ! -f "$HOME/.gemfile_template" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/ruby.gemfile-template.template" > "$HOME/.gemfile_template"
+    print_success "Gemfile template created"
+  fi
+
+  print_success "Ruby configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Ruby installation..."
+
+  # Ensure mise environment is activated
+  activate_mise_environment
+
+  local all_valid=true
+
+  # Check mise shows Ruby
+  if ! mise ls ruby 2>/dev/null | grep -q "ruby"; then
+    print_error "Ruby not installed via mise"
+    all_valid=false
+  else
+    print_success "Ruby managed by mise"
+  fi
+
+  # Check ruby command
+  if ! command_exists ruby; then
+    print_error "ruby command not found"
+    all_valid=false
+  else
+    print_success "Ruby: $(ruby -v)"
+  fi
+
+  # Check gem
+  if ! command_exists gem; then
+    print_error "gem not found"
+    all_valid=false
+  else
+    print_success "gem: $(gem -v)"
+  fi
+
+  # Check Bundler
+  if ! command_exists bundle; then
+    print_error "bundler not found"
+    all_valid=false
+  else
+    print_success "Bundler: $(bundle -v 2>&1 | head -n1)"
+  fi
+
+  # Check Rails (optional)
+  if command_exists rails; then
+    print_success "Rails: $(rails -v 2>&1 | head -n1)"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+  echo "Version Manager: mise"
+  echo ""
+
+  # Activate mise for status
+  activate_mise_environment
+
+  # Check installation status - must be mise-managed
+  if ! command_exists ruby; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Verify Ruby is managed by mise
+  if ! mise ls ruby 2>/dev/null | grep -q "ruby"; then
+    echo "Status: ✗ NOT INSTALLED (system Ruby detected, but mise-managed Ruby required)"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Ruby)"
+  echo ""
+
+  # Show mise-managed Ruby
+  print_status "mise-Managed Ruby:"
+  local ruby_info
+  ruby_info=$(mise ls ruby 2>/dev/null)
+  if [[ -n "$ruby_info" ]]; then
+    echo "$ruby_info" | sed 's/^/  • /'
+  else
+    echo "  (none)"
+  fi
+  echo ""
+
+  # Show available commands
+  print_status "Available Commands:"
+  command_exists ruby && echo "  ✓ ruby $(ruby -v | awk '{print $2}')"
+  command_exists gem && echo "  ✓ gem $(gem -v)"
+  command_exists bundle && echo "  ✓ bundler $(bundle -v 2>&1 | head -n1 | awk '{print $3}')"
+  command_exists rails && echo "  ✓ rails $(rails -v 2>&1 | head -n1 | awk '{print $2}')"
+
+  # Show development gems count
+  echo ""
+  local gem_count
+  gem_count=$(gem list --local --no-versions 2>/dev/null | wc -l || echo "0")
+  print_status "Development gems installed: $gem_count"
+
+  [[ -f "$HOME/.rubocop.yml" ]] && echo "" && print_status "Rubocop config: installed"
+  [[ -f "$HOME/.gemfile_template" ]] && print_status "Gemfile template: installed"
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Ruby..."
+
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "ruby" "gem" "bundle" "rails"
+
+  # Confirm removal
+  if ! prompt_confirmation "Continue with Ruby removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove mise configuration using shared helper
+  remove_mise_config "ruby"
+
+  # Clean up SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    print_status "Cleaning up SSH wrappers..."
+    rm -f /usr/local/bin/ruby 2>/dev/null || true
+    rm -f /usr/local/bin/gem 2>/dev/null || true
+    rm -f /usr/local/bin/bundle 2>/dev/null || true
+    rm -f /usr/local/bin/rails 2>/dev/null || true
+  fi
+
+  # Remove aliases
+  cleanup_bashrc "# Ruby aliases"
+
+  # Remove configs
+  rm -f "$HOME/.rubocop.yml"
+  rm -f "$HOME/.gemfile_template"
+
+  print_success "Ruby extension configuration removed"
+  print_warning "Run 'mise prune' to remove unused Ruby installations"
+  print_warning "Restart your shell or run: exec bash"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Check if mise is available
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    # Activate mise environment
+    activate_mise_environment
+
+    # Get current version
+    print_status "Current version:"
+    mise current ruby 2>/dev/null || echo "  ruby: not installed"
+    echo ""
+
+    # Use helper function for mise upgrades
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Ruby upgraded successfully"
+
+        # Show new version
+        echo ""
+        print_status "Updated version:"
+        mise current ruby
+
+        # Upgrade gems
+        print_status "Upgrading installed gems..."
+        gem update --system 2>/dev/null || print_warning "RubyGems update failed"
+        gem update 2>/dev/null || print_warning "Some gems failed to update"
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

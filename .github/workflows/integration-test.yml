@@ -1,0 +1,149 @@
+name: Integration Test Job
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "sindri-ci-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  integration-test:
+    name: End-to-End Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: "integration"
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: "1024"
+          vm-cpu-kind: "shared"
+          vm-cpu-count: "1"
+          volume-size: "5"
+
+      # Using composite action for deployment
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "300"
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # Using composite action for waiting
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "240"
+          expected-status: "started"
+
+      - name: Test SSH connectivity
+        uses: ./.github/actions/test-ssh-connectivity
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Test VM configuration and extension system
+        uses: ./.github/actions/test-vm-configuration
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Verify CI extension manifest
+        uses: ./.github/actions/run-vm-script
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          script-path: .github/scripts/integration/verify-manifest.sh
+
+      - name: Verify volume mount
+        uses: ./.github/actions/test-volume-mount
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Test volume persistence
+        uses: ./.github/actions/test-volume-persistence
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Test auto-suspend functionality
+        if: success()
+        uses: ./.github/actions/test-machine-lifecycle
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Test basic extension workflow
+        if: success()
+        uses: ./.github/actions/run-vm-script
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          script-path: .github/scripts/integration/test-basic-workflow.sh
+
+      # Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+      - name: Report test results
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All integration tests passed successfully"
+            echo "## ✅ Integration Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All end-to-end integration tests completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Validated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ VM deployment and configuration" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ SSH connectivity (Fly.io hallpass)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Volume persistence across restarts" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Extension system presence and basic workflow" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Auto-suspend functionality" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some integration tests failed"
+            echo "Check the logs above for details"
+            echo "## ❌ Integration Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some integration tests failed. Review the job logs for detailed error information." >> $GITHUB_STEP_SUMMARY
+          fi

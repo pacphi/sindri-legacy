@@ -1,0 +1,135 @@
+name: "Wait for Fly.io Deployment"
+description: "Waits for Fly.io machine to start and SSH daemon to be ready"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  timeout-seconds:
+    description: "Maximum time to wait in seconds"
+    required: false
+    default: "240"
+  poll-interval:
+    description: "Polling interval in seconds"
+    required: false
+    default: "15"
+  ssh-init-wait:
+    description: "Additional wait time for SSH daemon initialization (seconds)"
+    required: false
+    default: "15"
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  expected-status:
+    description: |
+      Expected machine status (started or running).
+
+      **Important:** In CI_MODE=true deployments (no health checks), machines
+      remain in 'started' state and never transition to 'running'. Always use
+      'started' for CI workflows.
+
+      Use 'running' only for production deployments with health checks enabled.
+    required: false
+    default: "started"
+
+outputs:
+  ready:
+    description: "Whether the deployment is ready (true or false)"
+    value: ${{ steps.wait.outputs.ready }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Wait for machine to start
+      id: wait
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        app_name="${{ inputs.app-name }}"
+        timeout=${{ inputs.timeout-seconds }}
+        elapsed=0
+        interval=${{ inputs.poll-interval }}
+        expected_status="${{ inputs.expected-status }}"
+        start_time=$(date +%s)
+
+        echo "⏱️  Waiting for $app_name to reach status: $expected_status"
+        echo "📋 Configuration:"
+        echo "   - Timeout: ${timeout}s ($(($timeout / 60)) minutes)"
+        echo "   - Poll interval: ${interval}s"
+        echo "   - Expected status: $expected_status"
+        echo "   - Start time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo ""
+
+        while [ $elapsed -lt $timeout ]; do
+          current_time=$(date +%s)
+          actual_elapsed=$((current_time - start_time))
+
+          # Check timeout BEFORE potentially hanging command
+          if [ $actual_elapsed -ge $timeout ]; then
+            echo ""
+            echo "❌ Timeout exceeded before status check (${actual_elapsed}s / ${timeout}s)"
+            break
+          fi
+
+          echo "🔍 Poll #$((elapsed / interval + 1)) - Elapsed: ${actual_elapsed}s / ${timeout}s"
+
+          # Add timeout to flyctl command to prevent indefinite hangs
+          # Use 60s timeout for the status check itself (much longer than it should take)
+          if status_output=$(timeout 60 flyctl status --app $app_name 2>&1); then
+            echo "   Status check completed"
+          else
+            status_exit=$?
+            if [ $status_exit -eq 124 ]; then
+              echo "   ⚠️  Status check timed out after 60s - flyctl may be hanging"
+              # Continue loop to retry, but this counts toward total elapsed time
+              sleep $interval
+              elapsed=$((elapsed + interval))
+              continue
+            else
+              echo "   ⚠️  Status check failed with exit code $status_exit"
+              sleep $interval
+              elapsed=$((elapsed + interval))
+              continue
+            fi
+          fi
+
+          # Extract and display current machine status
+          current_status=$(echo "$status_output" | grep -oE "(created|starting|started|running|stopping|stopped|replacing|destroying|destroyed|failed|crashed)" | head -1 || echo "unknown")
+          echo "   Current status: $current_status (expected: $expected_status)"
+
+          if echo "$status_output" | grep -q "$expected_status"; then
+            echo ""
+            echo "✅ Deployment successful - machine $expected_status (after ${actual_elapsed}s)"
+            echo "⏳ Waiting ${{ inputs.ssh-init-wait }}s for SSH daemon initialization..."
+            sleep ${{ inputs.ssh-init-wait }}  # Critical for SSH daemon to fully initialize
+            echo "ready=true" >> $GITHUB_OUTPUT
+            exit 0
+          elif echo "$status_output" | grep -q "failed\|crashed\|error"; then
+            echo ""
+            echo "❌ Deployment failed (detected after ${actual_elapsed}s)"
+            echo "📜 Fetching logs for diagnosis..."
+            flyctl logs --app $app_name
+            echo "ready=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "   Still waiting for status change..."
+          sleep $interval
+          elapsed=$((elapsed + interval))
+        done
+
+        actual_elapsed=$(($(date +%s) - start_time))
+        echo ""
+        echo "❌ Timeout waiting for deployment"
+        echo "   - Configured timeout: ${timeout}s"
+        echo "   - Actual elapsed: ${actual_elapsed}s"
+        echo "   - Expected status: $expected_status"
+        echo ""
+        echo "📊 Final status check:"
+        flyctl status --app $app_name || true
+        echo ""
+        echo "📜 Recent logs:"
+        flyctl logs --app $app_name || true
+        echo "ready=false" >> $GITHUB_OUTPUT
+        exit 1

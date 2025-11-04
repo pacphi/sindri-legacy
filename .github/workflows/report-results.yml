@@ -1,0 +1,83 @@
+name: Report Results
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      manager_validation_result:
+        description: "Result of extension-manager-validation job"
+        required: true
+        type: string
+      syntax_validation_result:
+        description: "Result of extension-syntax-validation job"
+        required: true
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  report-results:
+    name: Report Test Results
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: read
+
+    steps:
+      - name: Generate test report
+        run: |
+          echo "# Extension System Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Testing manifest-based extension system (Extension API v1.0)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Critical Jobs Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension Manager Validation | ${{ inputs.manager_validation_result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension Syntax Validation | ${{ inputs.syntax_validation_result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Note: Individual extensions (including core extensions) are tested in the per-extension-tests matrix job._" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.manager_validation_result }}" = "success" ] && \
+             [ "${{ inputs.syntax_validation_result }}" = "success" ]; then
+            echo "## ✅ Overall Result: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All critical extension system validation tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Validated Features" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Manifest-based activation system" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Extension API v1.0 compliance" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Extension manager commands (activate, install, status, list)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Script syntax and error handling" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Overall Result: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some validation tests failed. Please review the job logs for detailed error information." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Failed Jobs" >> $GITHUB_STEP_SUMMARY
+            [ "${{ inputs.manager_validation_result }}" != "success" ] && echo "- ❌ Extension Manager Validation" >> $GITHUB_STEP_SUMMARY
+            [ "${{ inputs.syntax_validation_result }}" != "success" ] && echo "- ❌ Extension Syntax Validation" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Workflow run: [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> $GITHUB_STEP_SUMMARY

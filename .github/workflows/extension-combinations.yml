@@ -1,0 +1,261 @@
+name: Extension Combinations Tests
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  extension-combinations:
+    name: Test Combination - ${{ matrix.combination.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    # Only run on workflow_dispatch or when explicitly requested via commit message
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-combinations]')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        combination:
+          - {
+              name: "core-stack",
+              extensions: "workspace-structure,mise-config,ssh-environment",
+              description: "Protected Core Extensions",
+            }
+          - {
+              name: "mise-stack",
+              extensions: "workspace-structure,mise-config,nodejs,python,rust,golang,ssh-environment",
+              description: "mise-Powered Languages",
+            }
+          - {
+              name: "full-node",
+              extensions: "workspace-structure,nodejs,nodejs-devtools,claude",
+              description: "Complete Node.js Development Stack",
+            }
+          - {
+              name: "fullstack",
+              extensions: "workspace-structure,nodejs,python,docker,cloud-tools",
+              description: "Python + Docker + Cloud",
+            }
+          - { name: "systems", extensions: "workspace-structure,rust,golang,docker", description: "Rust + Go + Docker" }
+          - {
+              name: "enterprise",
+              extensions: "workspace-structure,nodejs,jvm,docker,infra-tools",
+              description: "JVM + Docker + Infrastructure",
+            }
+          - {
+              name: "ai-dev",
+              extensions: "workspace-structure,nodejs,python,ai-tools,monitoring",
+              description: "Python + AI Tools + Monitoring",
+            }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: ${{ matrix.combination.name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: "16384"
+          vm-cpu-kind: "performance"
+          vm-cpu-count: "4"
+          volume-size: "20"
+
+      # Using composite action for deployment (includes retry logic)
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "600"
+          retry-attempts: "3"
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # Using composite action for waiting
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "420"
+          expected-status: "started"
+
+      - name: Add extension combination to manifest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extensions="${{ matrix.combination.extensions }}"
+
+          echo "Adding extensions to manifest: $extensions"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest_file=\"extensions.d/active-extensions.conf\"
+            failed_extensions=()
+
+            # Create manifest from CI template (already has protected extensions)
+            if [ ! -f \"\$manifest_file\" ]; then
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+            fi
+
+            # Protected extensions already in CI conf - no need to add
+            protected=\"workspace-structure mise-config ssh-environment\"
+
+            # Verify protected extensions are present
+            echo \"Verifying protected extensions from CI config...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present\"
+              else
+                echo \"❌ \$ext missing from CI config\"
+                exit 1
+              fi
+            done
+
+            # Split extensions and add non-protected ones
+            echo \"\"
+            echo \"Adding combination extensions (skipping protected)...\"
+            IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
+
+            for ext in \"\${EXT_ARRAY[@]}\"; do
+              ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
+
+              # Skip if protected (already in CI conf)
+              if echo \"\$protected\" | grep -q \"\$ext\"; then
+                echo \"⏭️  Skipping \$ext (protected, already in CI conf)\"
+                continue
+              fi
+
+              if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
+                echo \"\$ext\" >> \"\$manifest_file\"
+                echo \"✅ \$ext added to manifest\"
+              else
+                echo \"✅ \$ext already in manifest\"
+              fi
+            done
+
+            echo \"\"
+            echo \"=== Extensions in Manifest ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+          '"
+
+      - name: Install all extensions from manifest
+        timeout-minutes: 60
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Installing all extensions for ${{ matrix.combination.name }} combination..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            echo \"Running install-all...\"
+            if bash extension-manager.sh install-all; then
+              echo \"✅ All extensions installed\"
+            else
+              echo \"❌ Extension installation failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Verify extension combination functionality
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          combination_name="${{ matrix.combination.name }}"
+
+          echo "Verifying $combination_name combination functionality..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            # Source SSH environment
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              source /etc/profile.d/00-ssh-environment.sh
+            fi
+
+            case \"$combination_name\" in
+              core-stack)
+                echo \"Testing core extensions...\"
+                [ -d /workspace/src ] || exit 1
+                mise --version
+                [ -f /etc/profile.d/00-ssh-environment.sh ] || exit 1
+                ;;
+              mise-stack)
+                echo \"Testing mise-powered stack...\"
+                mise --version
+                node --version && npm --version
+                python3 --version
+                rustc --version && cargo --version
+                go version
+                ;;
+              full-node)
+                echo \"Testing full Node.js stack...\"
+                node --version && npm --version
+                npx tsc --version
+                npx eslint --version
+                npx prettier --version
+                command -v claude >/dev/null 2>&1 && echo \"✅ Claude CLI available\" || echo \"⚠️  Claude CLI not in PATH\"
+                ;;
+              fullstack)
+                echo \"Testing Python + Docker + Cloud combination...\"
+                python3 --version && docker --version && node --version
+                ;;
+              systems)
+                echo \"Testing Rust + Go + Docker combination...\"
+                rustc --version && go version && docker --version
+                ;;
+              enterprise)
+                echo \"Testing JVM + Docker + Infrastructure combination...\"
+                java -version && terraform version && docker --version && node --version
+                ;;
+              ai-dev)
+                echo \"Testing Python + AI Tools + Monitoring combination...\"
+                python3 --version && node --version
+                ollama --version || echo \"⚠️  ollama not ready\"
+                command -v claude-monitor >/dev/null 2>&1 && echo \"✅ Monitoring available\" || echo \"⚠️  Monitoring not in PATH\"
+                ;;
+            esac
+
+            echo \"✅ Cross-extension functionality verified\"
+          '"
+
+      # Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

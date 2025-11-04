@@ -1,0 +1,325 @@
+#!/bin/bash
+# ssh-environment.sh.example - SSH environment configuration for non-interactive sessions
+# Extension API v1.0
+#
+# This extension configures SSH daemon to support environment variables in
+# non-interactive sessions, enabling tools to work correctly in CI/CD and
+# remote command execution scenarios.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="ssh-environment"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="SSH daemon configuration for non-interactive environment support"
+EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for sudo
+  if ! command_exists sudo; then
+    print_error "sudo is required but not installed"
+    return 1
+  fi
+
+  # Check SSH daemon is installed
+  if ! systemctl list-unit-files | grep -qE 'ssh|sshd'; then
+    print_warning "SSH daemon does not appear to be installed"
+    print_status "This extension requires SSH daemon (openssh-server)"
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing SSH environment support..."
+
+  # No packages to install - this extension only configures existing SSH daemon
+  print_success "No packages to install"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring SSH environment support..."
+
+  local sshd_config_d="/etc/ssh/sshd_config.d"
+  local env_config_file="$sshd_config_d/99-bash-env.conf"
+  local ssh_env_file="/etc/profile.d/00-ssh-environment.sh"
+  local template_dir="$(dirname "${BASH_SOURCE[0]}")"
+
+  # Create sshd_config.d directory if it doesn't exist
+  if [[ ! -d "$sshd_config_d" ]]; then
+    sudo mkdir -p "$sshd_config_d"
+  fi
+
+  # Create the SSH environment initialization script from template
+  if [[ ! -f "$ssh_env_file" ]]; then
+    print_status "Creating SSH environment initialization script..."
+    local profile_template="$template_dir/ssh-environment.profile.template"
+
+    if [[ ! -f "$profile_template" ]]; then
+      print_error "Template not found: $profile_template"
+      return 1
+    fi
+
+    if sudo cp "$profile_template" "$ssh_env_file"; then
+      sudo chmod +x "$ssh_env_file"
+      print_success "Created SSH environment script: $ssh_env_file"
+    else
+      print_error "Failed to create SSH environment script"
+      return 1
+    fi
+  else
+    print_debug "SSH environment script already exists"
+  fi
+
+  # Add BASH_ENV configuration for non-interactive SSH sessions from template
+  if [[ ! -f "$env_config_file" ]]; then
+    print_status "Creating SSH daemon environment configuration..."
+    local sshd_template="$template_dir/ssh-environment.sshd-config.template"
+
+    if [[ ! -f "$sshd_template" ]]; then
+      print_error "Template not found: $sshd_template"
+      return 1
+    fi
+
+    # Use envsubst to expand variables in template
+    if command -v envsubst &>/dev/null; then
+      export ssh_env_file  # Export for envsubst
+      if envsubst < "$sshd_template" | sudo tee "$env_config_file" > /dev/null; then
+        print_success "Created SSH daemon environment config: $env_config_file"
+      else
+        print_error "Failed to create SSH daemon config"
+        return 1
+      fi
+    else
+      print_warning "envsubst not available, using sed fallback"
+      if sed "s|\$ssh_env_file|$ssh_env_file|g" "$sshd_template" | sudo tee "$env_config_file" > /dev/null; then
+        print_success "Created SSH daemon environment config: $env_config_file"
+      else
+        print_error "Failed to create SSH daemon config"
+        return 1
+      fi
+    fi
+  else
+    print_debug "SSH daemon environment config already exists"
+  fi
+
+  # Reload SSH daemon to apply changes
+  print_status "Reloading SSH daemon to apply environment configuration..."
+  local reloaded=false
+
+  if systemctl is-active --quiet ssh 2>/dev/null; then
+    if sudo systemctl reload ssh 2>/dev/null; then
+      print_success "SSH daemon reloaded successfully"
+      reloaded=true
+    fi
+  elif systemctl is-active --quiet sshd 2>/dev/null; then
+    if sudo systemctl reload sshd 2>/dev/null; then
+      print_success "SSH daemon (sshd) reloaded successfully"
+      reloaded=true
+    fi
+  fi
+
+  if [[ "$reloaded" == "false" ]]; then
+    print_warning "SSH daemon not running or not using systemd"
+    print_status "Environment will be available after next SSH session"
+  fi
+
+  print_success "SSH environment configuration completed"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating SSH environment configuration..."
+
+  local all_valid=true
+
+  # Check sshd_config.d exists
+  if [[ ! -d "/etc/ssh/sshd_config.d" ]]; then
+    print_warning "sshd_config.d directory not found"
+  else
+    print_success "sshd_config.d directory exists"
+  fi
+
+  # Check environment config file
+  local env_config_file="/etc/ssh/sshd_config.d/99-bash-env.conf"
+  if [[ ! -f "$env_config_file" ]]; then
+    print_error "SSH environment config not found: $env_config_file"
+    all_valid=false
+  else
+    print_success "SSH environment config: $env_config_file"
+
+    # Verify BASH_ENV is set
+    if grep -q "BASH_ENV" "$env_config_file" 2>/dev/null; then
+      print_success "BASH_ENV configuration present"
+    else
+      print_warning "BASH_ENV not found in config file"
+    fi
+  fi
+
+  # Check SSH daemon is running
+  if systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null; then
+    print_success "SSH daemon is running"
+  else
+    print_warning "SSH daemon is not running"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  local env_config_file="/etc/ssh/sshd_config.d/99-bash-env.conf"
+  if [[ ! -f "$env_config_file" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific details
+  print_status "Configuration:"
+  echo "  Config file: $env_config_file"
+
+  # Show BASH_ENV setting
+  local bash_env
+  bash_env=$(grep "BASH_ENV" "$env_config_file" 2>/dev/null | head -n1)
+  if [[ -n "$bash_env" ]]; then
+    echo "  $bash_env"
+  fi
+  echo ""
+
+  print_status "SSH daemon status:"
+  # Show SSH daemon status
+  if systemctl is-active --quiet ssh 2>/dev/null; then
+    echo "  Service (ssh): ✓ running"
+  elif systemctl is-active --quiet sshd 2>/dev/null; then
+    echo "  Service (sshd): ✓ running"
+  else
+    echo "  Service: ✗ not running"
+  fi
+
+  # Show enabled status
+  if systemctl is-enabled --quiet ssh 2>/dev/null || systemctl is-enabled --quiet sshd 2>/dev/null; then
+    echo "  Boot enabled: ✓ yes"
+  else
+    echo "  Boot enabled: ✗ no"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Removing SSH environment configuration..."
+
+  # Check for dependent extensions
+  show_dependent_extensions_warning "ssh" "BASH_ENV"
+
+  print_warning "Removing SSH environment configuration may break non-interactive SSH sessions"
+  print_warning "Tools installed by extensions may not work in CI/CD pipelines"
+  echo ""
+
+  if ! prompt_confirmation "Continue with SSH environment config removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove configuration file
+  local env_config_file="/etc/ssh/sshd_config.d/99-bash-env.conf"
+  if [[ -f "$env_config_file" ]]; then
+    print_status "Removing SSH environment config..."
+    sudo rm -f "$env_config_file"
+    print_success "Configuration file removed"
+
+    # Reload SSH daemon
+    print_status "Reloading SSH daemon..."
+    if systemctl is-active --quiet ssh 2>/dev/null; then
+      sudo systemctl reload ssh 2>/dev/null || true
+      print_success "SSH daemon reloaded"
+    elif systemctl is-active --quiet sshd 2>/dev/null; then
+      sudo systemctl reload sshd 2>/dev/null || true
+      print_success "SSH daemon reloaded"
+    fi
+  else
+    print_status "Configuration file not found (already removed)"
+  fi
+
+  print_success "SSH environment configuration removed"
+  print_warning "Non-interactive SSH sessions will use default environment"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Checking ${EXT_NAME}..."
+
+    # SSH configuration is managed by templates - no upgrade needed
+    print_success "SSH environment is up to date"
+    print_status "SSH configuration does not require upgrades"
+    print_status "To update, reinstall the extension"
+
+    return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

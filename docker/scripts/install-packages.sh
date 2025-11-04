@@ -1,11 +1,22 @@
 #!/bin/bash
 set -e
 
-# Update package lists
-apt-get update
+# Source retry helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/lib/registry-retry.sh"
 
-# Install system dependencies
-apt-get install -y \
+# Suppress systemd tmpfiles warnings by pre-creating system users/groups
+# This prevents "Failed to resolve user" warnings during package installation
+groupadd -f -g 999 systemd-journal 2>/dev/null || true
+groupadd -f -g 998 systemd-network 2>/dev/null || true
+useradd -r -g systemd-network -u 998 -s /usr/sbin/nologin systemd-network 2>/dev/null || true
+
+# Update package lists with retry
+apt_update_retry 3
+
+# Install system dependencies with retry
+# Note: libssl-dev, zlib1g-dev, libyaml-dev, libreadline-dev are required for compiling language runtimes and their native extensions
+apt_install_retry 3 \
     openssh-server \
     sudo \
     curl \
@@ -19,9 +30,11 @@ apt-get install -y \
     unzip \
     build-essential \
     pkg-config \
-    python3 \
-    python3-pip \
-    python3-venv \
+    libssl-dev \
+    zlib1g-dev \
+    libyaml-dev \
+    libreadline-dev \
+    pipx \
     sqlite3 \
     postgresql-client \
     redis-tools \
@@ -33,15 +46,16 @@ apt-get install -y \
     zip \
     gnupg \
     ca-certificates \
-    software-properties-common
+    software-properties-common \
+    gettext-base
 
 # Install GitHub CLI
 echo "Installing GitHub CLI..."
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
 chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-apt-get update
-apt-get install -y gh
+apt_update_retry 3
+apt_install_retry 3 gh
 
 # Clean up to reduce image size
 rm -rf /var/lib/apt/lists/*

@@ -2,9 +2,9 @@ name: Project Validation
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
   setup-validation:
@@ -28,7 +28,6 @@ jobs:
             "scripts/vm-resume.sh"
             "scripts/vm-teardown.sh"
             "docker/scripts/entrypoint.sh"
-            "docker/scripts/vm-configure.sh"
           )
 
           missing_files=()
@@ -119,8 +118,8 @@ jobs:
         run: |
           echo "Running shellcheck on all shell scripts..."
 
-          # Find all shell scripts (.sh and .sh.example files)
-          scripts=$(find . -name "*.sh" -o -name "*.sh.example" -type f | grep -v node_modules | grep -v .git)
+          # Find all shell scripts (.sh and .extension files)
+          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v .git)
 
           failed_scripts=()
           for script in $scripts; do
@@ -145,6 +144,32 @@ jobs:
           fi
 
           echo "✅ All shell scripts pass shellcheck"
+
+      - name: Validate TOML syntax
+        run: |
+          echo "Validating extension TOML files..."
+          pip install toml
+
+          for toml in docker/lib/extensions.d/*/*.toml; do
+            echo "Validating $toml..."
+            python3 -c "import toml; toml.load(open('$toml'))" || exit 1
+          done
+
+          echo "✅ All TOML files are valid"
+
+      - name: Verify extension-TOML pairs
+        run: |
+          echo "Checking mise-powered extensions have TOML files..."
+
+          mise_extensions=("nodejs" "python" "rust" "golang" "nodejs-devtools")
+
+          for ext in "${mise_extensions[@]}"; do
+            if [[ ! -f "docker/lib/extensions.d/${ext}/${ext}.toml" ]]; then
+              echo "❌ Missing TOML for mise-powered extension: $ext"
+              exit 1
+            fi
+            echo "✅ $ext.extension + $ext.toml pair verified"
+          done
 
       - name: Check script permissions
         run: |
@@ -215,11 +240,8 @@ jobs:
         run: |
           echo "Checking markdown files..."
 
-          # Install markdown lint
-          npm install -g markdownlint-cli
-
-          # Lint markdown files (ignore line length for now)
-          markdownlint --config .markdownlint.json --ignore node_modules --ignore .git . || echo "Markdown linting completed with warnings"
+          # Lint markdown files using npx (ignore line length for now)
+          npx markdownlint-cli --config .markdownlint.json --ignore node_modules --ignore .git . || echo "Markdown linting completed with warnings"
 
       - name: Check for broken links in README
         run: |
@@ -271,16 +293,16 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Check for secrets with GitLeaks
         run: |

@@ -1,0 +1,631 @@
+#!/bin/bash
+# template.extension - Extension Template and Reference Implementation
+# Extension API v2.0
+#
+# This template demonstrates the standard extension structure with all required
+# functions. Use this as a reference when creating new extensions.
+#
+# IMPORTANT: Copy this template and rename to match your extension (e.g., rust.extension)
+
+# ============================================================================
+# METADATA
+# ============================================================================
+# Simple variables - no functions needed
+# Note: Priority/order is defined in /workspace/config/active-extensions.conf
+
+EXT_NAME="template"
+EXT_VERSION="2.0.0"
+EXT_DESCRIPTION="Extension template and reference implementation"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="mixed"        # NEW: mise | apt | binary | git | native | mixed | manual
+EXT_UPGRADE_STRATEGY="automatic"  # NEW: automatic | manual | pinned | security-only
+
+# ============================================================================
+# COMMON UTILITIES
+# ============================================================================
+# Source shared helper functions from extensions-common.sh
+# This provides all standard utilities plus helper functions to reduce code duplication
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+
+# Initialize extension environment (replaces manual common.sh sourcing)
+# This loads: print_status, print_success, print_error, print_warning, print_debug, command_exists
+extension_init
+
+# ============================================================================
+# FUNCTION 1: PREREQUISITES
+# ============================================================================
+# Check if all requirements are met before installation
+# Returns: 0 if all prerequisites met, 1 otherwise
+#
+# Common checks:
+# - System packages (build-essential, curl, etc.)
+# - Commands available in PATH
+# - Disk space
+# - Memory
+# - Network connectivity
+# - Other extensions (dependencies)
+#
+# Example usage:
+#   if prerequisites; then
+#     echo "Prerequisites met"
+#   else
+#     echo "Prerequisites not met"
+#     exit 1
+#   fi
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  local all_met=true
+
+  # Example: Check for required system packages
+  local required_packages=("curl" "wget" "git")
+  for pkg in "${required_packages[@]}"; do
+    if ! command_exists "$pkg"; then
+      print_error "Required command not found: $pkg"
+      all_met=false
+    fi
+  done
+
+  # Example: Check for required commands
+  if ! command_exists gcc; then
+    print_warning "GCC not found - install build-essential"
+    all_met=false
+  fi
+
+  # Example: Check disk space using helper function (default 600MB, can override)
+  check_disk_space 5000  # Require 5GB for this example
+
+  # Example: Check if mise is required (for mise-powered extensions)
+  # check_mise_prerequisite || return 1
+
+  # Example: Check CI mode using helper function
+  if ! is_ci_mode; then
+    print_debug "Running in normal mode (not CI)"
+  fi
+
+  if [[ "$all_met" == "true" ]]; then
+    print_success "All prerequisites met"
+    return 0
+  else
+    print_error "Prerequisites not met"
+    return 1
+  fi
+}
+
+# ============================================================================
+# FUNCTION 2: INSTALL
+# ============================================================================
+# Install packages, tools, and binaries
+# Returns: 0 on success, 1 on failure
+#
+# Common patterns:
+# - apt-get install (system packages)
+# - Download binaries (curl/wget)
+# - Language package managers (npm, pip, cargo, gem, etc.)
+# - Build from source
+#
+# Best practices:
+# - Check if already installed before installing
+# - Respect CI_MODE for minimal installation
+# - Use timeouts for long-running operations
+# - Provide progress feedback
+# - Handle errors gracefully
+#
+# Example usage:
+#   if install; then
+#     echo "Installation successful"
+#   else
+#     echo "Installation failed"
+#     exit 1
+#   fi
+
+install() {
+  print_status "Installing ${EXT_NAME}..."
+
+  # Example: Check if already installed
+  if command_exists example-tool; then
+    print_warning "Tool already installed: $(example-tool --version)"
+    return 0
+  fi
+
+  # Example: Install system packages
+  print_status "Installing system dependencies..."
+  if ! sudo apt-get update -qq; then
+    print_error "Failed to update package lists"
+    return 1
+  fi
+
+  if ! sudo apt-get install -y example-package; then
+    print_error "Failed to install example-package"
+    return 1
+  fi
+
+  # Example: Download and install binary
+  print_status "Downloading example-tool..."
+  local download_url="https://example.com/tool.tar.gz"
+  local temp_file="/tmp/example-tool.tar.gz"
+
+  if ! curl -fsSL "$download_url" -o "$temp_file"; then
+    print_error "Failed to download from $download_url"
+    return 1
+  fi
+
+  # Example: Extract and install
+  if ! tar -xzf "$temp_file" -C /usr/local/bin/; then
+    print_error "Failed to extract archive"
+    rm -f "$temp_file"
+    return 1
+  fi
+
+  rm -f "$temp_file"
+
+  # Example: CI_MODE optimization - skip optional tools using helper
+  if ! is_ci_mode; then
+    print_status "Installing optional tools..."
+    # Install additional tools here
+  else
+    print_debug "CI mode - skipping optional tools"
+  fi
+
+  # Example: For mise-powered extensions, use helper function
+  # install_mise_config "${EXT_NAME}" || return 1
+
+  print_success "${EXT_NAME} installed successfully"
+  return 0
+}
+
+# ============================================================================
+# FUNCTION 3: CONFIGURE
+# ============================================================================
+# Post-installation configuration
+# Returns: 0 on success, 1 on failure
+#
+# Common tasks:
+# - Add to PATH
+# - Create SSH wrappers (for non-interactive sessions)
+# - Setup shell aliases
+# - Create configuration files
+# - Initialize user settings
+# - Setup environment variables
+#
+# Best practices:
+# - Make idempotent (can run multiple times safely)
+# - Check before modifying shell config files
+# - Use symlinks where appropriate
+# - Set proper file permissions
+#
+# Example usage:
+#   if configure; then
+#     echo "Configuration successful"
+#   else
+#     echo "Configuration failed"
+#     exit 1
+#   fi
+
+configure() {
+  print_status "Configuring ${EXT_NAME}..."
+
+  # Example: Add to PATH
+  local bin_path="/opt/example-tool/bin"
+  if [[ -d "$bin_path" ]]; then
+    if ! grep -q "$bin_path" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - added by extension" >> "$HOME/.bashrc"
+      echo "export PATH=\"$bin_path:\$PATH\"" >> "$HOME/.bashrc"
+      print_success "Added $bin_path to PATH"
+    else
+      print_debug "PATH already contains $bin_path"
+    fi
+  fi
+
+  # Example: Create SSH wrapper for non-interactive sessions
+  # This ensures commands work in CI and non-interactive SSH
+  if command_exists example-tool; then
+    setup_tool_path "${EXT_NAME}" \
+      "export PATH=\"$bin_path:\$PATH\"" \
+      "source /opt/example-tool/env"
+
+    create_tool_wrapper "example-tool" "$bin_path/example-tool"
+  fi
+
+  # Example: Setup shell aliases
+  if ! grep -q "alias example-run" "$HOME/.bashrc" 2>/dev/null; then
+    echo "alias example-run='example-tool run'" >> "$HOME/.bashrc"
+  fi
+
+  # Example: Setup git aliases using helper function
+  # setup_git_aliases "ex-test:!example-tool test" "ex-run:!example-tool run"
+
+  # Example: Create config file
+  local config_dir="$HOME/.config/example-tool"
+  local config_file="$config_dir/config.yaml"
+
+  if [[ ! -f "$config_file" ]]; then
+    mkdir -p "$config_dir"
+    cat "$(dirname "${BASH_SOURCE[0]}")/template.config.template" > "$config_file"
+    chmod 644 "$config_file"
+    print_success "Created config file: $config_file"
+  fi
+
+  print_success "${EXT_NAME} configured successfully"
+  return 0
+}
+
+# ============================================================================
+# FUNCTION 4: VALIDATE
+# ============================================================================
+# Smoke tests to verify installation and configuration
+# Returns: 0 if all validations pass, 1 otherwise
+#
+# Common validations:
+# - Command availability (command -v)
+# - Version checks
+# - Functional tests (can it actually run?)
+# - Configuration file existence
+# - SSH wrapper tests (for non-interactive sessions)
+#
+# Best practices:
+# - Test actual functionality, not just presence
+# - Use timeouts for operations that might hang
+# - Provide clear error messages
+# - Respect CI_MODE for faster validation
+#
+# Example usage:
+#   if validate; then
+#     echo "Validation passed"
+#   else
+#     echo "Validation failed"
+#     exit 1
+#   fi
+
+validate() {
+  print_status "Validating ${EXT_NAME} installation..."
+
+  local all_valid=true
+
+  # Example: Activate mise environment if needed
+  # activate_mise_environment
+
+  # Example: Validate multiple commands using helper function
+  # declare -A checks=(
+  #   [example-tool]="--version"
+  #   [example-cli]="-v"
+  # )
+  # validate_commands checks && all_valid=true || all_valid=false
+
+  # Example: Manual check (traditional approach)
+  if ! command_exists example-tool; then
+    print_error "example-tool command not found in PATH"
+    all_valid=false
+  else
+    print_success "example-tool command found"
+
+    # Example: Check version
+    local version
+    if version=$(example-tool --version 2>/dev/null); then
+      print_success "example-tool version: $version"
+    else
+      print_error "Failed to get example-tool version"
+      all_valid=false
+    fi
+  fi
+
+  # Example: Functional test
+  print_status "Running functional test..."
+  if example-tool test >/dev/null 2>&1; then
+    print_success "Functional test passed"
+  else
+    print_error "Functional test failed"
+    all_valid=false
+  fi
+
+  # Example: Check configuration
+  if [[ -f "$HOME/.config/example-tool/config.yaml" ]]; then
+    print_success "Configuration file exists"
+  else
+    print_warning "Configuration file not found (optional)"
+  fi
+
+  # Example: Test SSH wrapper (critical for CI) using helper
+  if ! is_ci_mode; then
+    print_status "Testing non-interactive SSH execution..."
+    if ssh localhost "example-tool --version" >/dev/null 2>&1; then
+      print_success "SSH wrapper works"
+    else
+      print_warning "SSH wrapper test failed (may not be critical)"
+    fi
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# FUNCTION 5: STATUS
+# ============================================================================
+# Check current installation status
+# Returns: 0 if installed, 1 if not installed
+#
+# Purpose:
+# - Quick check if extension is currently installed
+# - Show versions of installed tools
+# - Display configuration status
+# - Provide usage information
+#
+# Best practices:
+# - Be fast (this may be called frequently)
+# - Provide useful summary information
+# - Use print_status/print_success for output
+#
+# Example usage:
+#   if status; then
+#     echo "Extension is installed"
+#   else
+#     echo "Extension is not installed"
+#   fi
+
+status() {
+  # Use helper function to print standard header
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists example-tool; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  local version
+  if version=$(example-tool --version 2>/dev/null); then
+    echo "  ✓ example-tool: $version"
+  else
+    echo "  ✓ example-tool: installed (version check failed)"
+  fi
+
+  # Show configuration status
+  echo ""
+  print_status "Configuration:"
+  if [[ -f "$HOME/.config/example-tool/config.yaml" ]]; then
+    echo "  ✓ $HOME/.config/example-tool/config.yaml"
+  else
+    echo "  ✗ No configuration found"
+  fi
+
+  # Show PATH status
+  echo ""
+  if echo "$PATH" | grep -q "/opt/example-tool/bin"; then
+    print_status "PATH configured: ✓"
+  else
+    print_status "PATH configured: ✗ (restart shell)"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# FUNCTION 6: REMOVE
+# ============================================================================
+# Uninstall packages and clean up configuration
+# Returns: 0 on success, 1 on failure
+#
+# Common tasks:
+# - Remove installed packages
+# - Delete binaries
+# - Clean up configuration files
+# - Remove PATH modifications
+# - Delete SSH wrappers
+# - Clean cache/temporary files
+#
+# Best practices:
+# - Prompt for confirmation on destructive operations
+# - Provide option to keep user data/config
+# - Clean up in reverse order of installation
+# - Handle partial installations gracefully
+# - Remove entries from shell config files
+#
+# Example usage:
+#   if remove; then
+#     echo "Removal successful"
+#   else
+#     echo "Removal failed"
+#     exit 1
+#   fi
+
+remove() {
+  print_status "Removing ${EXT_NAME}..."
+
+  # Example: Check for dependent extensions using helper function
+  show_dependent_extensions_warning "example-tool" "example-cli"
+
+  # Example: For mise-powered extensions, remove mise config
+  # remove_mise_config "${EXT_NAME}"
+
+  # Example: Remove system packages
+  if command_exists example-package; then
+    print_status "Removing system packages..."
+    if sudo apt-get remove -y example-package; then
+      print_success "System packages removed"
+    else
+      print_warning "Failed to remove some system packages"
+    fi
+  fi
+
+  # Example: Remove binary
+  if [[ -f "/usr/local/bin/example-tool" ]]; then
+    print_status "Removing binary..."
+    if sudo rm -f "/usr/local/bin/example-tool"; then
+      print_success "Binary removed"
+    else
+      print_error "Failed to remove binary"
+      return 1
+    fi
+  fi
+
+  # Example: Clean up configuration using helper for confirmation
+  local config_dir="$HOME/.config/example-tool"
+  if [[ -d "$config_dir" ]]; then
+    print_warning "Configuration directory exists: $config_dir"
+    if prompt_confirmation "Delete $config_dir? This will delete user settings."; then
+      rm -rf "$config_dir"
+      print_success "Configuration removed"
+    else
+      print_status "Configuration preserved"
+    fi
+  fi
+
+  # Example: Remove from PATH using helper function
+  cleanup_bashrc "# ${EXT_NAME} - added by extension"
+
+  # Example: Remove git aliases using helper function
+  # cleanup_git_aliases "ex-test" "ex-run"
+
+  # Example: Remove SSH wrappers
+  if [[ -f "/usr/local/bin/example-tool" ]]; then
+    sudo rm -f "/usr/local/bin/example-tool"
+    print_debug "SSH wrapper removed"
+  fi
+
+  # Example: Clean cache
+  if [[ -d "$HOME/.cache/example-tool" ]]; then
+    rm -rf "$HOME/.cache/example-tool"
+    print_debug "Cache cleaned"
+  fi
+
+  print_success "${EXT_NAME} removed successfully"
+  print_warning "Restart your shell or run: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# FUNCTION 7: UPGRADE - Extension API v2.0
+# ============================================================================
+# Upgrade installed packages and tools
+# Returns: 0 on success, 1 on failure
+#
+# Common patterns:
+# - mise upgrades: upgrade_mise_tools "${EXT_NAME}"
+# - APT upgrades: upgrade_apt_packages "pkg1" "pkg2"
+# - Binary upgrades: upgrade_github_binary "repo/name" "binary" "/path"
+# - Git upgrades: upgrade_git_repo "/path/to/repo" "rebuild-cmd"
+# - Native tools: check_native_update "tool-name" "--version"
+#
+# Best practices:
+# - Check current versions before upgrading
+# - Provide progress feedback
+# - Handle dry-run mode (DRY_RUN=true)
+# - Return appropriate exit codes
+# - Show before/after versions
+#
+# Example usage:
+#   if upgrade; then
+#     echo "Upgrade successful"
+#   else
+#     echo "Upgrade failed"
+#     exit 1
+#   fi
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Check if installed
+    if ! command_exists example-tool; then
+        print_error "${EXT_NAME} is not installed"
+        return 1
+    fi
+
+    # Get current version
+    print_status "Current version:"
+    example-tool --version
+
+    local upgrade_failed=0
+
+    # Pattern 1: mise-managed tools
+    if [[ "${EXT_INSTALL_METHOD}" == "mise" ]]; then
+        if upgrade_mise_tools "${EXT_NAME}"; then
+            print_success "mise tools upgraded"
+        else
+            print_error "mise upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 2: APT packages
+    if [[ "${EXT_INSTALL_METHOD}" == "apt" ]]; then
+        if upgrade_apt_packages "example-package" "example-lib"; then
+            print_success "APT packages upgraded"
+        else
+            print_error "APT upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 3: GitHub binary
+    if [[ "${EXT_INSTALL_METHOD}" == "binary" ]]; then
+        if upgrade_github_binary "owner/repo" "binary-name" "/usr/local/bin/binary"; then
+            print_success "Binary upgraded"
+        else
+            print_error "Binary upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 4: Git repository
+    if [[ "${EXT_INSTALL_METHOD}" == "git" ]]; then
+        if upgrade_git_repo "$HOME/.example-tool" "make build"; then
+            print_success "Git repo upgraded"
+        else
+            print_error "Git upgrade failed"
+            upgrade_failed=1
+        fi
+    fi
+
+    # Pattern 5: Native (pre-installed)
+    if [[ "${EXT_INSTALL_METHOD}" == "native" ]]; then
+        check_native_update "example-tool" "--version"
+        return $?
+    fi
+
+    # Pattern 6: Mixed (custom logic)
+    if [[ "${EXT_INSTALL_METHOD}" == "mixed" ]]; then
+        # Combine multiple methods
+        print_status "Upgrading APT packages..."
+        upgrade_apt_packages "pkg1" "pkg2" || upgrade_failed=1
+
+        print_status "Upgrading binaries..."
+        upgrade_github_binary "repo/name" "binary" "/path" || upgrade_failed=1
+    fi
+
+    if [[ $upgrade_failed -eq 0 ]]; then
+        print_success "${EXT_NAME} upgraded successfully"
+
+        # Show new version
+        print_status "Updated version:"
+        example-tool --version
+
+        return 0
+    else
+        print_error "${EXT_NAME} upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION (for testing)
+# ============================================================================
+# This allows testing the extension directly
+# Usage: ./template.extension [prerequisites|install|configure|validate|status|remove|upgrade]
+# Note: Use the extension_main helper instead of manual case statement
+
+extension_main "$@"

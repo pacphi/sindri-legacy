@@ -1,0 +1,342 @@
+#!/bin/bash
+# claude.extension - Claude Code CLI and configuration
+# Extension API v2.0
+#
+# This extension installs Claude Code CLI using the native installer
+# and creates developer configuration. No Node.js/npm required.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="claude"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Claude Code CLI with developer preferences and hooks"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"  # Uses curl-based installer
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for required commands
+  if ! command_exists curl; then
+    print_error "curl is required but not installed"
+    return 1
+  fi
+
+  if ! command_exists bash; then
+    print_error "bash is required but not found"
+    return 1
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Claude Code..."
+
+  # Check if already installed
+  if command_exists claude; then
+    local claude_version=$(claude --version 2>/dev/null || echo "installed")
+    print_warning "Claude Code already installed: $claude_version"
+    print_status "Skipping installation (remove first to reinstall)"
+    return 0
+  fi
+
+  # Install Claude Code using official installer
+  print_status "Downloading and running Claude Code installer..."
+  if ! curl -fsSL https://claude.ai/install.sh | bash; then
+    print_error "Claude Code installation failed"
+    return 1
+  fi
+
+  # The installer adds Claude to PATH via shell config
+  # Need to source the config or use explicit path
+  local claude_path="$HOME/.local/bin/claude"
+
+  # Verify installation
+  if [[ -f "$claude_path" ]] || command_exists claude; then
+    # Try to get version - reload shell environment first
+    export PATH="$HOME/.local/bin:$PATH"
+    local claude_version=$(claude --version 2>/dev/null || echo "Installed successfully")
+    print_success "Claude Code installed: $claude_version"
+    print_status "Location: $HOME/.local/bin/claude"
+  else
+    print_warning "Claude Code installed but command not found in PATH"
+    print_status "You may need to reload your shell or run: source ~/.bashrc"
+    return 1
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Setting up Claude Code configuration..."
+
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Create Claude configuration directory
+  mkdir -p "$HOME/.claude"
+
+  # Create global CLAUDE.md with user preferences
+  if [[ ! -f "$HOME/.claude/CLAUDE.md" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude.claude-md.template" > "$HOME/.claude/CLAUDE.md"
+    print_success "Created global preferences: ~/.claude/CLAUDE.md"
+  else
+    print_status "Global preferences already exist: ~/.claude/CLAUDE.md"
+  fi
+
+  # Create settings.json with useful hooks
+  if [[ ! -f "$HOME/.claude/settings.json" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/claude.settings-json.template" > "$HOME/.claude/settings.json"
+    print_success "Created Claude hooks: ~/.claude/settings.json"
+  else
+    print_status "Claude hooks already exist: ~/.claude/settings.json"
+  fi
+
+  # Create SSH wrapper
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
+      create_tool_wrapper "claude" "$HOME/.local/bin/claude"
+    fi
+  fi
+
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/claude.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added Claude aliases to .bashrc"
+    fi
+  fi
+
+  print_success "Claude Code configuration created"
+  print_status "Authenticate with: claude"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Claude Code installation..."
+
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
+
+  local all_valid=true
+
+  # Check claude command exists
+  if ! command_exists claude && [[ ! -f "$HOME/.local/bin/claude" ]]; then
+    print_error "claude command not found"
+    all_valid=false
+  else
+    local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
+    print_success "claude: $claude_version"
+  fi
+
+  # Check config directory structure
+  if [[ -d "$HOME/.claude" ]]; then
+    print_success "Configuration directory exists: ~/.claude"
+  else
+    print_error "Configuration directory not found: ~/.claude"
+    all_valid=false
+  fi
+
+  # Validate CLAUDE.md exists
+  if [[ -f "$HOME/.claude/CLAUDE.md" ]]; then
+    print_success "Global preferences file exists: ~/.claude/CLAUDE.md"
+  else
+    print_warning "Global preferences file not found: ~/.claude/CLAUDE.md"
+    all_valid=false
+  fi
+
+  # Validate settings.json exists
+  if [[ -f "$HOME/.claude/settings.json" ]]; then
+    print_success "Settings file exists: ~/.claude/settings.json"
+
+    # Validate JSON syntax
+    if command_exists jq && jq . "$HOME/.claude/settings.json" >/dev/null 2>&1; then
+      print_success "Settings file is valid JSON"
+    elif command_exists python3 && python3 -c "import json; json.load(open('$HOME/.claude/settings.json'))" >/dev/null 2>&1; then
+      print_success "Settings file is valid JSON"
+    else
+      print_warning "Could not validate settings.json syntax"
+    fi
+  else
+    print_warning "Settings file not found: ~/.claude/settings.json"
+    all_valid=false
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Check installation status
+  if ! command_exists claude && [[ ! -f "$HOME/.local/bin/claude" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  local claude_version=$(claude --version 2>/dev/null || echo "Not authenticated")
+  echo "  ✓ claude: $claude_version"
+  echo "  Location: $HOME/.local/bin/claude"
+  echo ""
+
+  print_status "Authentication: Check with 'claude' command"
+
+  # List configured hooks
+  if [[ -f "$HOME/.claude/settings.json" ]]; then
+    local hooks_count
+    if command_exists jq; then
+      hooks_count=$(jq '.hooks | length' "$HOME/.claude/settings.json" 2>/dev/null || echo "unknown")
+    elif command_exists python3; then
+      hooks_count=$(python3 -c "import json; print(len(json.load(open('$HOME/.claude/settings.json')).get('hooks', [])))" 2>/dev/null || echo "unknown")
+    else
+      hooks_count="unknown"
+    fi
+    echo ""
+    print_status "Configured hooks: $hooks_count"
+  fi
+
+  # Show config files
+  echo ""
+  print_status "Configuration files:"
+  [[ -f "$HOME/.claude/CLAUDE.md" ]] && echo "  ✓ ~/.claude/CLAUDE.md (global preferences)"
+  [[ -f "$HOME/.claude/settings.json" ]] && echo "  ✓ ~/.claude/settings.json (hooks)"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Ensure claude is in PATH
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Get current version
+  print_status "Current version:"
+  if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
+    local current_version=$(claude --version 2>/dev/null || echo "version check failed")
+    echo "  claude: $current_version"
+  else
+    echo "  claude: not installed"
+  fi
+  echo ""
+
+  # Upgrade by running the installer again
+  print_status "Running Claude Code installer to upgrade..."
+  if curl -fsSL https://claude.ai/install.sh | bash; then
+    print_success "Claude Code upgraded successfully"
+
+    echo ""
+    print_status "Updated version:"
+    if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
+      local new_version=$(claude --version 2>/dev/null || echo "version check failed")
+      echo "  claude: $new_version"
+    fi
+
+    return 0
+  else
+    print_error "Failed to upgrade Claude Code"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Claude Code..."
+
+  # Remove the claude binary
+  if [[ -f "$HOME/.local/bin/claude" ]]; then
+    rm -f "$HOME/.local/bin/claude"
+    print_success "Claude Code binary removed"
+  fi
+
+  # Check for other potential installation locations
+  if command_exists claude; then
+    local claude_path=$(which claude)
+    print_warning "Claude still found at: $claude_path"
+    print_status "You may need to manually remove it"
+  fi
+
+  # Prompt for config removal
+  echo ""
+  if prompt_confirmation "Remove Claude configuration directory (~/.claude)?"; then
+    rm -rf "$HOME/.claude"
+    print_success "Claude configuration removed"
+  else
+    print_status "Claude configuration preserved at ~/.claude"
+    print_status "Contains: CLAUDE.md (preferences) and settings.json (hooks)"
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed Claude aliases from .bashrc"
+  fi
+
+  print_success "Claude Code uninstalled"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

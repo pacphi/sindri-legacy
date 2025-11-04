@@ -1,0 +1,201 @@
+name: Mise Stack Integration Test
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "sindri-ci-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  mise-stack-integration:
+    name: mise-Stack Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    # Only run on workflow_dispatch or when explicitly requested
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-mise-stack]')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: "mise"
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: "4096"
+          vm-cpu-kind: "performance"
+          vm-cpu-count: "2"
+          volume-size: "15"
+
+      # Using composite action for deployment
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "300"
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # Using composite action for waiting
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "300"
+          expected-status: "started"
+
+      - name: Add mise-stack extensions to manifest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Adding mise-stack extensions to manifest..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest_file=\"extensions.d/active-extensions.conf\"
+
+            # Create manifest from CI template (already has protected extensions)
+            if [ ! -f \"\$manifest_file\" ]; then
+              cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+            fi
+
+            # Verify protected extensions are present
+            echo \"Verifying protected extensions from CI config...\"
+            for ext in workspace-structure mise-config ssh-environment; do
+              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
+                echo \"✅ \$ext present\"
+              else
+                echo \"❌ \$ext missing from CI config\"
+                exit 1
+              fi
+            done
+
+            # Add additional mise-stack extensions (skip protected ones already in CI conf)
+            echo \"\"
+            echo \"Adding additional mise-stack extensions...\"
+            for ext in nodejs python rust golang; do
+              if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
+                echo \"\$ext\" >> \"\$manifest_file\"
+                echo \"✅ \$ext added to manifest\"
+              else
+                echo \"✅ \$ext already in manifest\"
+              fi
+            done
+
+            echo \"\"
+            echo \"=== Extensions in Manifest ===\"
+            grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
+          '"
+
+      - name: Install all mise-stack extensions
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Installing all mise-stack extensions..."
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            echo \"Running install-all for mise-stack...\"
+            if bash extension-manager.sh install-all; then
+              echo \"✅ All mise-stack extensions installed\"
+            else
+              echo \"❌ Extension installation failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Test mise-stack cross-extension functionality
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "Testing mise-stack cross-extension functionality..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            # Source SSH environment for non-interactive sessions
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              source /etc/profile.d/00-ssh-environment.sh
+            fi
+
+            echo \"Testing mise-Powered Language Stack...\"
+
+            # Verify mise is installed
+            if ! command -v mise >/dev/null 2>&1; then
+              echo \"❌ mise not installed\"
+              exit 1
+            fi
+            echo \"✅ mise: \$(mise --version)\"
+
+            # Show all mise-managed tools
+            echo \"\"
+            echo \"mise-managed tools:\"
+            mise ls
+
+            # Test Node.js
+            echo \"\"
+            echo \"Testing Node.js (via mise)...\"
+            node --version && npm --version
+            mise ls node && echo \"✅ Node.js managed by mise\"
+
+            # Test Python
+            echo \"\"
+            echo \"Testing Python (via mise)...\"
+            python3 --version
+            mise ls python && echo \"✅ Python managed by mise\"
+
+            # Test Rust
+            echo \"\"
+            echo \"Testing Rust (via mise)...\"
+            rustc --version && cargo --version
+            mise ls rust && echo \"✅ Rust managed by mise\"
+
+            # Test Go
+            echo \"\"
+            echo \"Testing Go (via mise)...\"
+            go version
+            mise ls go && echo \"✅ Go managed by mise\"
+
+            echo \"\"
+            echo \"✅ mise-powered language stack verified\"
+          '"
+
+      # Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

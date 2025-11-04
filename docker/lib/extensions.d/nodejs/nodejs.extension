@@ -1,0 +1,289 @@
+#!/bin/bash
+# nodejs.extension - Node.js and npm installation via mise
+# Extension API v1.0
+#
+# This extension installs Node.js LTS and npm using mise.
+# It provides the JavaScript runtime needed by Playwright, monitoring tools, and other extensions.
+# mise provides unified version management with declarative configuration.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="nodejs"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Node.js LTS and npm via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for mise (required by this extension)
+  check_mise_prerequisite || return 1
+
+  # Check disk space (Node.js needs ~500MB)
+  check_disk_space 600
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Node.js via mise..."
+
+  # Install via mise using shared helper
+  install_mise_config "nodejs" || return 1
+
+  # Verify installation
+  activate_mise_environment
+  print_success "Node.js installed: $(node -v 2>/dev/null || echo 'installed')"
+  print_success "npm installed: v$(npm -v 2>/dev/null || echo 'installed')"
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Node.js..."
+
+  # Setup SSH wrapper for node/npm
+  if command_exists node; then
+    local node_path=$(which node)
+    local npm_path=$(which npm)
+
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "${EXT_NAME}" \
+        "eval \"\$(mise activate bash --shims)\""
+    fi
+
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "node" "$node_path"
+      create_tool_wrapper "npm" "$npm_path"
+    fi
+  fi
+
+  # Set npm to use less verbose output
+  npm config set loglevel warn 2>/dev/null || true
+
+  print_success "Node.js configuration completed"
+  print_status "Global packages will be managed by mise"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Node.js installation..."
+
+  # Ensure mise environment is activated
+  activate_mise_environment
+
+  local all_valid=true
+
+  # Check mise shows Node.js
+  if ! mise ls node 2>/dev/null | grep -q "node"; then
+    print_error "Node.js not installed via mise"
+    all_valid=false
+  else
+    print_success "Node.js managed by mise"
+  fi
+
+  # Check node command
+  if ! command_exists node; then
+    print_error "node command not found"
+    print_debug "PATH: $PATH"
+    print_debug "mise shims: $(find ~/.local/share/mise/shims/ -name 'node' -type f 2>/dev/null || echo 'none')"
+    all_valid=false
+  else
+    local node_version=$(node -v)
+    print_success "node: $node_version"
+
+    # Verify it can run JavaScript
+    local test_output
+    if test_output=$(node -e "console.log('test')" 2>&1); then
+      if [[ "$test_output" == "test" ]]; then
+        print_success "node can execute JavaScript"
+      else
+        print_error "node execution test failed"
+        all_valid=false
+      fi
+    else
+      print_error "node execution test failed"
+      all_valid=false
+    fi
+  fi
+
+  # Check npm command
+  if ! command_exists npm; then
+    print_error "npm command not found"
+    all_valid=false
+  else
+    local npm_version=$(npm -v)
+    print_success "npm: v$npm_version"
+
+    # Check npm can list packages
+    if npm list -g --depth=0 >/dev/null 2>&1; then
+      print_success "npm can list global packages"
+    else
+      print_warning "npm list command had issues (may be normal)"
+    fi
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+  echo "Version Manager: mise"
+  echo ""
+
+  # Check installation status
+  if ! command_exists node; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Node.js)"
+  echo ""
+
+  # Show installed tools with versions
+  print_status "mise-Managed Tools:"
+  if command_exists mise; then
+    # Show node and npm tools from mise
+    mise ls node npm:* 2>/dev/null | sed 's/^/  • /' || {
+      # Fallback if mise ls doesn't work
+      echo "  • Node.js $(node -v 2>/dev/null || echo 'installed')"
+      echo "  • npm v$(npm -v 2>/dev/null || echo 'installed')"
+    }
+  else
+    echo "  • Node.js $(node -v 2>/dev/null || echo 'unknown')"
+    echo "  • npm v$(npm -v 2>/dev/null || echo 'unknown')"
+  fi
+
+  # Show global packages count
+  echo ""
+  local global_count
+  global_count=$(npm list -g --depth=0 2>/dev/null | grep -c '^[├└]' || echo "0")
+  print_status "Global packages installed: $global_count"
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Node.js..."
+
+  # Check for dependent extensions and show warning
+  show_dependent_extensions_warning "node" "npm" "npx"
+
+  # Confirm removal
+  if ! prompt_confirmation "Continue with Node.js removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove mise configuration using shared helper
+  remove_mise_config "nodejs"
+
+  # Clean up SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    print_status "Cleaning up SSH wrappers..."
+    rm -f /usr/local/bin/node 2>/dev/null || true
+    rm -f /usr/local/bin/npm 2>/dev/null || true
+  fi
+
+  # Remove bashrc entries if any
+  cleanup_bashrc "# ${EXT_NAME}"
+
+  print_success "Node.js configuration removed"
+  print_warning "Run 'mise prune' to remove unused Node.js installations"
+  print_warning "Restart your shell or run: exec bash"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Check if mise is available
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    # Activate mise environment
+    activate_mise_environment
+
+    # Get current versions
+    print_status "Current versions:"
+    mise current node 2>/dev/null || echo "  node: not installed"
+    mise current npm 2>/dev/null || echo "  npm: not installed"
+    echo ""
+
+    # Use helper function for mise upgrades
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Upgrade completed successfully"
+
+        # Show new versions
+        echo ""
+        print_status "Updated versions:"
+        mise current node
+        mise current npm
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

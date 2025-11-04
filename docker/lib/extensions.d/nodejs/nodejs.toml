@@ -1,0 +1,15 @@
+# nodejs.toml - Node.js LTS configuration for mise
+# Full development environment with Node.js and npm
+
+[tools]
+# Node.js LTS (Long Term Support)
+node = "lts"
+
+[env]
+# npm configuration
+_.file = ".env"
+NODE_ENV = "development"
+
+[settings]
+# Enable experimental features
+experimental = true

@@ -3,7 +3,7 @@ name: Release Automation
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -69,7 +69,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # Get full history for changelog generation
+          fetch-depth: 0 # Get full history for changelog generation
 
       - name: Get previous tag
         id: previous-tag
@@ -344,7 +344,7 @@ jobs:
           ```bash
           ./scripts/vm-setup.sh --app-name my-sindri-dev
           flyctl ssh console --app my-sindri-dev
-          /workspace/scripts/vm-configure.sh
+          extension-manager --interactive
           claude
           ```
 

@@ -110,6 +110,46 @@ flyctl volumes extend <volume-id> -s 50 -a <app-name>
 # Creates: /workspace/backups/backup_YYYYMMDD_HHMMSS.tar.gz
 ```
 
+## SSH Access
+
+Sindri provides two SSH connection methods:
+
+### Primary: Regular SSH (Port 10022)
+
+```bash
+ssh developer@<app-name>.fly.dev -p 10022
+```
+
+**Use this for:**
+
+- Daily development work
+- Running extension-manager commands
+- IDE remote development
+- All normal operations
+
+**Automatically connects as developer user** - no flags needed.
+
+### Fallback: flyctl ssh console
+
+```bash
+# For system troubleshooting (as root)
+flyctl ssh console -a <app-name>
+
+# For extension/dev work (as developer)
+flyctl ssh console -a <app-name> --user developer
+```
+
+**Use this only when:**
+
+- Port 10022 SSH is not working
+- Emergency access needed
+- System-level debugging required
+
+**Important:** The `--user developer` flag is critical when running extension commands via flyctl, otherwise extensions
+install to root's home directory.
+
+See [SSH Connection Methods](TROUBLESHOOTING.md#understanding-ssh-connection-methods) for complete details.
+
 ## Security
 
 ### SSH Configuration
@@ -119,6 +159,7 @@ Key-based authentication is enforced by default:
 - Password authentication disabled
 - Root login disabled
 - SSH on non-standard port 10022
+- Custom SSH daemon via `ssh-environment` extension
 
 ### Network Security
 

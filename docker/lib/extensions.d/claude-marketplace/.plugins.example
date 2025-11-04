@@ -1,0 +1,47 @@
+# Claude Code Plugin Marketplace - Curated Plugins
+#
+# This file specifies plugins to install from various Claude Code marketplaces.
+# Each line should contain a GitHub repository in the format: owner/repo
+# Lines starting with # are comments and will be ignored.
+#
+# To use this file:
+# 1. Copy to /workspace/.plugins: cp /workspace/.plugins.example /workspace/.plugins
+# 2. Customize the list (comment out unwanted plugins with #)
+# 3. Run: extension-manager install claude-marketplace
+#
+# Plugins are installed via: claude /plugin marketplace add <github-repo>
+#
+
+# ============================================================================
+# CURATED PLUGINS
+# ============================================================================
+
+# Beads - Natural language programming with Claude
+# https://github.com/steveyegge/beads
+steveyegge/beads
+
+# Blueprint Toolkit - Project scaffolding and architecture templates
+# https://github.com/croffasia/cc-blueprint-toolkit
+croffasia/cc-blueprint-toolkit
+
+# Equity Research - Financial analysis and equity research tools
+# https://github.com/quant-sentiment-ai/claude-equity-research
+quant-sentiment-ai/claude-equity-research
+
+# n8n Skills - Workflow automation integration
+# https://github.com/czlonkowski/n8n-skills
+czlonkowski/n8n-skills
+
+# Life Sciences - Anthropic's official life sciences research plugins
+# https://github.com/anthropics/life-sciences
+anthropics/life-sciences
+
+# Awesome Claude Skills - Community-curated collection of useful skills
+# https://github.com/ComposioHQ/awesome-claude-skills
+ComposioHQ/awesome-claude-skills
+
+# ============================================================================
+# CUSTOM PLUGINS
+# ============================================================================
+# Add your own custom plugins below:
+

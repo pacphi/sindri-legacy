@@ -1,0 +1,175 @@
+name: "Test Machine Lifecycle"
+description: "Tests machine stop/start lifecycle with proper state polling"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  stop-timeout:
+    description: "Maximum time to wait for machine to stop (seconds)"
+    required: false
+    default: "60"
+  start-timeout:
+    description: "Maximum time to wait for machine to start (seconds)"
+    required: false
+    default: "120"
+  max-stop-attempts:
+    description: "Maximum polling attempts for stop verification"
+    required: false
+    default: "12"
+  max-start-attempts:
+    description: "Maximum polling attempts for start verification"
+    required: false
+    default: "8"
+  poll-interval:
+    description: "Polling interval in seconds"
+    required: false
+    default: "5"
+
+outputs:
+  status:
+    description: "Test status (success or failure)"
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Test machine stop/start lifecycle
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Testing auto-suspend functionality..."
+
+        app_name="${{ inputs.app-name }}"
+
+        # Check that machine can be suspended
+        machine_id=$(flyctl machine list --app $app_name --json | jq -r '.[0].id')
+
+        if [ -z "$machine_id" ] || [ "$machine_id" = "null" ]; then
+          echo "❌ Failed to get machine ID"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        echo "Testing machine: $machine_id"
+        echo ""
+
+        # ============================================================
+        # PHASE 1: Stop machine and wait for full stop
+        # ============================================================
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "PHASE 1: Stopping machine"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        echo "Stopping machine $machine_id..."
+        if ! flyctl machine stop $machine_id --app $app_name 2>&1; then
+          echo "⚠️  Machine stop command failed, may already be stopped"
+        fi
+
+        # Wait for machine to fully stop with verification
+        echo ""
+        echo "Waiting for machine to fully stop..."
+        max_stop_attempts=${{ inputs.max-stop-attempts }}
+        stop_attempt=1
+        machine_stopped=false
+        poll_interval=${{ inputs.poll-interval }}
+
+        while [ $stop_attempt -le $max_stop_attempts ]; do
+          echo "🔍 Stop verification (attempt $stop_attempt/$max_stop_attempts)..."
+
+          status_output=$(flyctl status --app $app_name 2>&1 || echo "status_failed")
+
+          if echo "$status_output" | grep -q "stopped"; then
+            echo "✅ Machine fully stopped"
+            machine_stopped=true
+            break
+          elif echo "$status_output" | grep -q "status_failed"; then
+            echo "⚠️  Status check failed, retrying..."
+          else
+            current_status=$(echo "$status_output" | grep -oE 'stopped|starting|started|stopping' | head -1 || echo "unknown")
+            echo "   Machine still transitioning (status: $current_status), waiting..."
+          fi
+
+          sleep $poll_interval
+          stop_attempt=$((stop_attempt + 1))
+        done
+
+        if [ "$machine_stopped" = "false" ]; then
+          echo ""
+          echo "❌ Machine failed to stop after $max_stop_attempts attempts"
+          echo "Final status:"
+          flyctl status --app $app_name
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        echo "✅ Auto-suspend test passed - machine stopped successfully"
+
+        # ============================================================
+        # PHASE 2: Start machine and wait for full start
+        # ============================================================
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "PHASE 2: Starting machine"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        echo "Starting machine $machine_id..."
+        if ! flyctl machine start $machine_id --app $app_name 2>&1; then
+          echo "❌ Failed to start machine"
+          flyctl status --app $app_name
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        # Wait for machine to fully restart with verification
+        echo ""
+        echo "Waiting for machine to restart..."
+        sleep 30
+
+        # Verify machine is running before proceeding to cleanup
+        max_start_attempts=${{ inputs.max-start-attempts }}
+        start_attempt=1
+        machine_started=false
+
+        while [ $start_attempt -le $max_start_attempts ]; do
+          echo "🔍 Start verification (attempt $start_attempt/$max_start_attempts)..."
+
+          status_output=$(flyctl status --app $app_name 2>&1 || echo "status_failed")
+
+          if echo "$status_output" | grep -q "started"; then
+            echo "✅ Machine fully restarted and ready"
+            machine_started=true
+            break
+          elif echo "$status_output" | grep -q "status_failed"; then
+            echo "⚠️  Status check failed, retrying..."
+          else
+            current_status=$(echo "$status_output" | grep -oE 'stopped|starting|started|stopping' | head -1 || echo "unknown")
+            echo "   Machine still transitioning (status: $current_status), waiting..."
+          fi
+
+          sleep 10
+          start_attempt=$((start_attempt + 1))
+        done
+
+        if [ "$machine_started" = "false" ]; then
+          echo ""
+          echo "❌ Machine failed to start after $max_start_attempts attempts"
+          echo "Final status:"
+          flyctl status --app $app_name
+          echo ""
+          echo "Machine logs:"
+          flyctl logs --app $app_name
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ Machine lifecycle test passed"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "status=success" >> $GITHUB_OUTPUT

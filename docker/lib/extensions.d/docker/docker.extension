@@ -1,0 +1,472 @@
+#!/bin/bash
+# docker.sh.example - Docker Engine and development tools
+# Extension API v1.0
+#
+# This extension installs Docker with:
+# - Docker Engine (docker-ce)
+# - Docker Compose (v2 plugin and standalone)
+# - Container utilities (dive, ctop)
+# - Docker aliases and helper scripts
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="docker"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Docker Engine with compose and utilities"
+EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="mixed"  # apt (docker-ce) + binary (compose, dive, ctop)
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for apt-get
+  if ! command_exists apt-get; then
+    print_error "apt-get is required but not found"
+    print_status "This extension requires a Debian/Ubuntu based system"
+    return 1
+  fi
+
+  # Check for required tools
+  local missing_tools=()
+  for tool in curl wget sudo; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    print_status "Install with: sudo apt-get install ${missing_tools[*]}"
+    return 1
+  fi
+
+  # Check disk space (Docker needs ~2GB)
+  check_disk_space 2500
+
+  # Check network connectivity (non-blocking warning)
+  if command_exists check_network_connectivity; then
+    check_network_connectivity || print_warning "Continuing despite network issues..."
+  fi
+
+  # Check DNS resolution (non-blocking warning)
+  if command_exists check_dns_resolution; then
+    check_dns_resolution || print_warning "Continuing despite DNS issues..."
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Docker development tools..."
+
+  # PRE-FLIGHT: Test basic APT functionality
+  print_status "Testing package manager connectivity..."
+  if ! timeout 30s apt-cache policy > /dev/null 2>&1; then
+    print_error "APT package manager not responding"
+    print_error "Network connectivity or DNS resolution may be failing"
+    return 1
+  fi
+
+  # Install Docker Engine if not already installed
+  if command_exists docker; then
+    print_warning "Docker Engine already installed: $(docker --version)"
+  else
+    print_status "Installing Docker Engine..."
+
+    # Add Docker's official GPG key and repository
+    print_status "Installing prerequisites..."
+    install_apt_packages ca-certificates curl gnupg
+
+    # Add Docker's official GPG key
+    print_status "Adding Docker GPG key..."
+    sudo /usr/bin/install -m 0755 -d /etc/apt/keyrings
+    if curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
+      sudo chmod a+r /etc/apt/keyrings/docker.gpg
+      print_status "✓ GPG key added"
+
+      # Set up Docker repository
+      print_status "Configuring Docker repository..."
+      echo \
+        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+      # Install Docker Engine
+      print_status "Installing Docker Engine packages (this may take 2-3 minutes)..."
+      if install_apt_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+        print_success "Docker Engine installed: $(docker --version)"
+      else
+        print_error "Failed to install Docker Engine packages"
+        return 1
+      fi
+    else
+      print_error "Failed to add Docker GPG key"
+      return 1
+    fi
+  fi
+
+  # Install standalone Docker Compose if not available
+  if ! command_exists docker-compose; then
+    print_status "Installing standalone Docker Compose..."
+    local COMPOSE_VERSION="v2.39.2"
+    local TEMP_FILE="/tmp/docker-compose-$$"
+
+    if curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+       -o "${TEMP_FILE}" 2>/dev/null; then
+      if sudo mv "${TEMP_FILE}" /usr/local/bin/docker-compose && \
+         sudo chmod +x /usr/local/bin/docker-compose; then
+        print_success "Docker Compose installed: $(docker-compose --version)"
+      else
+        rm -f "${TEMP_FILE}"
+        print_warning "Failed to install Docker Compose"
+      fi
+    else
+      rm -f "${TEMP_FILE}"
+      print_warning "Failed to download Docker Compose"
+    fi
+  fi
+
+  # Install Docker utilities
+  print_status "Installing Docker utilities..."
+
+  # Install dive (image analysis)
+  if ! command_exists dive; then
+    print_debug "Installing dive..."
+    print_status "Downloading dive (image analysis tool)..."
+    local DIVE_VERSION="0.13.1"
+    local DEB_FILE="dive_${DIVE_VERSION}_linux_amd64.deb"
+
+    if wget -q "https://github.com/wagoodman/dive/releases/download/v${DIVE_VERSION}/${DEB_FILE}"; then
+      print_status "Installing dive package..."
+      if sudo dpkg -i "${DEB_FILE}" 2>/dev/null; then
+        rm -f "${DEB_FILE}"
+        print_debug "✓ dive installed"
+      else
+        rm -f "${DEB_FILE}"
+        print_warning "Failed to install dive"
+      fi
+    else
+      rm -f "${DEB_FILE}"
+      print_warning "Failed to download dive"
+    fi
+  fi
+
+  # Install ctop (container monitoring)
+  if ! command_exists ctop; then
+    print_debug "Installing ctop..."
+    print_status "Downloading ctop (container monitoring tool)..."
+    local TEMP_FILE="/tmp/ctop-$$"
+
+    if wget -q "https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64" \
+       -O "${TEMP_FILE}"; then
+      print_status "Installing ctop binary..."
+      if sudo mv "${TEMP_FILE}" /usr/local/bin/ctop && \
+         sudo chmod +x /usr/local/bin/ctop; then
+        print_debug "✓ ctop installed"
+      else
+        rm -f "${TEMP_FILE}"
+        print_warning "Failed to install ctop"
+      fi
+    else
+      rm -f "${TEMP_FILE}"
+      print_warning "Failed to download ctop"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Docker environment..."
+
+  # Add current user to docker group
+  if command_exists docker; then
+    if ! groups | grep -q docker; then
+      print_status "Adding user to docker group..."
+      sudo usermod -aG docker "$USER"
+      print_success "User added to docker group (logout/login to apply)"
+    else
+      print_debug "User already in docker group"
+    fi
+  fi
+
+  # Create Docker aliases
+  if ! grep -q "# Docker aliases" "$HOME/.bashrc" 2>/dev/null; then
+    print_status "Creating Docker aliases..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/docker.bashrc.template" >> "$HOME/.bashrc"
+    print_success "Docker aliases created"
+  else
+    print_debug "Docker aliases already exist"
+  fi
+
+  # Create SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    command_exists docker && create_tool_wrapper "docker" "$(which docker)"
+    command_exists docker-compose && create_tool_wrapper "docker-compose" "$(which docker-compose)"
+  fi
+
+  print_success "Docker configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Docker installation..."
+
+  local all_valid=true
+
+  # Check docker
+  if ! command_exists docker; then
+    print_error "docker not found"
+    all_valid=false
+  else
+    print_success "Docker: $(docker --version)"
+  fi
+
+  # Check docker daemon
+  if command_exists docker && docker info >/dev/null 2>&1; then
+    print_success "Docker daemon: running"
+  else
+    print_warning "Docker daemon: not running or no permissions"
+  fi
+
+  # Check docker-compose with timeout
+  if timeout 10 docker-compose --version 2>/dev/null; then
+    print_success "Docker Compose: $(timeout 10 docker-compose --version 2>/dev/null)"
+  elif timeout 10 docker compose version 2>/dev/null; then
+    print_success "Docker Compose: $(timeout 10 docker compose version 2>/dev/null)"
+  else
+    print_warning "docker-compose not found or timed out"
+  fi
+
+  # Check utilities
+  local utilities=(dive ctop)
+  local utils_found=0
+  for util in "${utilities[@]}"; do
+    command_exists "$util" && ((utils_found++))
+  done
+  print_status "Utilities: $utils_found/${#utilities[@]}"
+
+  # Check group membership
+  if groups | grep -q docker; then
+    print_success "User in docker group: yes"
+  else
+    print_warning "User not in docker group (logout/login required)"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists docker; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Docker-specific tool listing with versions
+  print_status "Installed tools:"
+  echo "  ✓ docker: $(docker --version)"
+
+  # Check Docker Compose with timeout
+  if timeout 10 docker-compose --version 2>/dev/null; then
+    echo "  ✓ docker-compose: $(timeout 10 docker-compose --version 2>/dev/null)"
+  elif timeout 10 docker compose version 2>/dev/null; then
+    echo "  ✓ docker compose: $(timeout 10 docker compose version 2>/dev/null)"
+  else
+    echo "  ✗ docker-compose: not available or timed out"
+  fi
+
+  # Show daemon status
+  if docker info >/dev/null 2>&1; then
+    echo "  ✓ docker daemon: running"
+  else
+    echo "  ✗ docker daemon: not running or no permissions"
+  fi
+
+  # Show utilities
+  for util in dive ctop; do
+    if command_exists "$util"; then
+      echo "  ✓ $util"
+    fi
+  done
+
+  # Show group membership
+  if groups | grep -q docker; then
+    echo "  ✓ user in docker group: yes"
+  else
+    echo "  ✗ user not in docker group"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Docker..."
+
+  local dependent_exts=()
+  mapfile -t dependent_exts < <(check_dependent_extensions "docker" "docker-compose" "dive" "ctop")
+  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
+    print_warning "The following extensions depend on Docker and may stop working:"
+    for ext in "${dependent_exts[@]}"; do
+      echo "  - $ext"
+    done
+    echo ""
+  fi
+
+  print_warning "This will remove Docker Engine, all containers, images, and volumes"
+  if ! prompt_confirmation "Continue with Docker removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove Docker packages
+  print_status "Removing Docker packages..."
+  sudo apt-get remove -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 2>/dev/null
+  sudo apt-get autoremove -y 2>/dev/null
+
+  # Remove Docker data
+  read -p "Remove all Docker data (/var/lib/docker)? (y/N): " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    sudo rm -rf /var/lib/docker
+    sudo rm -rf /var/lib/containerd
+    print_success "Docker data removed"
+  fi
+
+  # Remove standalone Docker Compose
+  if [[ -f "/usr/local/bin/docker-compose" ]]; then
+    sudo rm -f /usr/local/bin/docker-compose
+  fi
+
+  # Remove utilities
+  command_exists dive && sudo apt-get remove -y dive 2>/dev/null
+  [[ -f "/usr/local/bin/ctop" ]] && sudo rm -f /usr/local/bin/ctop
+
+  # Remove from docker group
+  if groups | grep -q docker; then
+    sudo deluser "$USER" docker 2>/dev/null
+  fi
+
+  # Remove Docker repository and GPG key
+  sudo rm -f /etc/apt/sources.list.d/docker.list
+  sudo rm -f /etc/apt/keyrings/docker.gpg
+
+  # Remove aliases
+  cleanup_bashrc "# Docker aliases"
+
+  print_success "Docker uninstalled"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    local upgrade_failed=0
+
+    # Part 1: Upgrade APT packages
+    print_status "Upgrading Docker packages via APT..."
+    if upgrade_apt_packages "docker-ce" "docker-ce-cli" "containerd.io" "docker-buildx-plugin" "docker-compose-plugin"; then
+        print_success "Docker packages upgraded"
+    else
+        print_warning "Docker package upgrade failed or skipped"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    # Part 2: Upgrade standalone Docker Compose binary
+    print_status "Upgrading standalone Docker Compose..."
+    if upgrade_github_binary "docker/compose" "docker-compose" "/usr/local/bin/docker-compose" "version"; then
+        print_success "Docker Compose upgraded"
+    else
+        print_warning "Docker Compose upgrade failed"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    # Part 3: Upgrade dive binary
+    print_status "Upgrading dive..."
+    if upgrade_github_binary "wagoodman/dive" "dive" "/usr/local/bin/dive"; then
+        print_success "dive upgraded"
+    else
+        print_warning "dive upgrade failed"
+        upgrade_failed=1
+    fi
+
+    echo ""
+
+    # Part 4: Upgrade ctop binary
+    print_status "Upgrading ctop..."
+    if upgrade_github_binary "bcicen/ctop" "ctop" "/usr/local/bin/ctop"; then
+        print_success "ctop upgraded"
+    else
+        print_warning "ctop upgrade failed"
+        upgrade_failed=1
+    fi
+
+    if [[ $upgrade_failed -eq 0 ]]; then
+        print_success "All Docker components upgraded successfully"
+        return 0
+    else
+        print_warning "Some Docker components failed to upgrade"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

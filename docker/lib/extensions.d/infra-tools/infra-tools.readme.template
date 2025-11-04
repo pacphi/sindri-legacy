@@ -1,0 +1,66 @@
+# Infrastructure as Code Workspace
+
+## Available Tools
+
+### Core IaC Tools
+- **Terraform**: Infrastructure provisioning and management
+- **Pulumi**: Infrastructure as code using general-purpose languages
+- **Crossplane**: Kubernetes-native infrastructure management
+
+### Kubernetes Tools
+- **kubectl**: Kubernetes command-line tool
+- **Helm**: Kubernetes package manager
+- **k9s**: Terminal UI for Kubernetes clusters
+- **kubectx/kubens**: Context and namespace switching
+
+### Carvel Suite
+- **kapp**: Deploy and view groups of Kubernetes resources
+- **ytt**: Template and overlay Kubernetes configuration
+- **kbld**: Build or reference container images in Kubernetes configuration
+- **vendir**: Declaratively state directory contents
+- **imgpkg**: Bundle and relocate application configuration and images
+
+## Directory Structure
+```
+infrastructure/
+├── terraform/     # Terraform configurations
+├── kubernetes/    # Raw Kubernetes manifests
+├── helm-charts/   # Helm charts
+├── crossplane/    # Crossplane compositions
+└── pulumi/        # Pulumi projects
+```
+
+## Quick Start
+
+### Terraform
+```bash
+cd terraform/
+terraform init
+terraform plan
+terraform apply
+```
+
+### Kubernetes
+```bash
+kubectl config get-contexts
+kubectl apply -f kubernetes/
+```
+
+### Helm
+```bash
+helm repo add stable https://charts.helm.sh/stable
+helm search repo stable
+helm install myapp ./helm-charts/myapp
+```
+
+### Carvel
+```bash
+# Deploy with kapp
+kapp deploy -a myapp -f kubernetes/
+
+# Template with ytt
+ytt -f config/ --data-values-file values.yaml
+
+# Bundle with imgpkg
+imgpkg push -b registry.example.com/my-bundle:v1.0.0 -f config/
+```

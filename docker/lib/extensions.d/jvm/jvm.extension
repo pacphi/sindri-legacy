@@ -1,0 +1,414 @@
+#!/bin/bash
+# jvm.sh.example - JVM languages and development tools
+# Extension API v1.0
+#
+# This extension installs JVM development environment with:
+# - SDKMAN for managing JVM SDKs
+# - Java (LTS versions: 25, 21, 17, 11)
+# - Build tools (Maven, Gradle)
+# - Languages (Kotlin, Scala, Clojure)
+# - Frameworks (Spring Boot, Micronaut)
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="jvm"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="JVM languages (Java, Kotlin, Scala, Clojure) with SDKMAN"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="native"  # SDKMAN manages everything
+EXT_UPGRADE_STRATEGY="manual"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for required tools
+  local missing_tools=()
+  for tool in curl wget sudo; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    print_status "Install with: sudo apt-get install ${missing_tools[*]}"
+    return 1
+  fi
+
+  # Check disk space (JVM needs ~1.5GB)
+  check_disk_space 2000
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing JVM development environment..."
+
+  # Install SDKMAN for managing JVM SDKs
+  if [[ -d "$HOME/.sdkman" ]]; then
+    print_warning "SDKMAN is already installed"
+    source "$HOME/.sdkman/bin/sdkman-init.sh"
+  else
+    print_status "Installing SDKMAN..."
+    if curl -s "https://get.sdkman.io" | bash; then
+      source "$HOME/.sdkman/bin/sdkman-init.sh"
+      print_success "SDKMAN installed successfully"
+    else
+      print_error "Failed to install SDKMAN"
+      return 1
+    fi
+  fi
+
+  # Install Java versions
+  print_status "Installing Java SDKs..."
+  local java_versions=(
+    "25.0.1-librca"    # Current LTS (Liberica)
+    "21.0.7-librca"    # LTS version (Liberica)
+    "17.0.16-librca"   # Previous LTS
+    "11.0.28-librca"   # Extended LTS
+  )
+
+  for version in "${java_versions[@]}"; do
+    print_debug "Installing Java $version..."
+    if sdk install java "$version" <<< "n" 2>/dev/null; then
+      print_debug "✓ Java $version installed"
+    else
+      print_debug "Java $version already installed or failed"
+    fi
+  done
+
+  # Set default Java version
+  sdk default java 25.0.1-librca 2>/dev/null
+
+  # Install build tools
+  print_status "Installing JVM build tools..."
+
+  # Maven
+  if ! command_exists mvn; then
+    print_debug "Installing Maven..."
+    sdk install maven 2>/dev/null && print_debug "✓ Maven installed"
+  fi
+
+  # Gradle
+  if ! command_exists gradle; then
+    print_debug "Installing Gradle..."
+    sdk install gradle 2>/dev/null && print_debug "✓ Gradle installed"
+  fi
+
+  # Install language-specific tools
+  print_status "Installing language-specific tools..."
+
+  # Kotlin
+  if ! command_exists kotlin; then
+    print_debug "Installing Kotlin..."
+    sdk install kotlin 2>/dev/null && print_debug "✓ Kotlin installed"
+  fi
+
+  # Scala and sbt
+  if ! command_exists scala; then
+    print_debug "Installing Scala..."
+    sdk install scala 2>/dev/null && print_debug "✓ Scala installed"
+  fi
+
+  if ! command_exists sbt; then
+    print_debug "Installing sbt..."
+    sdk install sbt 2>/dev/null && print_debug "✓ sbt installed"
+  fi
+
+  # Clojure
+  if ! command_exists clojure; then
+    print_debug "Installing Clojure..."
+    if curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh \
+       && chmod +x linux-install.sh \
+       && sudo ./linux-install.sh 2>/dev/null; then
+      rm -f linux-install.sh
+      print_debug "✓ Clojure installed"
+    else
+      rm -f linux-install.sh
+      print_warning "Failed to install Clojure"
+    fi
+  fi
+
+  # Leiningen
+  if ! command_exists lein; then
+    print_debug "Installing Leiningen..."
+    if wget -q https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+       && chmod +x lein \
+       && sudo mv lein /usr/local/bin/ \
+       && lein 2>/dev/null; then
+      print_debug "✓ Leiningen installed"
+    else
+      rm -f lein
+      print_warning "Failed to install Leiningen"
+    fi
+  fi
+
+  # Install additional JVM tools
+  print_status "Installing additional JVM tools..."
+
+  # JBang - Run Java code as scripts
+  if ! command_exists jbang; then
+    print_debug "Installing JBang..."
+    sdk install jbang 2>/dev/null && print_debug "✓ JBang installed"
+  fi
+
+  # Spring Boot CLI
+  if ! command_exists spring; then
+    print_debug "Installing Spring Boot CLI..."
+    sdk install springboot 2>/dev/null && print_debug "✓ Spring Boot CLI installed"
+  fi
+
+  # Micronaut CLI
+  if ! command_exists mn; then
+    print_debug "Installing Micronaut CLI..."
+    sdk install micronaut 2>/dev/null && print_debug "✓ Micronaut CLI installed"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring JVM environment..."
+
+  # Configure PATH for SSH sessions
+  if command_exists setup_tool_path 2>/dev/null; then
+    setup_tool_path "sdkman" \
+      'export SDKMAN_DIR="$HOME/.sdkman"' \
+      '[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"'
+  else
+    # Fallback: add to bashrc
+    if ! grep -q "SDKMAN_DIR" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - SDKMAN" >> "$HOME/.bashrc"
+      echo 'export SDKMAN_DIR="$HOME/.sdkman"' >> "$HOME/.bashrc"
+      echo '[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"' >> "$HOME/.bashrc"
+      print_success "Added SDKMAN to PATH"
+    fi
+  fi
+
+  # Create SSH wrappers - use dynamic wrappers since SDKMAN manages versions
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    create_tool_wrapper "sdk" "" "dynamic"
+    create_tool_wrapper "java" "" "dynamic"
+    create_tool_wrapper "javac" "" "dynamic"
+    create_tool_wrapper "mvn" "" "dynamic"
+    create_tool_wrapper "gradle" "" "dynamic"
+    create_tool_wrapper "kotlin" "" "dynamic"
+    create_tool_wrapper "scala" "" "dynamic"
+    create_tool_wrapper "sbt" "" "dynamic"
+  fi
+
+  # Create JVM aliases
+  if ! grep -q "# JVM aliases" "$HOME/.bashrc" 2>/dev/null; then
+    print_status "Creating JVM development aliases..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/jvm.bashrc.template" >> "$HOME/.bashrc"
+    print_success "JVM aliases created"
+  else
+    print_debug "JVM aliases already exist"
+  fi
+
+  print_success "JVM configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating JVM installation..."
+
+  local all_valid=true
+
+  # Check SDKMAN
+  if [[ -d "$HOME/.sdkman" ]]; then
+    print_success "SDKMAN: installed"
+    source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
+  else
+    print_error "SDKMAN not found"
+    all_valid=false
+  fi
+
+  # Check Java
+  if ! command_exists java; then
+    print_error "java not found"
+    all_valid=false
+  else
+    print_success "Java: $(java -version 2>&1 | head -n1)"
+  fi
+
+  # Check build tools
+  local build_tools=(mvn gradle)
+  local tools_found=0
+  for tool in "${build_tools[@]}"; do
+    command_exists "$tool" && ((tools_found++))
+  done
+  print_status "Build tools: $tools_found/${#build_tools[@]}"
+
+  # Check languages
+  local languages=(kotlin scala clojure)
+  local langs_found=0
+  for lang in "${languages[@]}"; do
+    command_exists "$lang" && ((langs_found++))
+  done
+  print_status "Languages: $langs_found/${#languages[@]}"
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if [[ ! -d "$HOME/.sdkman" ]] || ! command_exists java; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
+
+  # Show installed tools with versions
+  print_status "Installed tools:"
+  echo "  ✓ SDKMAN"
+
+  if command_exists java; then
+    echo "  ✓ Java $(java -version 2>&1 | head -n1 | awk '{print $3}' | tr -d '"')"
+  fi
+
+  echo ""
+  print_status "Installed build tools:"
+  for tool in mvn gradle sbt; do
+    if command_exists "$tool"; then
+      local tool_version=$(sdk current $tool 2>/dev/null | awk '{print $NF}')
+      echo "  ✓ $tool $tool_version"
+    fi
+  done
+
+  echo ""
+  print_status "Installed languages:"
+  for lang in kotlin scala clojure; do
+    command_exists "$lang" && echo "  ✓ $lang"
+  done
+
+  echo ""
+  print_status "Installed CLIs:"
+  for cli in jbang spring mn lein; do
+    command_exists "$cli" && echo "  ✓ $cli"
+  done
+
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Checking ${EXT_NAME}..."
+
+  # SDKMAN and its managed SDKs require manual upgrade
+  # Use 'sdk upgrade' commands to update individual tools
+  check_native_update "sdk" "version"
+
+  print_status ""
+  print_status "To upgrade JVM tools manually:"
+  print_status "  sdk upgrade java       # Upgrade Java installations"
+  print_status "  sdk upgrade maven      # Upgrade Maven"
+  print_status "  sdk upgrade gradle     # Upgrade Gradle"
+  print_status "  sdk upgrade kotlin     # Upgrade Kotlin"
+  print_status "  sdk selfupdate         # Update SDKMAN itself"
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling JVM development environment..."
+
+  show_dependent_extensions_warning "java" "mvn" "gradle" "kotlin" "scala"
+
+  if ! prompt_confirmation "Continue with JVM removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove SDKMAN
+  if [[ -d "$HOME/.sdkman" ]]; then
+    print_status "Removing SDKMAN and all managed SDKs..."
+    rm -rf "$HOME/.sdkman"
+    print_success "SDKMAN removed"
+  fi
+
+  # Remove Clojure
+  if command_exists clojure; then
+    print_status "Removing Clojure..."
+    sudo rm -f /usr/local/bin/clojure /usr/local/bin/clj
+    sudo rm -rf /usr/local/lib/clojure
+  fi
+
+  # Remove Leiningen
+  if [[ -f "/usr/local/bin/lein" ]]; then
+    sudo rm -f /usr/local/bin/lein
+  fi
+
+  # Remove aliases
+  cleanup_bashrc "# JVM aliases"
+
+  # Remove SDKMAN init from bashrc
+  cleanup_bashrc "# ${EXT_NAME}"
+
+  print_success "JVM development environment uninstalled"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

@@ -1,0 +1,480 @@
+#!/bin/bash
+# monitoring.sh.example - Claude monitoring and usage tracking tools
+# Extension API v1.0
+#
+# This extension installs monitoring tools for tracking Claude API usage:
+# - UV package manager (Python tool installer)
+# - claude-monitor (Python-based monitoring)
+# - claude-usage-cli (Node.js-based usage tracking)
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="monitoring"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Claude monitoring and usage tracking tools"
+EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="apt"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for Python 3 (required for claude-monitor)
+  # Must be installed via the python extension (mise-managed), not system python
+  if ! command_exists python3; then
+    print_error "python3 is required but not installed"
+    print_status "Install the python extension first: extension-manager install python"
+    return 1
+  fi
+
+  # Verify Python is managed by mise (from python extension), not system Python
+  if command_exists mise; then
+    if ! mise ls python &>/dev/null || ! mise ls 2>&1 | grep -q "python"; then
+      print_error "Python must be installed via the python extension (mise-managed)"
+      print_status "System Python detected, but monitoring requires mise-managed Python"
+      print_status "Install the python extension first: extension-manager install python"
+      return 1
+    fi
+  else
+    # If mise is not available, check if python is from system
+    # This helps catch the case where system python exists but python extension isn't installed
+    python_path=$(command -v python3 2>/dev/null || echo "")
+    if [[ "$python_path" != *"mise"* ]] && [[ "$python_path" != *".local"* ]]; then
+      print_error "Python must be installed via the python extension"
+      print_status "System Python detected at: $python_path"
+      print_status "Install the python extension first: extension-manager install python"
+      return 1
+    fi
+  fi
+
+  # Check for Node.js/npm (optional - for claude-usage-cli)
+  if ! command_exists node || ! command_exists npm; then
+    print_warning "Node.js/npm not found - claude-usage-cli will not be available"
+    print_status "For full monitoring features, install nodejs: extension-manager install nodejs"
+    print_status "Note: Core monitoring (claude-monitor) will still work"
+  fi
+
+  # Check for curl (for UV installer)
+  if ! command_exists curl; then
+    print_error "curl is required but not installed"
+    print_status "Install with: sudo apt-get install curl"
+    return 1
+  fi
+
+  # Check for sudo
+  if ! command_exists sudo; then
+    print_error "sudo is required but not installed"
+    return 1
+  fi
+
+  # Check disk space (monitoring tools need ~100MB)
+  check_disk_space 200
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing monitoring tools..."
+
+  # Install UV package manager if not present
+  if ! command_exists uv; then
+    print_status "Installing UV package manager..."
+    if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+      print_success "UV package manager installed"
+
+      # Source UV environment
+      if [[ -f "$HOME/.cargo/env" ]]; then
+        source "$HOME/.cargo/env"
+      else
+        export PATH="$HOME/.cargo/bin:$PATH"
+      fi
+
+      if [[ -f "$HOME/.local/bin/env" ]]; then
+        source "$HOME/.local/bin/env"
+      fi
+    else
+      print_warning "UV installation failed, will use pip3 as fallback"
+    fi
+  else
+    print_success "UV package manager already installed"
+  fi
+
+  # Install claude-monitor using UV or pip3
+  print_status "Installing claude-monitor..."
+
+  # Check if claude-monitor is already installed
+  if command_exists claude-monitor; then
+    print_warning "claude-monitor already installed"
+  elif command_exists uv; then
+    # Check if already installed as UV tool
+    if uv tool list 2>/dev/null | grep -q "claude-monitor"; then
+      print_warning "claude-monitor already installed via UV"
+    elif timeout 180 uv tool install claude-monitor 2>&1; then
+      print_success "claude-monitor installed via UV"
+    else
+      print_warning "UV installation failed or timed out, trying pip3..."
+      # Fallback to pip3
+      if ! command_exists pip3; then
+        print_status "Installing python3-pip..."
+        sudo apt-get update -qq && sudo apt-get install -y python3-pip
+      fi
+
+      if timeout 120 pip3 install claude-monitor 2>&1; then
+        print_success "claude-monitor installed via pip3"
+      else
+        print_error "Failed to install claude-monitor"
+        return 1
+      fi
+    fi
+  else
+    # UV not available, use pip3
+    if ! command_exists pip3; then
+      print_status "Installing python3-pip..."
+      sudo apt-get update -qq && sudo apt-get install -y python3-pip
+    fi
+
+    # Check if already installed via pip
+    if pip3 show claude-monitor >/dev/null 2>&1; then
+      print_warning "claude-monitor already installed via pip3"
+    elif timeout 120 pip3 install claude-monitor 2>&1; then
+      print_success "claude-monitor installed via pip3"
+    else
+      print_error "Failed to install claude-monitor"
+      return 1
+    fi
+  fi
+
+  # Install claude-usage-cli via npm
+  print_status "Installing claude-usage-cli..."
+  if command_exists claude-usage; then
+    print_warning "claude-usage-cli already installed"
+  elif npm install -g claude-usage-cli 2>&1; then
+    print_success "claude-usage-cli installed"
+  else
+    print_warning "Failed to install claude-usage-cli"
+    # Don't fail - claude-monitor is more important
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring monitoring tools..."
+
+  # Set up UV PATH if installed
+  if command_exists uv; then
+    local uv_bin_path="$HOME/.local/bin"
+    if [[ -d "$uv_bin_path" ]]; then
+      if ! grep -q "$uv_bin_path" "$HOME/.bashrc" 2>/dev/null; then
+        echo "" >> "$HOME/.bashrc"
+        echo "# ${EXT_NAME} - UV tools" >> "$HOME/.bashrc"
+        echo "export PATH=\"$uv_bin_path:\$PATH\"" >> "$HOME/.bashrc"
+        print_success "Added UV bin to PATH"
+      fi
+
+      # Export for current session
+      export PATH="$uv_bin_path:$PATH"
+    fi
+  fi
+
+  # Set up SSH wrappers for monitoring tools
+  if command_exists claude-monitor; then
+    local monitor_path=$(which claude-monitor)
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "claude-monitor" "$monitor_path"
+    fi
+  fi
+
+  if command_exists claude-usage; then
+    local usage_path=$(which claude-usage)
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "claude-usage" "$usage_path"
+    fi
+  fi
+
+  # Create helpful aliases
+  if [[ ! -f "$HOME/.bash_aliases" ]] || ! grep -q "claude-stats" "$HOME/.bash_aliases" 2>/dev/null; then
+    echo "" >> "$HOME/.bash_aliases"
+    echo "# ${EXT_NAME} - monitoring aliases" >> "$HOME/.bash_aliases"
+    echo "alias claude-stats='claude-monitor stats'" >> "$HOME/.bash_aliases"
+    echo "alias claude-cost='claude-usage cost'" >> "$HOME/.bash_aliases"
+    print_success "Created monitoring aliases"
+  fi
+
+  print_success "Monitoring tools configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating monitoring tools installation..."
+
+  local all_valid=true
+
+  # Check claude-monitor command
+  if ! command_exists claude-monitor; then
+    print_error "claude-monitor command not found"
+    all_valid=false
+  else
+    local monitor_version
+    if monitor_version=$(claude-monitor --version 2>&1 | head -n1); then
+      print_success "claude-monitor: $monitor_version"
+    else
+      print_success "claude-monitor: installed"
+    fi
+  fi
+
+  # Check claude-usage command (optional, don't fail if missing)
+  if command_exists claude-usage; then
+    local usage_version
+    if usage_version=$(claude-usage --version 2>&1 | head -n1); then
+      print_success "claude-usage: $usage_version"
+    else
+      print_success "claude-usage: installed"
+    fi
+  else
+    print_warning "claude-usage not found (optional)"
+  fi
+
+  # Check UV installation (optional)
+  if command_exists uv; then
+    local uv_version
+    if uv_version=$(uv --version 2>&1); then
+      print_success "UV: $uv_version"
+    fi
+  else
+    print_debug "UV not installed (using pip3)"
+  fi
+
+  # Check pip3 if UV not available
+  if ! command_exists uv && ! command_exists pip3; then
+    print_warning "Neither UV nor pip3 is available"
+    all_valid=false
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists claude-monitor; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Monitoring-specific tool listing with versions
+  print_status "Installed tools:"
+
+  # Show claude-monitor status
+  if command_exists claude-monitor; then
+    local monitor_version
+    if monitor_version=$(claude-monitor --version 2>&1 | head -n1); then
+      echo "  ✓ claude-monitor: $monitor_version"
+    else
+      echo "  ✓ claude-monitor: installed"
+    fi
+
+    # Show installation method
+    local monitor_path=$(which claude-monitor)
+    if [[ "$monitor_path" == *".local/bin"* ]]; then
+      echo "    (via UV)"
+    else
+      echo "    (via pip3)"
+    fi
+  fi
+
+  # Show claude-usage status
+  if command_exists claude-usage; then
+    local usage_version
+    if usage_version=$(claude-usage --version 2>&1 | head -n1); then
+      echo "  ✓ claude-usage: $usage_version"
+    else
+      echo "  ✓ claude-usage: installed"
+    fi
+  else
+    echo "  ✗ claude-usage: not installed"
+  fi
+
+  # Show UV status
+  if command_exists uv; then
+    local uv_version
+    if uv_version=$(uv --version 2>&1); then
+      echo "  ✓ uv: $uv_version"
+    fi
+
+    # List UV tools
+    local uv_tools=$(uv tool list 2>/dev/null)
+    if [[ -n "$uv_tools" ]]; then
+      echo "    UV tools:"
+      echo "$uv_tools" | sed 's/^/      /'
+    fi
+  else
+    echo "  ✗ uv: not installed (using pip3)"
+  fi
+
+  # Show aliases
+  if grep -q "claude-stats" "$HOME/.bash_aliases" 2>/dev/null; then
+    echo "  ✓ aliases configured: claude-stats, claude-cost"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling monitoring tools..."
+
+  # Check for dependent extensions
+  local dependent_exts=()
+  mapfile -t dependent_exts < <(check_dependent_extensions "claude-monitor" "claude-usage" "uv")
+
+  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
+    print_warning "The following active extensions depend on monitoring tools and may stop working:"
+    for ext in "${dependent_exts[@]}"; do
+      echo "  - $ext"
+    done
+    echo ""
+  fi
+
+  if ! prompt_confirmation "Continue with monitoring tools removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove claude-monitor
+  if command_exists claude-monitor; then
+    print_status "Removing claude-monitor..."
+
+    # Try UV first
+    if command_exists uv; then
+      if uv tool uninstall claude-monitor; then
+        print_success "claude-monitor removed via UV"
+      else
+        print_warning "Failed to remove via UV, trying pip3..."
+        pip3 uninstall -y claude-monitor 2>/dev/null || true
+      fi
+    else
+      # Use pip3
+      if command_exists pip3; then
+        pip3 uninstall -y claude-monitor
+        print_success "claude-monitor removed via pip3"
+      fi
+    fi
+  fi
+
+  # Remove claude-usage-cli
+  if command_exists claude-usage; then
+    print_status "Removing claude-usage-cli..."
+    if npm uninstall -g claude-usage-cli; then
+      print_success "claude-usage-cli removed"
+    else
+      print_warning "Failed to remove claude-usage-cli"
+    fi
+  fi
+
+  # Ask about UV removal
+  if command_exists uv; then
+    print_warning "UV package manager is installed"
+    read -p "Remove UV package manager? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      print_status "Removing UV..."
+
+      # Remove UV using its uninstall script
+      if [[ -f "$HOME/.cargo/bin/uv-uninstall" ]]; then
+        "$HOME/.cargo/bin/uv-uninstall"
+      else
+        # Manual cleanup
+        rm -rf "$HOME/.cargo/bin/uv" "$HOME/.local/bin/uv"
+        rm -rf "$HOME/.local/share/uv"
+      fi
+
+      print_success "UV package manager removed"
+    else
+      print_status "UV package manager preserved"
+    fi
+  fi
+
+  # Remove PATH modifications
+  if grep -q "# ${EXT_NAME} - UV tools" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - UV tools"
+    print_success "Removed PATH modification from .bashrc"
+  fi
+
+  # Remove aliases
+  if grep -q "# ${EXT_NAME} - monitoring aliases" "$HOME/.bash_aliases" 2>/dev/null; then
+    sed -i "/# ${EXT_NAME} - monitoring aliases/,+2d" "$HOME/.bash_aliases"
+    print_success "Removed monitoring aliases"
+  fi
+
+  print_success "Monitoring tools uninstalled"
+  print_warning "Restart your shell or run: source ~/.bashrc"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    # Upgrade monitoring tools via APT
+    if upgrade_apt_packages "htop" "iotop" "iftop" "glances" "dstat" "sysstat"; then
+        print_success "Monitoring tools upgraded successfully"
+        return 0
+    else
+        print_error "Monitoring tools upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

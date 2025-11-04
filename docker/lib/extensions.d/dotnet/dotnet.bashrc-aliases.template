@@ -1,0 +1,76 @@
+
+# .NET Core aliases
+alias dn="dotnet"
+alias dnr="dotnet run"
+alias dnb="dotnet build"
+alias dnc="dotnet clean"
+alias dnt="dotnet test"
+alias dnp="dotnet publish"
+alias dnw="dotnet watch"
+alias dnwr="dotnet watch run"
+alias dnwt="dotnet watch test"
+
+# Project management
+alias dnnew="dotnet new"
+alias dnrestore="dotnet restore"
+alias dnadd="dotnet add package"
+alias dnrem="dotnet remove package"
+alias dnlist="dotnet list package"
+alias dnout="dotnet outdated"
+alias dnsln="dotnet new sln"
+alias dnaddsln="dotnet sln add"
+alias dnremsln="dotnet sln remove"
+
+# Entity Framework Core
+alias ef="dotnet ef"
+alias efm="dotnet ef migrations"
+alias efma="dotnet ef migrations add"
+alias efmr="dotnet ef migrations remove"
+alias efml="dotnet ef migrations list"
+alias efdb="dotnet ef database"
+alias efdbu="dotnet ef database update"
+alias efdbd="dotnet ef database drop"
+
+# Templates
+alias dnweb="dotnet new web"
+alias dnapi="dotnet new webapi"
+alias dnmvc="dotnet new mvc"
+alias dnrazor="dotnet new razor"
+alias dnblazor="dotnet new blazor"
+alias dnclass="dotnet new classlib"
+alias dnconsole="dotnet new console"
+alias dnxunit="dotnet new xunit"
+alias dnnunit="dotnet new nunit"
+alias dnmstest="dotnet new mstest"
+
+# Tool shortcuts
+alias dnf="dotnet format"
+alias dns="dotnet serve"
+alias dnscript="dotnet script"
+alias dnef="dotnet ef"
+alias dngen="dotnet aspnet-codegenerator"
+
+# Package management
+alias nuget="mono /usr/local/bin/nuget.exe"
+alias paket="mono .paket/paket.exe"
+
+# Build configurations
+alias dnbd="dotnet build -c Debug"
+alias dnbr="dotnet build -c Release"
+alias dnpd="dotnet publish -c Debug"
+alias dnpr="dotnet publish -c Release"
+
+# Testing
+alias dntv="dotnet test --verbosity normal"
+alias dntc="dotnet test --collect:\"XPlat Code Coverage\""
+alias dntr="dotnet test --results-directory ./TestResults"
+alias dntf="dotnet test --filter"
+
+# Performance
+alias dncount="dotnet counters"
+alias dntrace="dotnet trace"
+alias dndump="dotnet dump"
+alias dngc="dotnet gcdump"
+
+# Docker support
+alias dndk="dotnet publish -c Release -o out && docker build -t app ."

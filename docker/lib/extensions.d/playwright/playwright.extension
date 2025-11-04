@@ -1,0 +1,490 @@
+#!/bin/bash
+# playwright.sh.example - Playwright browser automation framework
+# Extension API v1.0
+#
+# This extension installs Playwright for browser automation and visual verification.
+# It includes Chromium browser, TypeScript support, and test configuration.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="playwright"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Playwright browser automation framework with Chromium"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="mise"  # Uses mise npm plugin
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for Node.js and npm
+  if ! command_exists node; then
+    print_error "Node.js is required but not installed"
+    print_status "Install the nodejs extension first: extension-manager install nodejs"
+    return 1
+  fi
+
+  if ! command_exists npm; then
+    print_error "npm is required but not installed"
+    print_status "npm should be installed with Node.js"
+    return 1
+  fi
+
+  # Check WORKSPACE_DIR is set
+  if [[ -z "${WORKSPACE_DIR:-}" ]]; then
+    print_error "WORKSPACE_DIR is not set"
+    return 1
+  fi
+
+  if [[ ! -d "$WORKSPACE_DIR" ]]; then
+    print_error "Workspace directory does not exist: $WORKSPACE_DIR"
+    return 1
+  fi
+
+  # Check disk space (Playwright + Chromium needs ~500MB)
+  check_disk_space 1000
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Playwright..."
+
+  # Ensure we're in workspace directory
+  cd "$WORKSPACE_DIR" || return 1
+
+  # Check if Playwright is already installed
+  if [[ -f "node_modules/.bin/playwright" ]]; then
+    local pw_version
+    if pw_version=$(npx playwright --version 2>/dev/null); then
+      print_warning "Playwright is already installed: $pw_version"
+      print_status "Skipping installation (run 'npm install' manually to update)"
+      return 0
+    fi
+  fi
+
+  # Initialize package.json if it doesn't exist
+  if [[ ! -f "package.json" ]]; then
+    print_status "Initializing Node.js project..."
+    if ! npm init -y; then
+      print_error "Failed to initialize package.json"
+      return 1
+    fi
+  fi
+
+  # Set ES modules mode
+  print_status "Setting up ES modules..."
+  npm pkg set type="module"
+
+  # Install Playwright packages
+  print_status "Installing Playwright packages..."
+  if ! npm install -D playwright @playwright/test; then
+    print_error "Failed to install Playwright packages"
+    return 1
+  fi
+
+  print_success "Playwright packages installed"
+
+  # Install Chromium browser
+  print_status "Installing Chromium browser..."
+  if npx playwright install chromium; then
+    print_success "Chromium browser installed"
+  else
+    print_warning "Chromium browser installation had issues"
+  fi
+
+  # Install Chromium dependencies
+  print_status "Installing Chromium system dependencies..."
+  if npx playwright install-deps chromium; then
+    print_success "Chromium dependencies installed"
+  else
+    print_warning "Chromium dependencies installation had issues"
+  fi
+
+  # Install TypeScript and build tools
+  print_status "Installing TypeScript and development tools..."
+  if npm install -D typescript @types/node; then
+    print_success "TypeScript tools installed"
+  else
+    print_warning "TypeScript installation had issues"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Playwright..."
+
+  cd "$WORKSPACE_DIR" || return 1
+
+  # Copy TypeScript configuration
+  print_status "Setting up TypeScript configuration..."
+  if [[ -f "/docker/config/tsconfig.json" ]]; then
+    cp /docker/config/tsconfig.json tsconfig.json
+    print_success "TypeScript configuration copied"
+  else
+    # Create basic tsconfig.json if template not found
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.tsconfig.template" > tsconfig.json
+    print_success "Basic TypeScript configuration created"
+  fi
+
+  # Copy Playwright configuration
+  print_status "Setting up Playwright configuration..."
+  if [[ -f "/docker/config/playwright.config.ts" ]]; then
+    cp /docker/config/playwright.config.ts playwright.config.ts
+    print_success "Playwright configuration copied"
+  else
+    # Create basic playwright.config.ts if template not found
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.playwright-config.template" > playwright.config.ts
+    print_success "Basic Playwright configuration created"
+  fi
+
+  # Create tests directory and example test
+  print_status "Creating example test..."
+  mkdir -p tests
+  if [[ ! -f "tests/example.spec.ts" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/playwright.test-spec.template" > tests/example.spec.ts
+    print_success "Example test created: tests/example.spec.ts"
+  else
+    print_debug "Example test already exists"
+  fi
+
+  # Update package.json scripts
+  print_status "Adding npm scripts..."
+  npm pkg set scripts.build="tsc"
+  npm pkg set scripts.test="playwright test"
+  npm pkg set scripts.lint="echo 'Add linting here'"
+  npm pkg set scripts.typecheck="tsc --noEmit"
+  npm pkg set scripts.playwright="playwright test"
+
+  # Create wrapper script for SSH access
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    if [[ -f "$WORKSPACE_DIR/node_modules/.bin/playwright" ]]; then
+      print_status "Creating playwright wrapper for SSH access..."
+      create_tool_wrapper "playwright" "npx playwright" "dynamic"
+      print_success "Playwright wrapper created"
+    fi
+  else
+    print_debug "create_tool_wrapper not available, skipping wrapper creation"
+  fi
+
+  print_success "Playwright configuration completed"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Playwright installation..."
+
+  local all_valid=true
+
+  cd "$WORKSPACE_DIR" || return 1
+
+  # Check Playwright binary exists
+  if [[ ! -f "node_modules/.bin/playwright" ]]; then
+    print_error "Playwright binary not found in node_modules"
+    all_valid=false
+  else
+    print_success "Playwright binary found"
+
+    # Try to get version (with retries for CI environments)
+    local max_attempts=3
+    local attempt=1
+    local pw_version="unknown"
+
+    while [ $attempt -le $max_attempts ]; do
+      if pw_version=$(npx playwright --version 2>/dev/null); then
+        print_success "Playwright version: $pw_version"
+        break
+      else
+        if [ $attempt -lt $max_attempts ]; then
+          print_debug "Version check attempt $attempt failed, retrying..."
+          sleep 2
+          attempt=$((attempt + 1))
+        else
+          print_warning "Playwright binary exists but version check failed after $max_attempts attempts"
+          print_warning "This may work in normal use, but failed in current environment"
+          # Don't fail - Playwright is installed, version check just failed
+        fi
+      fi
+    done
+  fi
+
+  # Check configuration files
+  if [[ ! -f "playwright.config.ts" ]]; then
+    print_warning "Playwright configuration file not found"
+  else
+    print_success "Playwright configuration: playwright.config.ts"
+  fi
+
+  if [[ ! -f "tsconfig.json" ]]; then
+    print_warning "TypeScript configuration file not found"
+  else
+    print_success "TypeScript configuration: tsconfig.json"
+  fi
+
+  # Check test directory
+  if [[ ! -d "tests" ]]; then
+    print_warning "Tests directory not found"
+  else
+    local test_count
+    test_count=$(find tests -name "*.spec.ts" -o -name "*.test.ts" 2>/dev/null | wc -l)
+    print_success "Test directory exists with $test_count test file(s)"
+  fi
+
+  # Check package.json dependencies
+  if command_exists jq 2>/dev/null && [[ -f "package.json" ]]; then
+    local has_playwright
+    has_playwright=$(jq -r '.devDependencies.playwright // "missing"' package.json)
+    if [[ "$has_playwright" != "missing" ]]; then
+      print_success "Playwright package in devDependencies: $has_playwright"
+    else
+      print_error "Playwright not found in package.json devDependencies"
+      all_valid=false
+    fi
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  cd "$WORKSPACE_DIR" || {
+    echo "Status: ✗ NOT INSTALLED (cannot access workspace)"
+    return 1
+  }
+
+  # Check installation status
+  if [[ ! -f "node_modules/.bin/playwright" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  local pw_version
+  if pw_version=$(npx playwright --version 2>/dev/null); then
+    echo "  ✓ playwright: $pw_version"
+  else
+    echo "  ✓ playwright: installed (version check failed)"
+  fi
+
+  if [[ -f "tsconfig.json" ]]; then
+    echo "  ✓ TypeScript: configured"
+  fi
+
+  echo ""
+  print_status "Configuration:"
+  [[ -f "playwright.config.ts" ]] && echo "  ✓ playwright.config.ts" || echo "  ✗ playwright.config.ts (not found)"
+  [[ -f "tsconfig.json" ]] && echo "  ✓ tsconfig.json" || echo "  ✗ tsconfig.json (not found)"
+
+  # Show test files count
+  if [[ -d "tests" ]]; then
+    local test_count
+    test_count=$(find tests -name "*.spec.ts" -o -name "*.test.ts" 2>/dev/null | wc -l)
+    echo ""
+    print_status "Test files: $test_count"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  cd "$WORKSPACE_DIR" || return 1
+
+  # Get current version
+  print_status "Current version:"
+  if [[ -f "node_modules/.bin/playwright" ]]; then
+    npx playwright --version 2>/dev/null || echo "  playwright: version check failed"
+  else
+    echo "  playwright: not installed"
+  fi
+  echo ""
+
+  # Upgrade via npm
+  if [[ -f "package.json" ]]; then
+    print_status "Upgrading Playwright packages..."
+    if npm update playwright @playwright/test 2>&1; then
+      print_success "Playwright packages upgraded"
+
+      # Update browsers
+      print_status "Updating Chromium browser..."
+      if npx playwright install chromium 2>&1; then
+        print_success "Chromium browser updated"
+      else
+        print_warning "Failed to update Chromium browser"
+      fi
+
+      echo ""
+      print_status "Updated version:"
+      npx playwright --version 2>/dev/null || echo "  playwright: version check failed"
+
+      return 0
+    else
+      print_error "Failed to upgrade Playwright"
+      return 1
+    fi
+  else
+    print_error "package.json not found in $WORKSPACE_DIR"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Playwright..."
+
+  cd "$WORKSPACE_DIR" || {
+    print_error "Cannot access workspace directory"
+    return 1
+  }
+
+  # Check for dependent extensions
+  local dependent_exts=()
+  mapfile -t dependent_exts < <(check_dependent_extensions "playwright" "npx playwright")
+
+  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
+    print_warning "The following active extensions depend on Playwright and may stop working:"
+    for ext in "${dependent_exts[@]}"; do
+      echo "  - $ext"
+    done
+    echo ""
+  fi
+
+  if ! prompt_confirmation "Continue with Playwright removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove Playwright packages
+  if [[ -f "package.json" ]]; then
+    print_status "Removing Playwright packages from package.json..."
+    if npm uninstall playwright @playwright/test; then
+      print_success "Playwright packages removed"
+    else
+      print_warning "Failed to uninstall some packages"
+    fi
+
+    # Remove TypeScript if no other dependencies need it
+    print_status "Checking TypeScript usage..."
+    local other_deps
+    other_deps=$(npm list --depth=0 2>/dev/null | grep -v "playwright" | grep -c "@types/" || echo "0")
+    if [[ $other_deps -eq 0 ]]; then
+      print_status "Removing TypeScript (no other dependencies need it)..."
+      npm uninstall typescript @types/node 2>/dev/null || true
+    else
+      print_status "Keeping TypeScript (used by other packages)"
+    fi
+  fi
+
+  # Remove configuration files
+  local files_to_remove=(
+    "playwright.config.ts"
+    "tests/example.spec.ts"
+  )
+
+  for file in "${files_to_remove[@]}"; do
+    if [[ -f "$file" ]]; then
+      print_warning "Configuration file exists: $file"
+      read -p "Remove $file? (y/N): " -r
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -f "$file"
+        print_success "Removed: $file"
+      else
+        print_status "Preserved: $file"
+      fi
+    fi
+  done
+
+  # Ask about tsconfig.json separately (might be used by other tools)
+  if [[ -f "tsconfig.json" ]]; then
+    print_warning "TypeScript configuration exists: tsconfig.json"
+    print_status "This file might be used by other tools"
+    read -p "Remove tsconfig.json? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -f "tsconfig.json"
+      print_success "Removed: tsconfig.json"
+    else
+      print_status "Preserved: tsconfig.json"
+    fi
+  fi
+
+  # Clean up empty tests directory
+  if [[ -d "tests" ]]; then
+    if [[ -z "$(ls -A tests 2>/dev/null)" ]]; then
+      rmdir tests
+      print_success "Removed empty tests directory"
+    else
+      print_status "Tests directory contains other files (preserved)"
+    fi
+  fi
+
+  # Remove npm scripts
+  if [[ -f "package.json" ]] && command_exists jq 2>/dev/null; then
+    print_status "Removing Playwright-related npm scripts..."
+    local tmp_file=$(mktemp)
+    jq 'del(.scripts.playwright)' package.json > "$tmp_file" && mv "$tmp_file" package.json
+    print_success "npm scripts cleaned up"
+  fi
+
+  print_success "Playwright uninstalled"
+  print_warning "Chromium browser binaries may still be in ~/.cache/ms-playwright/"
+  print_status "To remove browsers manually: rm -rf ~/.cache/ms-playwright/"
+
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

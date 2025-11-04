@@ -1,0 +1,7 @@
+[tools]
+terraform = "latest"
+kubectl = "latest"
+helm = "latest"
+
+# k9s via ubi backend (GitHub releases)
+"ubi:derailed/k9s" = "latest"

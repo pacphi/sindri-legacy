@@ -1,0 +1,445 @@
+#!/bin/bash
+# claude-marketplace.extension - Claude Code plugin marketplace integration
+# Extension API v2.0
+#
+# This extension configures Claude Code to use plugins from claudecodemarketplace.com
+# and installs curated plugins specified in a .plugins file.
+# Requires the claude extension to be installed first.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="claude-marketplace"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Claude Code plugin marketplace integration for claudecodemarketplace.com"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+MARKETPLACE_NAME="claudecodemarketplace"
+MARKETPLACE_URL="https://claudecodemarketplace.com/"
+CLAUDE_CONFIG_DIR="$HOME/.claude"
+CLAUDE_SETTINGS="$CLAUDE_CONFIG_DIR/settings.json"
+PLUGINS_FILE="/workspace/.plugins"
+
+# Select appropriate example file based on CI mode
+if is_ci_mode; then
+  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.ci.example"
+else
+  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.example"
+fi
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Hard requirement: claude extension must be installed
+  if ! command_exists claude; then
+    print_error "Claude CLI is required but not installed"
+    print_status "Install with: extension-manager install claude"
+    return 1
+  fi
+
+  print_success "Claude CLI is available"
+
+  # Check Claude config directory exists
+  if [[ ! -d "$CLAUDE_CONFIG_DIR" ]]; then
+    print_error "Claude config directory not found: $CLAUDE_CONFIG_DIR"
+    print_status "Run 'claude' first to initialize configuration"
+    return 1
+  fi
+
+  print_success "Claude config directory exists"
+
+  # Check for git (required for cloning plugin repositories)
+  if ! command_exists git; then
+    print_error "git is required but not installed"
+    print_status "git is needed to clone plugin repositories"
+    return 1
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing ${EXT_NAME}..."
+
+  # Check if marketplace is already configured
+  if [[ -f "$CLAUDE_SETTINGS" ]] && grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
+    print_warning "Marketplace already configured in settings.json"
+  else
+    print_status "Configuring marketplace in Claude settings..."
+    configure_marketplace
+  fi
+
+  # Copy .plugins.example to workspace if it doesn't exist
+  if [[ ! -f "/workspace/.plugins.example" ]]; then
+    print_status "Creating .plugins.example template..."
+    if cp "$PLUGINS_EXAMPLE" /workspace/.plugins.example; then
+      print_success "Created /workspace/.plugins.example"
+    else
+      print_warning "Could not create .plugins.example template"
+    fi
+  fi
+
+  # In CI mode, automatically create .plugins file from CI template
+  if is_ci_mode && [[ ! -f "$PLUGINS_FILE" ]]; then
+    print_status "CI mode: Creating .plugins from CI template..."
+    if cp "$SCRIPT_DIR/.plugins.ci.example" "$PLUGINS_FILE"; then
+      print_success "Created $PLUGINS_FILE from CI template (3 test plugins)"
+    else
+      print_warning "Could not create CI plugins file"
+    fi
+  fi
+
+  # Install plugins from .plugins file if it exists
+  if [[ -f "$PLUGINS_FILE" ]]; then
+    print_status "Found .plugins file, installing specified plugins..."
+    install_plugins_from_file
+  else
+    print_status "No .plugins file found (optional)"
+    print_status "Create $PLUGINS_FILE to auto-install plugins"
+    print_status "See /workspace/.plugins.example for template"
+  fi
+
+  print_success "${EXT_NAME} installation complete"
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+configure_marketplace() {
+  # Ensure settings.json exists with valid JSON
+  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+    echo "{}" > "$CLAUDE_SETTINGS"
+  fi
+
+  # Add marketplace to settings.json
+  # Note: This is a simplified approach. In production, we'd use jq for proper JSON manipulation
+  print_status "Adding marketplace to Claude settings..."
+
+  # Create temporary settings with marketplace
+  cat > "${CLAUDE_SETTINGS}.tmp" << EOF
+{
+  "extraKnownMarketplaces": {
+    "${MARKETPLACE_NAME}": {
+      "source": {
+        "url": "${MARKETPLACE_URL}marketplace.json"
+      }
+    }
+  }
+}
+EOF
+
+  # Merge with existing settings if they exist and are valid JSON
+  if command_exists jq && jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
+    jq -s '.[0] * .[1]' "$CLAUDE_SETTINGS" "${CLAUDE_SETTINGS}.tmp" > "${CLAUDE_SETTINGS}.new"
+    mv "${CLAUDE_SETTINGS}.new" "$CLAUDE_SETTINGS"
+    rm "${CLAUDE_SETTINGS}.tmp"
+  else
+    # Fallback: just use the new settings if jq not available or invalid JSON
+    mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
+  fi
+
+  print_success "Marketplace configured"
+}
+
+install_plugins_from_file() {
+  local plugin_count=0
+  local installed_count=0
+  local failed_count=0
+
+  while IFS= read -r line; do
+    # Skip comments and empty lines
+    [[ "$line" =~ ^#.*$ ]] && continue
+    [[ -z "$line" ]] && continue
+
+    plugin_count=$((plugin_count + 1))
+    print_status "Installing plugin: $line"
+
+    # Check if already installed
+    if claude /plugin list 2>/dev/null | grep -q "$line"; then
+      print_success "Plugin already installed: $line"
+      installed_count=$((installed_count + 1))
+      continue
+    fi
+
+    # Install plugin (using marketplace add for GitHub repos)
+    if claude /plugin marketplace add "$line" 2>&1; then
+      print_success "Installed: $line"
+      installed_count=$((installed_count + 1))
+    else
+      print_warning "Failed to install: $line"
+      failed_count=$((failed_count + 1))
+    fi
+  done < "$PLUGINS_FILE"
+
+  echo ""
+  print_status "Plugin installation summary:"
+  echo "  Total: $plugin_count"
+  echo "  Installed: $installed_count"
+  echo "  Failed: $failed_count"
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring ${EXT_NAME}..."
+
+  # Verify marketplace is accessible
+  print_status "Verifying marketplace configuration..."
+  if command_exists claude; then
+    # List marketplaces to verify configuration
+    if claude /plugin marketplace list >/dev/null 2>&1; then
+      print_success "Claude plugin system is operational"
+    else
+      print_warning "Could not verify plugin system (may be normal)"
+    fi
+  fi
+
+  # Create SSH wrapper for claude command if not already created by claude extension
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    if command_exists claude; then
+      local claude_path
+      claude_path=$(which claude)
+      create_tool_wrapper "claude" "$claude_path"
+      print_success "Created SSH wrapper for claude"
+    fi
+  fi
+
+  print_success "${EXT_NAME} configuration complete"
+  print_status "Plugins can be managed with: claude /plugin"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating ${EXT_NAME} installation..."
+
+  local all_valid=true
+
+  # Check claude command exists
+  if ! command_exists claude; then
+    print_error "claude command not found"
+    all_valid=false
+  else
+    print_success "claude command available"
+  fi
+
+  # Check settings file exists
+  if [[ -f "$CLAUDE_SETTINGS" ]]; then
+    print_success "Claude settings file exists"
+
+    # Check for marketplace configuration
+    if grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
+      print_success "Marketplace configured in settings"
+    else
+      print_warning "Marketplace not found in settings"
+      all_valid=false
+    fi
+  else
+    print_error "Claude settings file not found"
+    all_valid=false
+  fi
+
+  # Check .plugins.example exists
+  if [[ -f "/workspace/.plugins.example" ]]; then
+    print_success "Plugin template exists: /workspace/.plugins.example"
+  else
+    print_warning "Plugin template not found"
+  fi
+
+  # Test plugin system access
+  if command_exists claude; then
+    if timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
+      print_success "Plugin marketplace accessible"
+    else
+      print_warning "Could not access plugin marketplace (may need authentication)"
+    fi
+  fi
+
+  # Check for git (runtime dependency)
+  if ! command_exists git; then
+    print_error "git not found (required for plugin installation)"
+    all_valid=false
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists claude; then
+    echo "Status: ✗ NOT INSTALLED (claude dependency missing)"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show marketplace configuration
+  print_status "Marketplace configuration:"
+  echo "  Name: $MARKETPLACE_NAME"
+  echo "  URL: $MARKETPLACE_URL"
+  echo ""
+
+  # Show registered marketplaces
+  if command_exists claude; then
+    print_status "Registered marketplaces:"
+    if timeout 5s claude /plugin marketplace list 2>/dev/null; then
+      echo ""
+    else
+      echo "  (unable to retrieve - may need authentication)"
+      echo ""
+    fi
+  fi
+
+  # Show .plugins file status
+  print_status "Plugin configuration:"
+  if [[ -f "$PLUGINS_FILE" ]]; then
+    echo "  .plugins file: ✓ exists"
+    local count
+    count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
+    echo "  Plugins specified: $count"
+  else
+    echo "  .plugins file: ✗ not found"
+    echo "  Template: /workspace/.plugins.example"
+  fi
+  echo ""
+
+  # Show available commands
+  print_status "Available commands:"
+  echo "  • claude /plugin                      - Browse and install plugins"
+  echo "  • claude /plugin marketplace list     - List marketplaces"
+  echo "  • claude /plugin marketplace add      - Add marketplace"
+  echo "  • claude /plugin list                 - List installed plugins"
+  echo "  • claude /plugin install <name>       - Install plugin"
+  echo ""
+
+  # Show config file location
+  print_status "Configuration:"
+  echo "  Settings: $CLAUDE_SETTINGS"
+  echo "  Plugins file: $PLUGINS_FILE"
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Update marketplace configuration
+  print_status "Updating marketplace configuration..."
+  configure_marketplace
+
+  # Re-sync plugins from .plugins file
+  if [[ -f "$PLUGINS_FILE" ]]; then
+    print_status "Re-syncing plugins from .plugins file..."
+    install_plugins_from_file
+  fi
+
+  # Update marketplace metadata
+  if command_exists claude; then
+    print_status "Updating marketplace metadata..."
+    if timeout 10s claude /plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
+      print_success "Marketplace metadata updated"
+    else
+      print_warning "Could not update marketplace metadata (may be normal)"
+    fi
+  fi
+
+  print_success "${EXT_NAME} upgraded successfully"
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling ${EXT_NAME}..."
+
+  # Remove marketplace from settings.json
+  if [[ -f "$CLAUDE_SETTINGS" ]] && command_exists jq; then
+    print_status "Removing marketplace from Claude settings..."
+    if jq "del(.extraKnownMarketplaces.\"$MARKETPLACE_NAME\")" "$CLAUDE_SETTINGS" > "${CLAUDE_SETTINGS}.tmp"; then
+      mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
+      print_success "Marketplace removed from settings"
+    else
+      print_warning "Could not remove marketplace from settings"
+      rm -f "${CLAUDE_SETTINGS}.tmp"
+    fi
+  fi
+
+  # Optionally remove plugins
+  echo ""
+  if prompt_confirmation "Remove installed plugins from this marketplace?"; then
+    if command_exists claude; then
+      # This would require listing and removing each plugin individually
+      # For now, inform the user
+      print_status "To remove individual plugins, use:"
+      print_status "  claude /plugin uninstall <plugin-name>"
+    fi
+  fi
+
+  # Optionally remove .plugins files
+  echo ""
+  if prompt_confirmation "Remove .plugins and .plugins.example files?"; then
+    rm -f "$PLUGINS_FILE" /workspace/.plugins.example
+    print_success "Plugin configuration files removed"
+  else
+    print_status "Plugin configuration files preserved"
+  fi
+
+  print_success "${EXT_NAME} uninstalled"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

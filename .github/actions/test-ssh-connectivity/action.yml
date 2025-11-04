@@ -1,0 +1,112 @@
+name: "Test SSH Connectivity"
+description: "Tests SSH connectivity to Fly.io machine with retry logic"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  max-attempts:
+    description: "Maximum connection attempts"
+    required: false
+    default: "8"
+  wait-between:
+    description: "Wait time between attempts (seconds)"
+    required: false
+    default: "15"
+  ssh-timeout:
+    description: "Timeout for each SSH attempt (seconds)"
+    required: false
+    default: "45"
+  user:
+    description: "SSH user"
+    required: false
+    default: "developer"
+
+outputs:
+  status:
+    description: "Test status (success or failure)"
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Test SSH connectivity
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Testing SSH connectivity..."
+
+        app_name="${{ inputs.app-name }}"
+        max_attempts=${{ inputs.max-attempts }}
+        attempt=1
+        wait_between=${{ inputs.wait-between }}
+        ssh_timeout=${{ inputs.ssh-timeout }}
+        user="${{ inputs.user }}"
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "SSH connectivity attempt $attempt/$max_attempts..."
+
+          # Test SSH connection with timeout using flyctl console
+          # Use explicit bash invocation to ensure command execution
+          if timeout ${ssh_timeout}s flyctl ssh console --app $app_name --user $user -C "echo 'SSH_TEST_SUCCESS' && whoami && pwd" 2>&1 | grep -q "SSH_TEST_SUCCESS"; then
+            echo "✅ SSH connection successful"
+
+            # Verify environment is ready
+            echo ""
+            echo "Verifying SSH environment..."
+            flyctl ssh console --app $app_name --user $user -C "echo \"User: \$(whoami)\" && echo \"Home: \$HOME\" && echo \"Path: \$PATH\" && ls -la /workspace/ | head -5"
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "✅ SSH connectivity verified"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "status=success" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "⚠️  SSH attempt $attempt failed"
+
+            if [ $attempt -eq $max_attempts ]; then
+              echo ""
+              echo "❌ All SSH attempts failed after $max_attempts tries"
+
+              # Comprehensive debug information
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "DIAGNOSTIC INFORMATION"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              echo ""
+              echo "=== App Status ==="
+              flyctl status --app $app_name
+
+              echo ""
+              echo "=== Machine List ==="
+              flyctl machines list --app $app_name
+
+              echo ""
+              echo "=== Recent Logs (last 100 lines) ==="
+              flyctl logs --app $app_name --json | jq -r '.[] | "\(.timestamp) [\(.level)]: \(.message)"' 2>/dev/null || flyctl logs --app $app_name
+
+              echo ""
+              echo "=== Machine Events ==="
+              machine_id=$(flyctl machines list --app $app_name --json 2>/dev/null | jq -r '.[0].id // empty' || echo "")
+              if [[ -n "$machine_id" ]]; then
+                flyctl machine status "$machine_id" --app $app_name || echo "Could not get machine status"
+              fi
+
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            echo "Waiting ${wait_between}s before retry..."
+            sleep $wait_between
+          fi
+
+          attempt=$((attempt + 1))
+        done

@@ -1,0 +1,146 @@
+# Cloud Provider CLIs Workspace
+
+## Installed Cloud Provider CLIs
+
+### Amazon Web Services (AWS)
+- **CLI**: `aws`
+- **Documentation**: https://aws.amazon.com/cli/
+- **Configuration**: `aws configure`
+
+### Microsoft Azure
+- **CLI**: `az`
+- **Documentation**: https://docs.microsoft.com/cli/azure/
+- **Login**: `az login`
+
+### Google Cloud Platform (GCP)
+- **CLI**: `gcloud`
+- **Documentation**: https://cloud.google.com/sdk/gcloud
+- **Authentication**: `gcloud auth login`
+- **Set Project**: `gcloud config set project PROJECT_ID`
+
+### Oracle Cloud Infrastructure (OCI)
+- **CLI**: `oci`
+- **Documentation**: https://docs.oracle.com/iaas/tools/oci-cli/
+- **Setup**: `oci setup config`
+
+### Alibaba Cloud
+- **CLI**: `aliyun`
+- **Documentation**: https://www.alibabacloud.com/help/cli
+- **Configuration**: `aliyun configure`
+
+### DigitalOcean
+- **CLI**: `doctl`
+- **Documentation**: https://docs.digitalocean.com/reference/doctl/
+- **Authentication**: `doctl auth init`
+
+### IBM Cloud
+- **CLI**: `ibmcloud`
+- **Documentation**: https://cloud.ibm.com/docs/cli
+- **Login**: `ibmcloud login`
+
+## Directory Structure
+```
+cloud/
+├── aws/            # AWS configurations and scripts
+├── azure/          # Azure configurations and scripts
+├── gcp/            # GCP configurations and scripts
+├── oracle/         # Oracle Cloud configurations
+├── alibaba/        # Alibaba Cloud configurations
+├── digitalocean/   # DigitalOcean configurations
+└── ibm/            # IBM Cloud configurations
+```
+
+## Quick Start Examples
+
+### AWS
+```bash
+# Configure credentials
+aws configure
+
+# List S3 buckets
+aws s3 ls
+
+# List EC2 instances
+aws ec2 describe-instances
+```
+
+### Azure
+```bash
+# Login
+az login
+
+# List resource groups
+az group list
+
+# List virtual machines
+az vm list
+```
+
+### Google Cloud
+```bash
+# Authenticate
+gcloud auth login
+
+# Set project
+gcloud config set project my-project
+
+# List compute instances
+gcloud compute instances list
+```
+
+### Oracle Cloud
+```bash
+# Configure
+oci setup config
+
+# List compute instances
+oci compute instance list --compartment-id <compartment-ocid>
+```
+
+### Alibaba Cloud
+```bash
+# Configure
+aliyun configure
+
+# List ECS instances
+aliyun ecs DescribeInstances
+```
+
+### DigitalOcean
+```bash
+# Authenticate
+doctl auth init
+
+# List droplets
+doctl compute droplet list
+
+# List Kubernetes clusters
+doctl kubernetes cluster list
+```
+
+### IBM Cloud
+```bash
+# Login
+ibmcloud login
+
+# List resource groups
+ibmcloud resource groups
+
+# List virtual server instances
+ibmcloud is instances
+```
+
+## Multi-Cloud Best Practices
+
+1. **Credential Management**: Keep credentials secure and never commit them to version control
+2. **Environment Separation**: Use different profiles/accounts for dev, staging, and production
+3. **Cost Monitoring**: Regularly review cloud spending across all providers
+4. **Resource Tagging**: Tag resources consistently for better organization and cost allocation
+5. **Infrastructure as Code**: Use Terraform, Pulumi, or provider-specific tools (CloudFormation, ARM templates, etc.)
+
+## Additional Tools
+
+Consider installing these multi-cloud tools:
+- **Terraform**: Multi-cloud infrastructure as code
+- **Pulumi**: Infrastructure as code using programming languages
+- **CloudQuery**: Multi-cloud asset inventory and security

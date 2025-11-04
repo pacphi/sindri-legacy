@@ -1,0 +1,129 @@
+#!/bin/bash
+# Create a new Rust project with Cargo
+
+project_name="$1"
+project_type="${2:-binary}"
+
+if [[ -z "$project_name" ]]; then
+    echo "Usage: $0 <project-name> [binary|library]"
+    exit 1
+fi
+
+cd /workspace/projects/active
+
+if [[ "$project_type" == "library" ]]; then
+    cargo new --lib "$project_name"
+else
+    cargo new "$project_name"
+fi
+
+cd "$project_name"
+
+cat >> Cargo.toml << 'DEPS'
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+criterion = "0.5"
+pretty_assertions = "1.4"
+DEPS
+
+cat > Makefile << 'MAKEFILE'
+.PHONY: build run test clean watch doc
+
+build:
+	cargo build --release
+
+run:
+	cargo run
+
+test:
+	cargo test
+
+clean:
+	cargo clean
+
+watch:
+	cargo watch -x check -x test -x run
+
+doc:
+	cargo doc --open
+
+bench:
+	cargo bench
+
+audit:
+	cargo audit
+
+fmt:
+	cargo fmt
+
+clippy:
+	cargo clippy -- -D warnings
+MAKEFILE
+
+cat > README.md << README
+# $project_name
+
+## Build
+\`\`\`bash
+cargo build --release
+\`\`\`
+
+## Run
+\`\`\`bash
+cargo run
+\`\`\`
+
+## Test
+\`\`\`bash
+cargo test
+\`\`\`
+
+## Development
+\`\`\`bash
+# Watch for changes
+cargo watch -x check -x test -x run
+
+# Format code
+cargo fmt
+
+# Lint code
+cargo clippy
+\`\`\`
+README
+
+mkdir -p .github/workflows
+cat > .github/workflows/rust.yml << 'WORKFLOW'
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Run clippy
+      run: cargo clippy -- -D warnings
+WORKFLOW
+
+echo "Rust project '$project_name' created!"
+echo "To run: cd /workspace/projects/active/$project_name && cargo run"

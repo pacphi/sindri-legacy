@@ -1,0 +1,28 @@
+#!/bin/bash
+# context-loader.aliases - Context and environment management aliases
+# Sourced by context-loader extension
+
+# ============================================================================
+# CONTEXT & ENVIRONMENT
+# ============================================================================
+
+# Context loading
+alias load-context="source /workspace/scripts/lib/context-loader.sh && load_all_context"
+alias load-global="source /workspace/scripts/lib/context-loader.sh && load_global_context"
+alias load-user="source /workspace/scripts/lib/context-loader.sh && load_user_context"
+alias load-project="source /workspace/scripts/lib/context-loader.sh && load_project_context"
+
+# Context validation and information
+alias validate-context="source /workspace/scripts/lib/context-loader.sh && validate_context"
+alias context-hierarchy="source /workspace/scripts/lib/context-loader.sh && show_context_hierarchy"
+alias context-status="validate-context"
+
+# Context file editing
+alias edit-global-claude="nano /workspace/context/global/CLAUDE.md"
+alias edit-global-cc="nano /workspace/context/global/CCFOREVER.md"
+alias edit-project="nano ./CLAUDE.md"
+alias edit-user="mkdir -p ~/.claude && nano ~/.claude/CLAUDE.md"
+
+# Claude Code Direct Access
+alias cf-dsp="claude --dangerously-skip-permissions"
+alias dsp="claude --dangerously-skip-permissions"

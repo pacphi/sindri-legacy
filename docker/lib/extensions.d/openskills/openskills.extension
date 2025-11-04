@@ -1,0 +1,367 @@
+#!/bin/bash
+# openskills.extension - OpenSkills CLI for Claude Code skills management
+# Extension API v2.0
+#
+# This extension installs OpenSkills, a CLI tool that implements Anthropic's Agent Skills
+# specification for managing Claude Code skills across all AI coding agents.
+# Requires the nodejs extension to be installed first.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="openskills"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="npm"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Hard requirement: nodejs extension must be installed (provides Node.js/npm)
+  if ! command_exists node; then
+    print_error "Node.js is required but not installed"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
+  if ! command_exists npm; then
+    print_error "npm is required but not found"
+    print_status "Install with: extension-manager install nodejs"
+    return 1
+  fi
+
+  # Check Node.js version (requires 20.6+)
+  local node_version
+  node_version=$(node --version 2>/dev/null | sed 's/v//')
+  local required_major=20
+  local required_minor=6
+  local current_major
+  local current_minor
+  current_major=$(echo "$node_version" | cut -d. -f1)
+  current_minor=$(echo "$node_version" | cut -d. -f2)
+
+  if (( current_major < required_major )) || \
+     (( current_major == required_major && current_minor < required_minor )); then
+    print_error "Node.js $required_major.$required_minor+ required (found: v$node_version)"
+    print_status "Upgrade Node.js with: mise use node@latest"
+    return 1
+  fi
+
+  print_success "Node.js $node_version meets requirements"
+
+  # Check for git (required by openskills for cloning repositories)
+  if ! command_exists git; then
+    print_error "git is required but not installed"
+    print_status "git is needed to clone skill repositories from GitHub"
+    return 1
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing OpenSkills CLI..."
+
+  # Check if already installed
+  if command_exists openskills; then
+    local openskills_version
+    openskills_version=$(openskills --version 2>/dev/null || echo "installed")
+    print_warning "OpenSkills already installed: $openskills_version"
+    print_status "Skipping installation (remove first to reinstall)"
+    return 0
+  fi
+
+  # Install openskills globally via npm
+  print_status "Installing openskills via npm..."
+  if npm install -g openskills; then
+    print_success "OpenSkills installed successfully"
+
+    # Verify installation
+    if command_exists openskills; then
+      local version
+      version=$(openskills --version 2>/dev/null || echo "version check failed")
+      print_success "OpenSkills CLI installed: $version"
+    else
+      print_warning "OpenSkills installed but command not found in PATH"
+      print_status "You may need to reload your shell"
+      return 1
+    fi
+  else
+    print_error "Failed to install OpenSkills"
+    return 1
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring OpenSkills..."
+
+  # Create openskills config directory
+  mkdir -p "$HOME/.openskills"
+  print_success "Created config directory: ~/.openskills"
+
+  # Create SSH wrapper for openskills command
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    if command_exists openskills; then
+      local openskills_path
+      openskills_path=$(which openskills)
+      create_tool_wrapper "openskills" "$openskills_path"
+      print_success "Created SSH wrapper for openskills"
+    fi
+  fi
+
+  # Add aliases to bashrc
+  local alias_file
+  alias_file="$(dirname "${BASH_SOURCE[0]}")/openskills.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added OpenSkills aliases to .bashrc"
+    fi
+  fi
+
+  print_success "OpenSkills configuration complete"
+  print_status "Get started with: openskills --help"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating OpenSkills installation..."
+
+  local all_valid=true
+
+  # Check openskills command exists
+  if ! command_exists openskills; then
+    print_error "openskills command not found"
+    all_valid=false
+  else
+    local version
+    version=$(openskills --version 2>/dev/null || echo "version check failed")
+    print_success "openskills: $version"
+  fi
+
+  # Check config directory exists
+  if [[ -d "$HOME/.openskills" ]]; then
+    print_success "Config directory exists: ~/.openskills"
+  else
+    print_warning "Config directory not found: ~/.openskills"
+    all_valid=false
+  fi
+
+  # Test basic functionality
+  if command_exists openskills; then
+    if openskills list >/dev/null 2>&1; then
+      print_success "Command execution test passed"
+    else
+      print_warning "Command execution test failed (may be normal if no skills installed)"
+    fi
+  fi
+
+  # Check for Node.js and npm (runtime dependencies)
+  if ! command_exists node; then
+    print_error "Node.js not found (required for runtime)"
+    all_valid=false
+  fi
+
+  if ! command_exists npm; then
+    print_error "npm not found (required for runtime)"
+    all_valid=false
+  fi
+
+  if ! command_exists git; then
+    print_error "git not found (required for skill installation)"
+    all_valid=false
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists openskills; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show version
+  print_status "Installed version:"
+  local version
+  version=$(openskills --version 2>/dev/null || echo "version check failed")
+  echo "  ✓ openskills: $version"
+  echo ""
+
+  # Show installed skills
+  print_status "Installed skills:"
+  if command_exists openskills; then
+    local skills_output
+    skills_output=$(openskills list 2>/dev/null)
+    if [[ -n "$skills_output" ]]; then
+      echo "$skills_output" | sed 's/^/  /'
+    else
+      echo "  (no skills installed yet)"
+    fi
+  fi
+  echo ""
+
+  # Show available commands
+  print_status "Available commands:"
+  echo "  • openskills install <source>  - Install skills from GitHub"
+  echo "  • openskills sync              - Update AGENTS.md with skills"
+  echo "  • openskills read <name>       - Load skill content"
+  echo "  • openskills list              - Display installed skills"
+  echo "  • openskills manage            - Remove skills interactively"
+  echo ""
+
+  # Show config directory
+  if [[ -d "$HOME/.openskills" ]]; then
+    print_status "Config directory: ~/.openskills"
+    local skill_count
+    skill_count=$(find "$HOME/.openskills" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ $skill_count -gt 0 ]]; then
+      echo "  Skills found: $skill_count"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  if ! command_exists npm; then
+    print_error "npm not installed, cannot upgrade"
+    return 1
+  fi
+
+  # Get current version
+  print_status "Current version:"
+  if command_exists openskills; then
+    local current_version
+    current_version=$(openskills --version 2>/dev/null || echo "version check failed")
+    echo "  openskills: $current_version"
+  else
+    echo "  openskills: not installed"
+  fi
+  echo ""
+
+  # Upgrade via npm
+  print_status "Upgrading openskills via npm..."
+  if npm update -g openskills; then
+    print_success "OpenSkills upgraded successfully"
+
+    echo ""
+    print_status "Updated version:"
+    if command_exists openskills; then
+      local new_version
+      new_version=$(openskills --version 2>/dev/null || echo "version check failed")
+      echo "  openskills: $new_version"
+    fi
+
+    return 0
+  else
+    print_error "Failed to upgrade OpenSkills"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling OpenSkills..."
+
+  # Uninstall via npm
+  if command_exists npm; then
+    print_status "Uninstalling openskills via npm..."
+    if npm uninstall -g openskills; then
+      print_success "OpenSkills uninstalled"
+    else
+      print_warning "Failed to uninstall via npm"
+    fi
+  fi
+
+  # Check if command still exists
+  if command_exists openskills; then
+    local openskills_path
+    openskills_path=$(which openskills)
+    print_warning "OpenSkills still found at: $openskills_path"
+    print_status "You may need to manually remove it"
+  fi
+
+  # Prompt for config and skills removal
+  echo ""
+  if prompt_confirmation "Remove OpenSkills config and installed skills (~/.openskills)?"; then
+    rm -rf "$HOME/.openskills"
+    print_success "Config and skills removed"
+  else
+    print_status "Config and skills preserved at ~/.openskills"
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed OpenSkills aliases from .bashrc"
+  fi
+
+  print_success "OpenSkills uninstalled"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

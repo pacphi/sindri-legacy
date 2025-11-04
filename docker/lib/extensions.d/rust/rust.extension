@@ -1,0 +1,424 @@
+#!/bin/bash
+# rust.extension - Rust toolchain and development tools via mise
+# Extension API v1.0
+#
+# This extension installs Rust via mise with:
+# - Complete Rust toolchain (rustc, cargo)
+# - Essential cargo tools (ripgrep, fd-find, exa, bat, tokei)
+# - CI mode detection for lightweight installs
+# - mise-powered version management
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="rust"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Rust toolchain and cargo tools via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for mise
+  check_mise_prerequisite || return 1
+
+  # Check disk space (Rust needs ~1-2GB)
+  check_disk_space 2000
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Rust toolchain via mise..."
+
+  # Check if already installed
+  if command_exists rustc && command_exists cargo; then
+    local rust_version
+    rust_version=$(rustc --version 2>/dev/null)
+    print_warning "Rust is already installed: $rust_version"
+
+    # Check if managed by mise
+    if mise ls rust &>/dev/null; then
+      print_status "Rust is managed by mise"
+      return 0
+    else
+      print_warning "Rust not managed by mise - consider removing existing installation"
+      return 1
+    fi
+  fi
+
+  # Install Rust via mise using shared helper
+  if is_ci_mode; then
+    print_status "Installing Rust stable only..."
+  else
+    print_status "Installing Rust stable + cargo tools (ripgrep, fd-find, exa, bat, tokei)..."
+    print_warning "Cargo tools may take 10-15 minutes to compile from source"
+  fi
+
+  install_mise_config "rust" || return 1
+
+  # Activate mise for current session
+  activate_mise_environment
+
+  # Verify installation
+  if command_exists rustc && command_exists cargo; then
+    print_success "Rust installed: $(rustc --version)"
+    print_success "Cargo installed: $(cargo --version)"
+  else
+    print_error "Rust installation failed - commands not found after mise install"
+    return 1
+  fi
+
+  # Show installed cargo tools in non-CI mode
+  if ! is_ci_mode; then
+    print_status "Checking cargo tools..."
+    local tools=(rg fd exa bat tokei)
+    local installed_count=0
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        print_debug "✓ $tool installed"
+        ((installed_count++))
+      else
+        print_warning "✗ $tool not yet available (may still be installing)"
+      fi
+    done
+    print_status "Cargo tools available: $installed_count/${#tools[@]}"
+
+    if [[ $installed_count -lt ${#tools[@]} ]]; then
+      print_status "Some tools may still be installing in the background"
+      print_status "Run 'mise ls cargo:*' to check installation progress"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Rust environment..."
+
+  # mise handles PATH configuration via its activation
+  # No need to modify .bashrc as mise is already activated
+
+  # Activate mise for current session
+  activate_mise_environment
+  print_success "mise activated for current session"
+
+  # Verify Rust is available
+  if command_exists rustc && command_exists cargo; then
+    print_success "Rust commands available in PATH"
+  else
+    print_warning "Rust commands not yet in PATH (restart shell or run: source ~/.bashrc)"
+  fi
+
+  # Create Rust project template script
+  print_status "Creating Rust project template..."
+  cat "$(dirname "${BASH_SOURCE[0]}")/rust.create-project.template" > /workspace/scripts/create-rust-project.sh
+  chmod +x /workspace/scripts/create-rust-project.sh
+  print_success "Project template created"
+
+  # Add Git aliases
+  setup_git_aliases \
+    "cargotest:!cargo test" \
+    "cargofmt:!cargo fmt" \
+    "cargoclippy:!cargo clippy -- -D warnings"
+
+  print_success "Rust configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Rust installation..."
+
+  local all_valid=true
+
+  # Activate mise for validation
+  activate_mise_environment
+
+  # Check if Rust is managed by mise
+  if ! mise ls rust &>/dev/null; then
+    print_error "Rust not managed by mise"
+    all_valid=false
+  else
+    local rust_version
+    rust_version=$(mise ls rust 2>/dev/null | grep -v "^Tool" | head -n1 | awk '{print $2}')
+    if [[ -n "$rust_version" ]]; then
+      print_success "mise manages Rust: $rust_version"
+    else
+      print_error "Could not determine mise-managed Rust version"
+      all_valid=false
+    fi
+  fi
+
+  # Check rustc
+  if ! command_exists rustc; then
+    print_error "rustc not found"
+    all_valid=false
+  else
+    print_success "rustc: $(rustc --version)"
+  fi
+
+  # Check cargo
+  if ! command_exists cargo; then
+    print_error "cargo not found"
+    all_valid=false
+  else
+    print_success "cargo: $(cargo --version)"
+  fi
+
+  # Check cargo tools (only in non-CI mode)
+  if ! is_ci_mode; then
+    local tools=(rg fd exa bat tokei)
+    local tools_found=0
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        ((tools_found++))
+      fi
+    done
+
+    if [[ $tools_found -eq ${#tools[@]} ]]; then
+      print_success "Cargo tools: $tools_found/${#tools[@]} installed"
+    else
+      print_warning "Cargo tools: $tools_found/${#tools[@]} installed (some may still be installing)"
+    fi
+  else
+    print_status "CI mode: skipping cargo tools validation"
+  fi
+
+  # Check project template
+  [[ -f "/workspace/scripts/create-rust-project.sh" ]] && print_success "Project template: installed"
+
+  # Verify Rust can compile
+  print_status "Testing Rust compilation..."
+  local test_output
+  if test_output=$(echo 'fn main() { println!("test"); }' | rustc - -o /tmp/rust-test 2>&1); then
+    if [[ -f /tmp/rust-test ]]; then
+      local run_output=$(/tmp/rust-test 2>&1)
+      rm -f /tmp/rust-test
+      if [[ "$run_output" == "test" ]]; then
+        print_success "Rust can compile and run programs"
+      else
+        print_error "Rust compilation test produced unexpected output"
+        all_valid=false
+      fi
+    else
+      print_error "Rust compilation test failed to produce binary"
+      all_valid=false
+    fi
+  else
+    print_error "Rust compilation test failed"
+    all_valid=false
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+  echo "Version Manager: mise"
+  echo ""
+
+  # Check installation status
+  if ! command_exists rustc; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED (mise-powered)"
+  echo ""
+
+  # Show mise-managed Rust version
+  print_status "Installed tools:"
+
+  # Activate mise to ensure we can query it
+  activate_mise_environment
+
+  # Show Rust version from mise
+  local rust_info
+  rust_info=$(mise ls rust 2>/dev/null | grep -v "^Tool" | head -n1)
+  if [[ -n "$rust_info" ]]; then
+    echo "  ✓ Rust (mise): $rust_info"
+  fi
+
+  # Show actual command versions
+  command_exists rustc && echo "  ✓ rustc $(rustc --version | awk '{print $2}')"
+  command_exists cargo && echo "  ✓ cargo $(cargo --version | awk '{print $2}')"
+
+  # Show cargo tools (if not CI mode)
+  if ! is_ci_mode; then
+    echo ""
+    print_status "Cargo tools (mise-managed):"
+
+    local tools=(rg fd exa bat tokei)
+    local found_any=false
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        # Get version if possible
+        local version=""
+        case "$tool" in
+          rg) version=$(rg --version 2>/dev/null | head -n1 | awk '{print $2}') ;;
+          fd) version=$(fd --version 2>/dev/null | awk '{print $2}') ;;
+          bat) version=$(bat --version 2>/dev/null | awk '{print $2}') ;;
+          tokei) version=$(tokei --version 2>/dev/null | awk '{print $2}') ;;
+          exa) version=$(exa --version 2>/dev/null | head -n1 | awk '{print $2}') ;;
+        esac
+
+        if [[ -n "$version" ]]; then
+          echo "  ✓ $tool v$version"
+        else
+          echo "  ✓ $tool"
+        fi
+        found_any=true
+      fi
+    done
+
+    if [[ "$found_any" != "true" ]]; then
+      echo "  (no cargo tools installed yet - may still be compiling)"
+      echo "  Run 'mise ls cargo:*' to check installation progress"
+    fi
+  else
+    echo ""
+    print_status "CI mode: cargo tools not installed"
+  fi
+
+  # Show configuration file
+  if [[ -f "$HOME/.config/mise/conf.d/rust.toml" ]]; then
+    echo ""
+    print_status "Configuration: ~/.config/mise/conf.d/rust.toml"
+  fi
+
+  # Show project template
+  [[ -f "/workspace/scripts/create-rust-project.sh" ]] && echo "" && print_status "Project template: installed"
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Rust..."
+
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "rustc" "cargo"
+
+  if ! prompt_confirmation "Continue with Rust removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove mise configuration using shared helper
+  remove_mise_config "rust"
+
+  # Uninstall Rust via mise
+  if command_exists mise; then
+    print_status "Uninstalling Rust via mise..."
+    if mise uninstall rust 2>/dev/null; then
+      print_success "Rust uninstalled via mise"
+    else
+      print_warning "Could not uninstall Rust via mise (may not be installed)"
+    fi
+
+    # Uninstall cargo tools if present
+    if ! is_ci_mode; then
+      print_status "Uninstalling cargo tools..."
+      local tools=(ripgrep fd-find exa bat tokei)
+      for tool in "${tools[@]}"; do
+        mise uninstall "cargo:$tool" 2>/dev/null && print_debug "✓ Uninstalled cargo:$tool"
+      done
+    fi
+  fi
+
+  # Cleanup
+  rm -f "/workspace/scripts/create-rust-project.sh"
+  cleanup_bashrc "# ${EXT_NAME}"
+  cleanup_git_aliases "cargotest" "cargofmt" "cargoclippy"
+
+  print_success "Rust uninstalled"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    activate_mise_environment
+
+    # Get current versions
+    print_status "Current versions:"
+    mise current rust 2>/dev/null || echo "  rust: not installed"
+    echo ""
+
+    # Upgrade via mise
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Rust upgraded successfully"
+
+        echo ""
+        print_status "Updated versions:"
+        mise current rust
+
+        # Update cargo components
+        if command_exists rustup; then
+            print_status "Updating Rust components..."
+            rustup update || print_warning "rustup update failed"
+        fi
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

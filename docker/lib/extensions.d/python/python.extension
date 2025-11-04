@@ -1,0 +1,341 @@
+#!/bin/bash
+# python.extension - Python development environment via mise
+# Extension API v1.0
+#
+# This extension installs Python 3.13 with development tools using mise.
+# mise manages Python and pipx-based CLI tools declaratively via TOML config.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="python"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Python 3.13 development environment via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for mise
+  check_mise_prerequisite || return 1
+
+  # Check disk space (Python + pipx tools need ~1GB)
+  check_disk_space 1200
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Python development environment via mise..."
+
+  # Install via mise using shared helper
+  install_mise_config "python" || return 1
+
+  # Activate mise for current session
+  activate_mise_environment
+
+  # Verify core tools are available
+  if ! command_exists python3; then
+    print_error "python3 not found after mise install"
+    return 1
+  fi
+
+  # Check for pip (Python 3.13+ uses 'pip' not 'pip3')
+  if ! command_exists pip && ! command_exists pip3; then
+    print_error "pip not found after mise install"
+    return 1
+  fi
+
+  print_success "Python $(python3 --version 2>&1 | awk '{print $2}') installed via mise"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Python environment..."
+
+  # Ensure mise activation in .bashrc (should already be there from mise-config extension)
+  if ! grep -q 'mise activate bash' "$HOME/.bashrc" 2>/dev/null; then
+    print_warning "mise activation not found in .bashrc"
+    print_status "Adding mise activation..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/python.bashrc-mise.template" >> "$HOME/.bashrc"
+    print_success "Added mise activation to .bashrc"
+  fi
+
+  # Create project template script
+  print_status "Creating Python project template..."
+  cat "$(dirname "${BASH_SOURCE[0]}")/python.create-project.template" > /workspace/scripts/create-python-project.sh
+  chmod +x /workspace/scripts/create-python-project.sh
+  print_success "Project template created"
+
+  # Add git aliases
+  setup_git_aliases \
+    "pytest:!python -m pytest" \
+    "black:!black ." \
+    "flake:!flake8 ."
+
+  # Create SSH wrappers
+  if command_exists python3; then
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "python3" "$(which python3)"
+      # Wrap both pip and pip3 if they exist
+      command_exists pip && create_tool_wrapper "pip" "$(which pip)"
+      command_exists pip3 && create_tool_wrapper "pip3" "$(which pip3)"
+    fi
+  fi
+
+  print_success "Python configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Python installation..."
+
+  local all_valid=true
+
+  # Activate mise for validation
+  activate_mise_environment
+
+  # Check mise shows Python
+  if ! mise ls python 2>/dev/null | grep -q "python"; then
+    print_error "Python not managed by mise"
+    all_valid=false
+  else
+    print_success "mise manages Python: $(mise ls python 2>/dev/null | head -n1)"
+  fi
+
+  # Check Python3
+  if ! command_exists python3; then
+    print_error "python3 not found"
+    all_valid=false
+  else
+    print_success "Python: $(python3 --version 2>&1)"
+  fi
+
+  # Check pip (Python 3.13+ uses 'pip' not 'pip3')
+  if command_exists pip; then
+    print_success "pip: $(pip --version 2>&1 | awk '{print $2}')"
+  elif command_exists pip3; then
+    print_success "pip: $(pip3 --version 2>&1 | awk '{print $2}')"
+  else
+    print_error "pip not found"
+    all_valid=false
+  fi
+
+  # Check uv (always installed via pipx in both configs)
+  if ! command_exists uv; then
+    print_error "uv not found"
+    all_valid=false
+  else
+    print_success "uv: $(uv --version 2>&1)"
+  fi
+
+  # Check pipx tools (only in full config, not CI)
+  local ci_mode="${CI_MODE:-false}"
+  if [[ "$ci_mode" != "true" ]]; then
+    local pipx_tools_output
+    pipx_tools_output=$(mise ls 'pipx:*' 2>/dev/null)
+    if [[ -z "$pipx_tools_output" ]]; then
+      print_warning "No pipx tools found via mise"
+    else
+      local tool_count
+      tool_count=$(echo "$pipx_tools_output" | wc -l)
+      print_success "pipx tools managed by mise: $tool_count tools"
+
+      # Verify some key tools are available
+      for tool in virtualenv poetry flake8 black; do
+        if command_exists "$tool"; then
+          print_debug "✓ $tool available"
+        else
+          print_warning "$tool not available as command"
+        fi
+      done
+    fi
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+  echo "Version Manager: mise"
+  echo ""
+
+  # Activate mise for status
+  activate_mise_environment
+
+  # Check installation status - must be mise-managed, not system Python
+  if ! command_exists python3; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Verify Python is managed by mise (not system Python)
+  if ! mise ls python 2>/dev/null | grep -q "python"; then
+    echo "Status: ✗ NOT INSTALLED (system Python detected, but mise-managed Python required)"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Python + pipx tools)"
+  echo ""
+
+  # Show mise-managed Python
+  print_status "mise-Managed Python:"
+  local python_info
+  python_info=$(mise ls python 2>/dev/null)
+  if [[ -n "$python_info" ]]; then
+    echo "$python_info" | sed 's/^/  • /'
+  else
+    echo "  (none)"
+  fi
+  echo ""
+
+  # Show mise-managed pipx tools
+  print_status "mise-Managed pipx Tools:"
+  local pipx_info
+  pipx_info=$(mise ls 'pipx:*' 2>/dev/null)
+  if [[ -n "$pipx_info" ]]; then
+    echo "$pipx_info" | sed 's/^/  • /'
+  else
+    echo "  (none - CI mode or not installed)"
+  fi
+  echo ""
+
+  # Show available commands
+  print_status "Available Commands:"
+  command_exists python3 && echo "  ✓ python3 $(python3 --version 2>&1 | awk '{print $2}')"
+  if command_exists pip; then
+    echo "  ✓ pip $(pip --version 2>&1 | awk '{print $2}')"
+  elif command_exists pip3; then
+    echo "  ✓ pip $(pip3 --version 2>&1 | awk '{print $2}')"
+  fi
+  command_exists uv && echo "  ✓ uv $(uv --version 2>&1 | awk '{print $2}')"
+  command_exists virtualenv && echo "  ✓ virtualenv"
+  command_exists poetry && echo "  ✓ poetry"
+  command_exists flake8 && echo "  ✓ flake8"
+  command_exists mypy && echo "  ✓ mypy"
+  command_exists black && echo "  ✓ black"
+  command_exists jupyter && echo "  ✓ jupyterlab"
+
+  [[ -f "/workspace/scripts/create-python-project.sh" ]] && echo "" && print_status "Project template: installed"
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Python development environment..."
+
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "python3" "pip" "pip3" "pipx" "uv"
+
+  # Confirm removal
+  if ! prompt_confirmation "Continue with Python removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove mise configuration using shared helper
+  remove_mise_config "python"
+
+  # Cleanup project template
+  rm -f "/workspace/scripts/create-python-project.sh"
+
+  # Remove git aliases
+  cleanup_git_aliases "pytest" "black" "flake"
+
+  print_success "Python extension configuration removed"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE - Extension API v2.0
+# ============================================================================
+
+upgrade() {
+    print_status "Upgrading ${EXT_NAME}..."
+
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
+    fi
+
+    activate_mise_environment
+
+    # Get current versions
+    print_status "Current versions:"
+    mise current python 2>/dev/null || echo "  python: not installed"
+    echo ""
+
+    # Upgrade mise-managed tools
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Python upgraded successfully"
+
+        echo ""
+        print_status "Updated versions:"
+        mise current python
+
+        # Upgrade pipx-installed tools
+        if command_exists pipx; then
+            print_status "Upgrading pipx packages..."
+            pipx upgrade-all || print_warning "Some pipx packages failed to upgrade"
+        fi
+
+        return 0
+    else
+        print_error "Upgrade failed"
+        return 1
+    fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

@@ -1,0 +1,522 @@
+#!/bin/bash
+# cloud-tools.sh.example - Cloud provider CLI tools
+# Extension API v1.0
+#
+# This extension installs cloud provider CLIs with:
+# - AWS CLI
+# - Azure CLI
+# - Google Cloud CLI (gcloud)
+# - Oracle Cloud Infrastructure CLI
+# - Alibaba Cloud CLI
+# - DigitalOcean CLI (doctl)
+# - IBM Cloud CLI
+# - Cloud workspace setup
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="cloud-tools"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Cloud provider CLI tools (AWS, Azure, GCP, OCI, Alibaba, DO, IBM)"
+EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="mixed"  # Binary downloads + apt
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for apt-get (needed for GCP)
+  if ! command_exists apt-get; then
+    print_error "apt-get is required but not found"
+    print_status "This extension requires a Debian/Ubuntu based system"
+    return 1
+  fi
+
+  # Check for required tools
+  local missing_tools=()
+  for tool in wget curl sudo unzip; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    print_status "Install with: sudo apt-get install ${missing_tools[*]}"
+    return 1
+  fi
+
+  # Check disk space (cloud CLIs need ~2GB)
+  check_disk_space 2500
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing cloud provider CLI tools..."
+
+  # AWS CLI
+  print_status "Installing AWS CLI..."
+  if command_exists aws; then
+    print_warning "AWS CLI already installed: $(aws --version)"
+  else
+    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; then
+      unzip -q awscliv2.zip
+      sudo ./aws/install 2>/dev/null
+      rm -rf aws awscliv2.zip
+      print_success "AWS CLI installed"
+    else
+      print_warning "Failed to install AWS CLI"
+    fi
+  fi
+
+  # Azure CLI
+  print_status "Installing Azure CLI..."
+  if command_exists az; then
+    print_warning "Azure CLI already installed"
+  else
+    if curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash 2>/dev/null; then
+      print_success "Azure CLI installed"
+    else
+      print_warning "Failed to install Azure CLI"
+    fi
+  fi
+
+  # Google Cloud CLI
+  print_status "Installing Google Cloud CLI..."
+  if command_exists gcloud; then
+    print_warning "Google Cloud CLI already installed"
+  else
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+    if curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - 2>/dev/null; then
+      apt_update_retry 3 && apt_install_retry 3 google-cloud-cli
+      print_success "Google Cloud CLI installed"
+    else
+      print_warning "Failed to install Google Cloud CLI"
+    fi
+  fi
+
+  # Check if running in CI mode
+  if is_ci_mode; then
+    print_status "CI mode detected - skipping optional cloud CLIs (Oracle, Alibaba, DigitalOcean, IBM)"
+    return 0
+  fi
+
+  # Oracle Cloud Infrastructure CLI
+  print_status "Installing Oracle Cloud CLI..."
+  if command_exists oci; then
+    print_warning "Oracle Cloud CLI already installed: $(oci --version)"
+  else
+    if bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --accept-all-defaults 2>/dev/null; then
+      export PATH=$PATH:$HOME/bin
+      print_success "Oracle Cloud CLI installed"
+    else
+      print_warning "Failed to install Oracle Cloud CLI"
+    fi
+  fi
+
+  # Alibaba Cloud CLI
+  print_status "Installing Alibaba Cloud CLI..."
+  if command_exists aliyun; then
+    print_warning "Alibaba Cloud CLI already installed: $(aliyun version)"
+  else
+    if wget -q https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz; then
+      tar xzf aliyun-cli-linux-latest-amd64.tgz
+      sudo mv aliyun /usr/local/bin/
+      rm aliyun-cli-linux-latest-amd64.tgz
+      print_success "Alibaba Cloud CLI installed"
+    else
+      print_warning "Failed to install Alibaba Cloud CLI"
+    fi
+  fi
+
+  # DigitalOcean CLI
+  print_status "Installing DigitalOcean CLI (doctl)..."
+  if command_exists doctl; then
+    print_warning "DigitalOcean CLI already installed: $(doctl version)"
+  else
+    local DOCTL_VERSION
+    DOCTL_VERSION=$(curl -s https://api.github.com/repos/digitalocean/doctl/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+    if [[ -n "$DOCTL_VERSION" ]] && wget -q "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"; then
+      tar xzf "doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+      sudo mv doctl /usr/local/bin/
+      rm "doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+      print_success "DigitalOcean CLI installed"
+    else
+      print_warning "Failed to install DigitalOcean CLI"
+    fi
+  fi
+
+  # IBM Cloud CLI
+  print_status "Installing IBM Cloud CLI..."
+  if command_exists ibmcloud; then
+    print_warning "IBM Cloud CLI already installed: $(ibmcloud version)"
+  else
+    if curl -fsSL https://clis.cloud.ibm.com/install/linux | sh 2>/dev/null; then
+      print_success "IBM Cloud CLI installed"
+    else
+      print_warning "Failed to install IBM Cloud CLI"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring cloud provider CLIs..."
+
+  # Configure Oracle CLI PATH for SSH sessions
+  if command_exists oci; then
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "oci" 'export PATH=$PATH:$HOME/bin'
+    else
+      # Fallback: add to bashrc
+      if ! grep -q '$HOME/bin' "$HOME/.bashrc" 2>/dev/null; then
+        echo "" >> "$HOME/.bashrc"
+        echo "# ${EXT_NAME} - Oracle Cloud CLI" >> "$HOME/.bashrc"
+        echo 'export PATH=$PATH:$HOME/bin' >> "$HOME/.bashrc"
+        print_success "Added Oracle CLI to PATH"
+      fi
+    fi
+    export PATH=$PATH:$HOME/bin
+  fi
+
+  # Create SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    local cloud_clis=(aws az gcloud oci aliyun doctl ibmcloud)
+    for cli in "${cloud_clis[@]}"; do
+      if command_exists "$cli"; then
+        create_tool_wrapper "$cli" "$(which $cli)"
+      fi
+    done
+  fi
+
+  # Create cloud CLI aliases
+  if ! grep -q "# Cloud CLI aliases" "$HOME/.bashrc" 2>/dev/null; then
+    print_status "Creating cloud CLI aliases..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/cloud-tools.bashrc.template" >> "$HOME/.bashrc"
+    print_success "Cloud CLI aliases created"
+  else
+    print_debug "Cloud CLI aliases already exist"
+  fi
+
+  # Create cloud workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  print_status "Setting up cloud workspace..."
+  mkdir -p "$WORKSPACE_DIR/cloud"/{aws,azure,gcp,oracle,alibaba,digitalocean,ibm}
+
+  # Create comprehensive README
+  if [[ ! -f "$WORKSPACE_DIR/cloud/README.md" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/cloud-tools.readme.template" > "$WORKSPACE_DIR/cloud/README.md"
+    print_success "Cloud workspace README created"
+  fi
+
+  print_success "Cloud provider CLIs configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating cloud provider CLIs installation..."
+
+  local all_valid=true
+
+  # Core CLIs (always installed)
+  local core_clis=(aws az gcloud)
+  for cli in "${core_clis[@]}"; do
+    if ! command_exists "$cli"; then
+      print_error "$cli not found"
+      all_valid=false
+    else
+      print_success "$cli: installed"
+    fi
+  done
+
+  # Optional CLIs
+  local optional_clis=(oci aliyun doctl ibmcloud)
+  local optional_found=0
+  for cli in "${optional_clis[@]}"; do
+    command_exists "$cli" && ((optional_found++))
+  done
+  print_status "Optional CLIs: $optional_found/${#optional_clis[@]}"
+
+  # Check workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
+    print_success "Cloud workspace: exists"
+  else
+    print_warning "Cloud workspace: not found"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  local core_clis=(aws az gcloud)
+  local any_installed=false
+  for cli in "${core_clis[@]}"; do
+    if command_exists "$cli"; then
+      any_installed=true
+      break
+    fi
+  done
+
+  if [[ "$any_installed" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Cloud-tools-specific tool listing with versions
+  print_status "Installed tools:"
+
+  # Core CLIs
+  echo "  Core CLIs:"
+  for cli in "${core_clis[@]}"; do
+    if command_exists "$cli"; then
+      local version=""
+      case "$cli" in
+        aws) version=$(aws --version 2>&1) ;;
+        az) version=$(az version --output tsv --query '"azure-cli"' 2>/dev/null) ;;
+        gcloud) version=$(gcloud version --format='value(version)' 2>/dev/null) ;;
+      esac
+      echo "    ✓ $cli: $version"
+    fi
+  done
+
+  # Optional CLIs
+  echo "  Optional CLIs:"
+  local optional_clis=(oci aliyun doctl ibmcloud)
+  for cli in "${optional_clis[@]}"; do
+    if command_exists "$cli"; then
+      local version=""
+      case "$cli" in
+        oci) version=$(oci --version 2>&1) ;;
+        aliyun) version=$(aliyun version 2>&1) ;;
+        doctl) version=$(doctl version 2>&1) ;;
+        ibmcloud) version=$(ibmcloud version 2>&1) ;;
+      esac
+      echo "    ✓ $cli: $version"
+    fi
+  done
+
+  # Workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
+    echo ""
+    print_status "Cloud workspace:"
+    echo "  $WORKSPACE_DIR/cloud/"
+    for provider in aws azure gcp oracle alibaba digitalocean ibm; do
+      [[ -d "$WORKSPACE_DIR/cloud/$provider" ]] && echo "    ├── $provider/"
+    done
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  local upgraded_count=0
+  local failed_count=0
+
+  # Get current versions
+  print_status "Current versions:"
+  command_exists aws && echo "  aws: $(aws --version 2>&1)"
+  command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
+  command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+  echo ""
+
+  # Upgrade AWS CLI
+  if command_exists aws; then
+    print_status "Upgrading AWS CLI..."
+    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+       && unzip -q awscliv2.zip \
+       && sudo ./aws/install --update 2>/dev/null; then
+      rm -rf aws awscliv2.zip
+      print_success "AWS CLI upgraded"
+      ((upgraded_count++))
+    else
+      rm -rf aws awscliv2.zip 2>/dev/null
+      print_warning "Failed to upgrade AWS CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade Azure CLI
+  if command_exists az; then
+    print_status "Upgrading Azure CLI..."
+    if apt_update_retry 3 && apt_install_retry 3 azure-cli; then
+      print_success "Azure CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Azure CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade Google Cloud CLI
+  if command_exists gcloud; then
+    print_status "Upgrading Google Cloud CLI..."
+    if apt_update_retry 3 && apt_install_retry 3 google-cloud-cli; then
+      print_success "Google Cloud CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Google Cloud CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Summary
+  echo ""
+  print_status "Updated versions:"
+  command_exists aws && echo "  aws: $(aws --version 2>&1)"
+  command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
+  command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+
+  echo ""
+  print_status "Upgrade summary: $upgraded_count upgraded, $failed_count failed"
+
+  if [[ $upgraded_count -gt 0 ]]; then
+    print_success "Cloud tools upgrade completed"
+    return 0
+  else
+    print_warning "No cloud tools were upgraded"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling cloud provider CLIs..."
+
+  show_dependent_extensions_warning "aws" "az" "gcloud" "oci" "doctl" "ibmcloud"
+
+  if ! prompt_confirmation "Continue with cloud CLIs removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove AWS CLI
+  if [[ -d /usr/local/aws-cli ]]; then
+    print_status "Removing AWS CLI..."
+    sudo rm -rf /usr/local/aws-cli
+    sudo rm -f /usr/local/bin/aws /usr/local/bin/aws_completer
+    print_success "AWS CLI removed"
+  fi
+
+  # Remove Azure CLI
+  if command_exists az; then
+    print_status "Removing Azure CLI..."
+    sudo apt-get remove -y azure-cli 2>/dev/null
+    sudo apt-get autoremove -y 2>/dev/null
+  fi
+
+  # Remove Google Cloud CLI
+  if command_exists gcloud; then
+    print_status "Removing Google Cloud CLI..."
+    sudo apt-get remove -y google-cloud-cli 2>/dev/null
+    sudo rm -f /etc/apt/sources.list.d/google-cloud-sdk.list
+    sudo rm -f /usr/share/keyrings/cloud.google.gpg
+  fi
+
+  # Remove Oracle Cloud CLI
+  if [[ -d "$HOME/lib/oracle-cli" ]]; then
+    read -p "Remove Oracle Cloud CLI installation directory? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "$HOME/lib/oracle-cli" "$HOME/bin/oci"
+      print_success "Oracle Cloud CLI removed"
+    fi
+  fi
+
+  # Remove Alibaba Cloud CLI
+  [[ -f /usr/local/bin/aliyun ]] && sudo rm -f /usr/local/bin/aliyun
+
+  # Remove DigitalOcean CLI
+  [[ -f /usr/local/bin/doctl ]] && sudo rm -f /usr/local/bin/doctl
+
+  # Remove IBM Cloud CLI
+  if [[ -d /usr/local/ibmcloud ]]; then
+    sudo rm -rf /usr/local/ibmcloud
+    sudo rm -f /usr/local/bin/ibmcloud
+  fi
+
+  # Remove aliases
+  cleanup_bashrc "# Cloud CLI aliases"
+
+  # Remove Oracle CLI PATH from bashrc
+  cleanup_bashrc "# ${EXT_NAME}"
+
+  # Remove workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
+    read -p "Remove cloud workspace directory? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "$WORKSPACE_DIR/cloud"
+      print_success "Cloud workspace removed"
+    fi
+  fi
+
+  print_success "Cloud provider CLIs uninstalled"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

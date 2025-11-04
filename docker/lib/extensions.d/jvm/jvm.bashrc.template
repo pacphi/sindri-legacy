@@ -1,0 +1,39 @@
+
+# JVM aliases
+alias j11='sdk use java 11.0.28-librca'
+alias j17='sdk use java 17.0.16-librca'
+alias j21='sdk use java 21.0.7-librca'
+alias j25='sdk use java 25.0.1-librca'
+alias jv='java -version'
+
+# Maven aliases
+alias mci='mvn clean install'
+alias mcis='mvn clean install -DskipTests'
+alias mcp='mvn clean package'
+alias mcps='mvn clean package -DskipTests'
+alias mt='mvn test'
+alias mdep='mvn dependency:tree'
+
+# Gradle aliases
+alias gw='./gradlew'
+alias gwb='./gradlew build'
+alias gwc='./gradlew clean'
+alias gwcb='./gradlew clean build'
+alias gwt='./gradlew test'
+alias gwr='./gradlew run'
+
+# Spring Boot aliases
+alias sbr='mvn spring-boot:run'
+alias sbg='./gradlew bootRun'
+
+# Kotlin aliases
+alias kc='kotlinc'
+alias kr='kotlin'
+
+# Scala aliases
+alias sc='scala'
+alias sbti='sbt interactive'
+
+# Clojure aliases
+alias repl='clojure -M:repl'
+alias lrepl='lein repl'

@@ -1,0 +1,581 @@
+#!/bin/bash
+# agent-manager.sh.example - Claude Code agent manager
+# Extension API v1.0
+#
+# This extension installs the agent-manager binary for managing Claude Code agents.
+# It downloads the latest release from GitHub and sets up agent configuration.
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="agent-manager"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Claude Code agent manager for managing AI agents"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="git"  # GitHub releases
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+GITHUB_REPO="pacphi/claude-code-agent-manager"
+BINARY_NAME="agent-manager"
+INSTALL_PATH="$HOME/.local/bin"
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for curl
+  if ! command_exists curl; then
+    print_error "curl is required but not installed"
+    print_status "Install with: sudo apt-get install curl"
+    return 1
+  fi
+
+  # Check for jq (required for parsing GitHub API responses)
+  if ! command_exists jq; then
+    print_error "jq is required but not installed"
+    print_status "Install with: sudo apt-get install jq"
+    return 1
+  fi
+
+  # Check for template files
+  if [[ ! -f "/docker/config/agents-config.yaml" ]]; then
+    print_warning "Template file not found: /docker/config/agents-config.yaml"
+    print_status "Configuration will need to be created manually"
+  fi
+
+  if [[ ! -f "/docker/lib/templates/agent-discovery.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/agent-discovery.sh"
+    print_status "Agent discovery utilities will not be available"
+  fi
+
+  # Check disk space (~50MB for binary)
+  local available_space
+  available_space=$(df -BM "$HOME" | awk 'NR==2 {print $4}' | sed 's/M//')
+  if [[ $available_space -lt 100 ]]; then
+    print_warning "Low disk space: ${available_space}MB available (100MB recommended)"
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# Get the latest release from GitHub
+get_latest_release() {
+  local include_prereleases=${1:-false}
+  local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases"
+
+  if [[ "$include_prereleases" == "true" ]]; then
+    # Get all releases (including pre-releases) and pick the first one
+    curl -s "$api_url" | jq -r '.[0].tag_name' 2>/dev/null || echo ""
+  else
+    # Get only non-prerelease releases
+    curl -s "$api_url" | jq -r '[.[] | select(.prerelease == false)][0].tag_name' 2>/dev/null || echo ""
+  fi
+}
+
+# Detect platform and architecture
+detect_platform() {
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64|Linux-amd64)
+      echo "linux-amd64"
+      ;;
+    Linux-aarch64|Linux-arm64)
+      echo "linux-arm64"
+      ;;
+    Darwin-x86_64|Darwin-amd64)
+      echo "darwin-amd64"
+      ;;
+    Darwin-arm64|Darwin-aarch64)
+      echo "darwin-arm64"
+      ;;
+    MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64)
+      echo "windows-amd64"
+      ;;
+    *)
+      echo "unsupported"
+      ;;
+  esac
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing agent-manager..."
+
+  # Check if already installed
+  if [[ -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    if "${INSTALL_PATH}/${BINARY_NAME}" version >/dev/null 2>&1; then
+      local current_version
+      current_version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+      print_warning "agent-manager is already installed: $current_version"
+      print_status "Skipping installation (remove manually to reinstall)"
+      return 0
+    fi
+  fi
+
+  # Get latest release (including prereleases since this is an internal tool)
+  print_status "Fetching latest release..."
+  local tag_name
+  tag_name=$(get_latest_release true)
+
+  if [[ -z "$tag_name" ]]; then
+    print_error "Failed to get latest release from GitHub"
+    print_status "Check internet connection and GitHub API availability"
+    return 1
+  fi
+
+  print_status "Latest release: $tag_name"
+
+  # Detect platform
+  local platform_arch
+  platform_arch=$(detect_platform)
+
+  if [[ "$platform_arch" == "unsupported" ]]; then
+    print_error "Unsupported platform: $(uname -s)-$(uname -m)"
+    return 1
+  fi
+
+  print_status "Detected platform: $platform_arch"
+
+  # Construct download URL
+  local binary_name="${BINARY_NAME}-${platform_arch}"
+  local download_url="https://github.com/${GITHUB_REPO}/releases/download/${tag_name}/${binary_name}"
+
+  print_status "Download URL: $download_url"
+
+  # Create bin directory
+  mkdir -p "$INSTALL_PATH"
+
+  # Download the binary
+  print_status "Downloading agent-manager binary..."
+  if curl -L -o "${INSTALL_PATH}/${BINARY_NAME}" "$download_url"; then
+    print_success "Binary downloaded successfully"
+  else
+    print_error "Failed to download binary"
+    return 1
+  fi
+
+  # Make executable
+  chmod +x "${INSTALL_PATH}/${BINARY_NAME}"
+
+  # Verify installation
+  if "${INSTALL_PATH}/${BINARY_NAME}" version >/dev/null 2>&1; then
+    local version
+    version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+    print_success "Agent Manager installed successfully: $version"
+  else
+    print_error "Agent Manager installation failed - binary not working"
+    return 1
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring agent-manager..."
+
+  # Set up agents configuration
+  local config_dir="/workspace/config"
+  local config_file="${config_dir}/agents-config.yaml"
+  local template_file="/docker/config/agents-config.yaml"
+
+  mkdir -p "$config_dir"
+
+  # Copy configuration template if it doesn't exist
+  if [[ -f "$config_file" ]]; then
+    print_status "Agents config already exists, skipping template copy"
+    print_status "To reset: rm $config_file && rerun configure"
+  elif [[ -f "$template_file" ]]; then
+    print_status "Copying agents config template..."
+    cp "$template_file" "$config_file"
+    chmod 644 "$config_file"
+    print_success "Agents configuration copied from template"
+    print_status "Edit $config_file to customize agent sources"
+  else
+    print_warning "Template not found at $template_file"
+    print_status "You'll need to create $config_file manually"
+  fi
+
+  # Set up agent discovery utilities
+  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  local discovery_template="/docker/lib/templates/agent-discovery.sh"
+
+  mkdir -p "/workspace/scripts/lib"
+
+  if [[ -f "$discovery_template" ]]; then
+    print_status "Copying agent discovery script..."
+    cp "$discovery_template" "$discovery_script"
+    chmod +x "$discovery_script"
+    print_success "Agent discovery utilities installed"
+
+    # Add sourcing to bashrc if not already present
+    local bashrc_file="$HOME/.bashrc"
+    if [[ -f "$bashrc_file" ]]; then
+      if ! grep -q "agent-discovery.sh" "$bashrc_file"; then
+        echo "" >> "$bashrc_file"
+        echo "# ${EXT_NAME} - agent discovery utilities" >> "$bashrc_file"
+        echo "if [ -f /workspace/scripts/lib/agent-discovery.sh ]; then" >> "$bashrc_file"
+        echo "    source /workspace/scripts/lib/agent-discovery.sh" >> "$bashrc_file"
+        echo "fi" >> "$bashrc_file"
+        print_success "Added agent-discovery.sh to .bashrc"
+      fi
+    fi
+
+    # Source for current session
+    source "$discovery_script" 2>/dev/null || true
+  else
+    print_warning "Template not found at $discovery_template"
+    print_status "Agent discovery utilities will not be available"
+  fi
+
+  # Add to PATH if not already there
+  local bin_path="$HOME/.local/bin"
+  if [[ -d "$bin_path" ]]; then
+    if ! grep -q "$bin_path" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - binary path" >> "$HOME/.bashrc"
+      echo "export PATH=\"$bin_path:\$PATH\"" >> "$HOME/.bashrc"
+      print_success "Added ~/.local/bin to PATH"
+    fi
+
+    # Export for current session
+    export PATH="$bin_path:$PATH"
+  fi
+
+  # Create SSH wrapper
+  if command_exists agent-manager 2>/dev/null || [[ -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    local manager_path="${INSTALL_PATH}/${BINARY_NAME}"
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "agent-manager" "$manager_path"
+    fi
+  fi
+
+  # Add aliases to bashrc
+  local alias_file="$(dirname "${BASH_SOURCE[0]}")/agent-manager.aliases"
+  if [[ -f "$alias_file" ]]; then
+    if ! grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+      echo "" >> "$HOME/.bashrc"
+      echo "# ${EXT_NAME} - aliases" >> "$HOME/.bashrc"
+      echo "if [[ -f \"$alias_file\" ]]; then" >> "$HOME/.bashrc"
+      echo "    source \"$alias_file\"" >> "$HOME/.bashrc"
+      echo "fi" >> "$HOME/.bashrc"
+      print_success "Added agent management aliases to .bashrc"
+    fi
+  fi
+
+  print_success "Agent manager configuration completed"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating agent-manager installation..."
+
+  local all_valid=true
+
+  # Check binary exists
+  if [[ ! -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    print_error "agent-manager binary not found at ${INSTALL_PATH}/${BINARY_NAME}"
+    all_valid=false
+  else
+    print_success "Binary found: ${INSTALL_PATH}/${BINARY_NAME}"
+
+    # Check binary is executable
+    if [[ ! -x "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+      print_error "Binary is not executable"
+      all_valid=false
+    else
+      print_success "Binary is executable"
+    fi
+
+    # Check binary works
+    if "${INSTALL_PATH}/${BINARY_NAME}" version >/dev/null 2>&1; then
+      local version
+      version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+      print_success "agent-manager version: $version"
+    else
+      print_error "Binary exists but does not execute properly"
+      all_valid=false
+    fi
+  fi
+
+  # Check command is in PATH
+  if command_exists agent-manager; then
+    print_success "agent-manager command is in PATH"
+  else
+    print_warning "agent-manager command not in PATH (may need to restart shell)"
+  fi
+
+  # Check configuration exists
+  local config_file="/workspace/config/agents-config.yaml"
+  if [[ -f "$config_file" ]]; then
+    print_success "Configuration file exists: $config_file"
+  else
+    print_warning "Configuration file not found (create manually or rerun configure)"
+  fi
+
+  # Check agent discovery utilities
+  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  if [[ -f "$discovery_script" ]]; then
+    print_success "Agent discovery utilities installed"
+  else
+    print_warning "Agent discovery utilities not found"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if [[ ! -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Extension-specific tool listing with versions
+  print_status "Installed tools:"
+  if "${INSTALL_PATH}/${BINARY_NAME}" version >/dev/null 2>&1; then
+    local version
+    version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+    echo "  ✓ agent-manager: $version"
+  else
+    echo "  ✓ agent-manager: installed (version check failed)"
+  fi
+
+  echo ""
+  print_status "Binary location: ${INSTALL_PATH}/${BINARY_NAME}"
+
+  # Check if in PATH
+  if command_exists agent-manager; then
+    print_status "Command available in PATH: ✓"
+  else
+    print_status "Command available in PATH: ✗ (restart shell)"
+  fi
+
+  # Show configuration
+  echo ""
+  print_status "Configuration:"
+  local config_file="/workspace/config/agents-config.yaml"
+  if [[ -f "$config_file" ]]; then
+    echo "  ✓ $config_file"
+
+    # Show agent count if possible
+    if command_exists yq 2>/dev/null; then
+      local agent_count
+      agent_count=$(yq eval '.agents | length' "$config_file" 2>/dev/null || echo "unknown")
+      echo "    Configured agents: $agent_count"
+    fi
+  else
+    echo "  ✗ No configuration file found"
+  fi
+
+  # Show agent discovery status
+  echo ""
+  print_status "Agent discovery utilities:"
+  if [[ -f "/workspace/scripts/lib/agent-discovery.sh" ]]; then
+    echo "  ✓ installed"
+  else
+    echo "  ✗ not found"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Get current version
+  if [[ -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    print_status "Current version:"
+    local current_version
+    current_version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+    echo "  agent-manager: $current_version"
+  else
+    print_error "agent-manager not installed"
+    return 1
+  fi
+
+  echo ""
+
+  # Get latest release
+  print_status "Checking for updates..."
+  local latest_tag
+  latest_tag=$(get_latest_release true)
+
+  if [[ -z "$latest_tag" ]]; then
+    print_error "Failed to check for updates"
+    return 1
+  fi
+
+  print_status "Latest release: $latest_tag"
+
+  # Detect platform
+  local platform_arch
+  platform_arch=$(detect_platform)
+
+  if [[ "$platform_arch" == "unsupported" ]]; then
+    print_error "Unsupported platform: $(uname -s)-$(uname -m)"
+    return 1
+  fi
+
+  # Download and replace binary
+  local binary_name="${BINARY_NAME}-${platform_arch}"
+  local download_url="https://github.com/${GITHUB_REPO}/releases/download/${latest_tag}/${binary_name}"
+  local temp_binary="/tmp/${BINARY_NAME}.new"
+
+  print_status "Downloading new version..."
+  if curl -L -o "$temp_binary" "$download_url" 2>&1; then
+    chmod +x "$temp_binary"
+
+    # Verify new binary works
+    if "$temp_binary" version >/dev/null 2>&1; then
+      mv "$temp_binary" "${INSTALL_PATH}/${BINARY_NAME}"
+      print_success "agent-manager upgraded successfully"
+
+      echo ""
+      print_status "Updated version:"
+      local new_version
+      new_version=$("${INSTALL_PATH}/${BINARY_NAME}" version 2>/dev/null | head -n1 || echo "unknown")
+      echo "  agent-manager: $new_version"
+
+      return 0
+    else
+      rm -f "$temp_binary"
+      print_error "New binary verification failed"
+      return 1
+    fi
+  else
+    print_error "Failed to download new version"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling agent-manager..."
+
+  # Check for dependent extensions
+  show_dependent_extensions_warning "agent-manager"
+
+  if ! prompt_confirmation "Continue with agent-manager removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove binary
+  if [[ -f "${INSTALL_PATH}/${BINARY_NAME}" ]]; then
+    print_status "Removing agent-manager binary..."
+    rm -f "${INSTALL_PATH}/${BINARY_NAME}"
+    print_success "Binary removed"
+  fi
+
+  # Ask about configuration
+  local config_file="/workspace/config/agents-config.yaml"
+  if [[ -f "$config_file" ]]; then
+    print_warning "Configuration file exists: $config_file"
+    if prompt_confirmation "Remove configuration file?"; then
+      rm -f "$config_file"
+      print_success "Configuration removed"
+    else
+      print_status "Configuration preserved"
+    fi
+  fi
+
+  # Ask about agent discovery utilities
+  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  if [[ -f "$discovery_script" ]]; then
+    print_warning "Agent discovery utilities exist: $discovery_script"
+    if prompt_confirmation "Remove agent discovery utilities?"; then
+      rm -f "$discovery_script"
+      print_success "Agent discovery utilities removed"
+    else
+      print_status "Agent discovery utilities preserved"
+    fi
+  fi
+
+  # Remove PATH modifications
+  if grep -q "# ${EXT_NAME} - binary path" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - binary path"
+    print_success "Removed PATH modification from .bashrc"
+  fi
+
+  # Remove agent discovery sourcing
+  if grep -q "# ${EXT_NAME} - agent discovery utilities" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - agent discovery utilities"
+    print_success "Removed agent discovery sourcing from .bashrc"
+  fi
+
+  # Remove aliases from bashrc
+  if grep -q "# ${EXT_NAME} - aliases" "$HOME/.bashrc" 2>/dev/null; then
+    cleanup_bashrc "# ${EXT_NAME} - aliases"
+    print_success "Removed agent aliases from .bashrc"
+  fi
+
+  print_success "agent-manager uninstalled"
+  print_warning "Restart your shell or run: source ~/.bashrc"
+
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

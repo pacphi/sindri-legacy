@@ -16,7 +16,6 @@ certs/
 
 # Anthropic API Keys and Claude credentials
 .anthropic
-.claude/
 claude-credentials*
 anthropic-key*
 api-keys*
@@ -42,6 +41,7 @@ flyctl.toml.local
 .Trashes
 ehthumbs.db
 Thumbs.db
+.archive/
 
 # IDE and Editor Files
 .vscode/settings.json
@@ -215,8 +215,6 @@ workspace/
 projects/sensitive/
 projects/private/
 
-# Common functions (in scripts directory)
-!scripts/lib
 
 # Extension activation manifest (user-specific)
 docker/lib/extensions.d/active-extensions.conf

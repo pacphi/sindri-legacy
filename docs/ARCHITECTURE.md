@@ -115,15 +115,15 @@ File locations after deployment to the VM:
 
 ## File System Mapping
 
-| Repository Location | VM Runtime Location | Purpose |
-|-------------------|-------------------|---------|
-| `docker/scripts/vm-configure.sh` | `/workspace/scripts/vm-configure.sh` | Main configuration script |
-| `docker/lib/*.sh` | `/workspace/scripts/lib/*.sh` | Shared utility libraries |
-| `docker/lib/extension-manager.sh` | `/workspace/scripts/lib/extension-manager.sh` | Extension management CLI |
-| `docker/lib/extensions.d/*.sh.example` | `/workspace/scripts/extensions.d/*.sh.example` | Available extensions |
-| `docker/lib/extensions.d/active-extensions.conf.example` | `/workspace/scripts/extensions.d/active-extensions.conf` | Activation manifest |
-| `docker/config/*` | Various VM locations | Configuration files |
-| `templates/*.example` | User reference only | Example configurations |
+| Repository Location                                      | VM Runtime Location                                      | Purpose                   |
+| -------------------------------------------------------- | -------------------------------------------------------- | ------------------------- |
+| `docker/scripts/vm-configure.sh`                         | `/workspace/scripts/vm-configure.sh`                     | Main configuration script |
+| `docker/lib/*.sh`                                        | `/workspace/scripts/lib/*.sh`                            | Shared utility libraries  |
+| `docker/lib/extension-manager.sh`                        | `/workspace/scripts/lib/extension-manager.sh`            | Extension management CLI  |
+| `docker/lib/extensions.d/*.sh.example`                   | `/workspace/scripts/extensions.d/*.sh.example`           | Available extensions      |
+| `docker/lib/extensions.d/active-extensions.conf.example` | `/workspace/scripts/extensions.d/active-extensions.conf` | Activation manifest       |
+| `docker/config/*`                                        | Various VM locations                                     | Configuration files       |
+| `templates/*.example`                                    | User reference only                                      | Example configurations    |
 
 ## Development Workflow Architecture
 
@@ -170,9 +170,9 @@ Sindri uses **Extension API v1.0** with manifest-based activation for managing d
 ### Extension Lifecycle
 
 1. **Discovery**: Extension scripts stored as `.sh.example` files in `/workspace/scripts/extensions.d/`
-2. **Activation**: Users activate extensions via `extension-manager activate <name>` which adds them to the manifest
+2. **Installation**: Users install extensions via `extension-manager install <name>` which auto-activates and installs
 3. **Manifest Processing**: The `active-extensions.conf` file controls which extensions install and their execution order
-4. **Installation**: `extension-manager install <name>` runs the extension's API functions in sequence:
+4. **API Execution**: `install` command runs the extension's API functions in sequence:
    - `prerequisites()` - Check system requirements
    - `install()` - Install packages and tools
    - `configure()` - Post-installation configuration
@@ -186,7 +186,7 @@ Extensions are organized by capability:
 - **Language Tools**: nodejs, python, rust, golang, ruby, php, dotnet, jvm
 - **Infrastructure**: docker, infra-tools (Terraform, Ansible, kubectl)
 - **Cloud Platforms**: cloud-tools (AWS, Azure, GCP CLIs)
-- **AI Development**: ai-tools, claude-config, agent-manager
+- **AI Development**: ai-tools, claude, agent-manager
 - **Development Tools**: nodejs-devtools, playwright, monitoring
 - **Workspace Tools**: workspace-structure, ssh-environment, tmux-workspace
 

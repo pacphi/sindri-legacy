@@ -26,7 +26,8 @@
 
 ## Extension System
 
-Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a standardized API (v1.0) with explicit dependency management and activation control.
+Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a
+standardized API (v1.0) with explicit dependency management and activation control.
 
 ### Extension API v1.0
 
@@ -50,16 +51,28 @@ The Extension API v1.0 provides:
 
 Extensions are organized by category:
 
-#### Core Infrastructure
+#### Core Infrastructure (Protected)
+
+These extensions are **protected** and cannot be removed:
 
 - **workspace-structure** - Creates /workspace directory structure (src, tests, docs, scripts, etc.)
+- **mise-config** - Unified tool version manager for mise-powered extensions
 - **ssh-environment** - Configures SSH daemon for non-interactive sessions (required for CI/CD)
-- **nodejs** - Node.js LTS via NVM and npm (required by many tools)
-- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools)
+
+#### Foundational Languages
+
+While not protected, these are highly recommended:
+
+- **nodejs** - Node.js LTS via mise and npm (required by many tools, depends on mise-config)
+- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, depends on mise-config)
 
 #### Claude AI
 
-- **claude-config** - Claude Code CLI with developer configuration (depends on nodejs)
+- **claude** - Claude Code CLI with developer configuration
+- **claude-marketplace** - Plugin installer for https://claudecodemarketplace.com/
+  (depends on claude, git)
+- **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
+  (depends on nodejs 20.6+, git)
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
 
 #### Language Runtimes
@@ -67,7 +80,7 @@ Extensions are organized by category:
 - **rust** - Rust toolchain with cargo, clippy, rustfmt
 - **golang** - Go 1.24 with gopls, delve, golangci-lint
 - **ruby** - Ruby 3.4/3.3 with rbenv, Rails, Bundler
-- **php** - PHP 8.3 with Composer, Symfony CLI
+- **php** - PHP 8.4 with Composer, Symfony CLI
 - **jvm** - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - **dotnet** - .NET SDK 9.0/8.0 with ASP.NET Core
 
@@ -85,7 +98,6 @@ Extensions are organized by category:
 - **playwright** - Browser automation testing (depends on nodejs)
 - **agent-manager** - Claude Code agent management (depends on curl, jq)
 - **context-loader** - Context management utilities for Claude Code
-- **post-cleanup** - Clean caches, set permissions, create tools summary (run LAST)
 
 ## Extension Management
 
@@ -108,20 +120,23 @@ extension-manager list
 #   ✓ docker (docker.sh.example) - activated
 ```
 
-**Activate an extension:**
+**Install extensions (auto-activates):**
 
 ```bash
-# Activate Rust toolchain (adds to manifest)
-extension-manager activate rust
+# Install Rust toolchain
+extension-manager install rust
 
-# Activate Python development tools
-extension-manager activate python
+# Install Python development tools
+extension-manager install python
 
-# Activate Docker utilities
-extension-manager activate docker
+# Install Docker utilities
+extension-manager install docker
+
+# Or use interactive mode for guided setup
+extension-manager --interactive
 ```
 
-**Install activated extensions:**
+**Install all extensions from manifest:**
 
 ```bash
 # Install a specific activated extension
@@ -159,10 +174,12 @@ extension-manager reorder python 5
 ```
 
 > [!TIP]
-> After activating extensions, run `extension-manager install-all` to install them. Extensions execute in the order listed in `active-extensions.conf`.
-
+> After activating extensions, run `extension-manager install-all` to install them. Extensions execute in the order
+> listed in `active-extensions.conf`.
+>
 > [!NOTE]
-> The `workspace-structure` extension is typically installed first as it creates the base directory structure. The `post-cleanup` extension should be installed last for optimal cleanup.
+> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and
+> cannot be removed.
 
 ### Activation Manifest
 
@@ -171,13 +188,13 @@ Extensions are executed in the order listed in `/workspace/scripts/extensions.d/
 **Example manifest:**
 
 ```conf
-# Core extensions (always first)
+# Protected extensions (required, cannot be removed):
 workspace-structure
-nodejs
+mise-config
 ssh-environment
 
 # Claude AI tools
-claude-config
+claude
 nodejs-devtools
 
 # Language runtimes
@@ -189,9 +206,8 @@ rust
 docker
 infra-tools
 
-# Utilities (last)
+# Utilities
 monitoring
-post-cleanup
 ```
 
 **Managing the manifest:**
@@ -200,10 +216,10 @@ post-cleanup
 # View current manifest
 cat /workspace/scripts/extensions.d/active-extensions.conf
 
-# Activate extension (adds to manifest)
-extension-manager activate <name>
+# Install extension (auto-activates and adds to manifest)
+extension-manager install <name>
 
-# Deactivate extension (removes from manifest)
+# Deactivate extension (removes from manifest, but doesn't uninstall)
 extension-manager deactivate <name>
 
 # Manually edit manifest (for advanced users)
@@ -361,6 +377,7 @@ Check system requirements before installation.
 **Returns**: `0` if all prerequisites met, `1` otherwise
 
 **Common checks**:
+
 - System packages (build-essential, curl, etc.)
 - Commands available in PATH
 - Disk space and memory
@@ -395,6 +412,7 @@ Install packages and tools.
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Download and install packages
 - Compile from source if needed
 - Verify installation success
@@ -431,6 +449,7 @@ Post-installation configuration.
 **Returns**: `0` on success, `1` on failure
 
 **Tasks**:
+
 - Add to PATH
 - Create SSH wrappers (for non-interactive sessions)
 - Setup shell aliases
@@ -469,6 +488,7 @@ Run smoke tests to verify installation.
 **Returns**: `0` if validation passes, `1` otherwise
 
 **Tests**:
+
 - Command availability
 - Version checks
 - Basic functionality
@@ -507,6 +527,7 @@ Check installation state and report status.
 **Returns**: `0` if installed, `1` otherwise
 
 **Reports**:
+
 - Installation status
 - Version information
 - Configuration state
@@ -542,6 +563,7 @@ Uninstall and cleanup.
 **Returns**: `0` on success, `1` on failure
 
 **Actions**:
+
 - Uninstall packages
 - Remove configuration files
 - Clean up caches
@@ -607,9 +629,8 @@ prerequisites() {
 install() {
   print_status "Installing ${EXT_NAME}..."
 
-  # Load NVM
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Node.js is available globally via mise (from nodejs extension)
+  # No need to load NVM - mise handles version management
 
   # Global packages
   print_status "Installing global npm packages..."
@@ -981,11 +1002,13 @@ EOF
 
 ### API Keys, Authentication, and LLM Provider Configuration
 
-This section covers secret management patterns, API key configuration for cloud providers and AI tools, and comprehensive guidance for configuring Claude Code to work with alternate LLM providers.
+This section covers secret management patterns, API key configuration for cloud providers and AI tools, and
+comprehensive guidance for configuring Claude Code to work with alternate LLM providers.
 
 #### Fly.io Secrets Management
 
-Fly.io secrets are injected as runtime environment variables into your VM, providing secure storage for sensitive credentials.
+Fly.io secrets are injected as runtime environment variables into your VM, providing secure storage for sensitive
+credentials.
 
 **Basic Commands:**
 
@@ -1013,13 +1036,15 @@ echo $ANTHROPIC_API_KEY
 
 **Best Practices:**
 
-- **Secrets vs fly.toml [env]**: Use `flyctl secrets set` for sensitive data (API keys, passwords). Use `fly.toml` [env] section for non-sensitive configuration (feature flags, endpoints).
+- **Secrets vs fly.toml [env]**: Use `flyctl secrets set` for sensitive data (API keys, passwords). Use `fly.toml`
+  [env] section for non-sensitive configuration (feature flags, endpoints).
 - **Persistence**: Secrets persist across VM restarts and are only accessible at runtime inside the VM.
 - **Deployment**: Set secrets before first deployment or updates will trigger a new deployment.
 
 #### Cloud Provider CLI Authentication
 
-The **cloud-tools.sh.example** extension installs multiple cloud provider CLIs. Here's how to configure authentication for each:
+The **cloud-tools.sh.example** extension installs multiple cloud provider CLIs. Here's how to configure
+authentication for each:
 
 **AWS CLI:**
 
@@ -1198,7 +1223,8 @@ ollama run llama3.2
 
 #### Claude Code LLM Provider Configuration
 
-Claude Code natively supports only Anthropic's Claude models. However, you can configure it to work with alternate LLM providers through environment variables and proxy solutions.
+Claude Code natively supports only Anthropic's Claude models. However, you can configure it to work with alternate LLM
+providers through environment variables and proxy solutions.
 
 ##### Native Anthropic Configuration (Default)
 
@@ -1212,7 +1238,8 @@ flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
 # Get API key: https://console.anthropic.com/
 ```
 
-**Important:** If `ANTHROPIC_API_KEY` is set, Claude Code will use API-based billing instead of your Claude.ai subscription (Pro/Max/Team/Enterprise).
+**Important:** If `ANTHROPIC_API_KEY` is set, Claude Code will use API-based billing instead of your Claude.ai
+subscription (Pro/Max/Team/Enterprise).
 
 ##### OpenAI-Compatible Providers (Direct Method)
 
@@ -1286,7 +1313,8 @@ export ANTHROPIC_API_KEY=fw-...  # Get from https://fireworks.ai
 
 ##### Proxy Solutions for Advanced Use Cases
 
-When providers don't offer Anthropic-compatible APIs, or when you need advanced features like model-specific routing, fallback chains, or cost optimization, use a proxy solution.
+When providers don't offer Anthropic-compatible APIs, or when you need advanced features like model-specific routing,
+fallback chains, or cost optimization, use a proxy solution.
 
 **When to Use Proxies:**
 
@@ -1296,7 +1324,7 @@ When providers don't offer Anthropic-compatible APIs, or when you need advanced 
 - Cost optimization across multiple providers
 - Enterprise features (monitoring, rate limiting, multi-tenancy)
 
-**Option 1: claude-code-proxy (Simple & Fast)**
+### Option 1: claude-code-proxy (Simple & Fast)
 
 A lightweight proxy that translates Claude API requests to OpenAI-compatible APIs.
 
@@ -1336,7 +1364,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:8082 -a <app-name>
 claude-code-proxy &
 ```
 
-**Option 2: LiteLLM Proxy (Enterprise-Grade)**
+### Option 2: LiteLLM Proxy (Enterprise-Grade)
 
 LiteLLM provides a unified API gateway for 100+ LLM providers with advanced features:
 
@@ -1390,12 +1418,12 @@ claude
 model_list:
   - model_name: claude-sonnet-4
     litellm_params:
-      model: deepseek/deepseek-chat  # $1/M tokens
+      model: deepseek/deepseek-chat # $1/M tokens
       api_key: os.environ/DEEPSEEK_API_KEY
 
   - model_name: claude-haiku-3
     litellm_params:
-      model: gemini/gemini-2.0-flash  # Free tier
+      model: gemini/gemini-2.0-flash # Free tier
       api_key: os.environ/GOOGLE_GEMINI_API_KEY
 
   # Fallback to Anthropic for complex tasks
@@ -1405,7 +1433,7 @@ model_list:
       api_key: os.environ/ANTHROPIC_API_KEY
 ```
 
-**Option 3: Claude Code Router (Multi-Provider Management)**
+### Option 3: Claude Code Router (Multi-Provider Management)
 
 Claude Code Router provides intelligent routing with support for multiple providers:
 
@@ -1436,14 +1464,14 @@ Claude Code Router provides intelligent routing with support for multiple provid
 
 #### Complete Setup Examples
 
-**Example 1: Pure Anthropic (Standard)**
+##### Example 1: Pure Anthropic (Standard)
 
 ```bash
 # Simplest setup - just use Anthropic API
 flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
 ```
 
-**Example 2: Z.ai GLM-4.6 Direct**
+##### Example 2: Z.ai GLM-4.6 Direct
 
 ```bash
 # Use Z.ai's GLM-4.6 model directly
@@ -1451,7 +1479,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=https://api.z.ai/api/paas/v4 -a <app-name>
 flyctl secrets set ANTHROPIC_API_KEY=your-z-ai-key -a <app-name>
 ```
 
-**Example 3: Z.ai via OpenRouter (Easiest)**
+##### Example 3: Z.ai via OpenRouter (Easiest)
 
 ```bash
 # Access GLM-4.6 plus 400+ other models
@@ -1459,7 +1487,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1 -a <app-name>
 flyctl secrets set ANTHROPIC_API_KEY=sk-or-... -a <app-name>
 ```
 
-**Example 4: Cost-Optimized (DeepSeek + Gemini)**
+##### Example 4: Cost-Optimized (DeepSeek + Gemini)
 
 ```bash
 # Set up claude-code-proxy with cheap providers
@@ -1474,7 +1502,7 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:8082 -a <app-name>
 # claude-code-proxy &
 ```
 
-**Example 5: Enterprise Multi-Cloud (LiteLLM)**
+##### Example 5: Enterprise Multi-Cloud (LiteLLM)
 
 ```bash
 # Set all provider keys
@@ -1493,11 +1521,14 @@ flyctl secrets set ANTHROPIC_BASE_URL=http://localhost:4000 -a <app-name>
 
 1. **Never Commit Secrets**: Add API keys to `.gitignore`. Use `.env.example` templates without actual keys.
 
-2. **Use Fly.io Secrets for Production**: Secrets are encrypted at rest and only accessible inside the VM at runtime.
+2. **Use Fly.io Secrets for Production**: Secrets are encrypted at rest and only accessible inside the VM at
+   runtime.
 
-3. **Rotate Secrets Regularly**: Establish a rotation schedule, especially after team changes or suspected compromise.
+3. **Rotate Secrets Regularly**: Establish a rotation schedule, especially after team changes or suspected
+   compromise.
 
-4. **Principle of Least Privilege**: Use read-only or limited-scope API keys when possible. For cloud providers, create service accounts with minimal permissions.
+4. **Principle of Least Privilege**: Use read-only or limited-scope API keys when possible. For cloud providers,
+   create service accounts with minimal permissions.
 
 5. **Separate Environments**: Use different API keys for development, staging, and production.
 
@@ -1519,9 +1550,11 @@ OPENROUTER_API_KEY=sk-or-actual_secret_key
 
 #### Cost Optimization Strategies
 
-1. **Use Cheaper Models for Simple Tasks**: Route haiku/fast-tier requests to cheaper providers like DeepSeek ($1/M) or Gemini Flash (free tier).
+1. **Use Cheaper Models for Simple Tasks**: Route haiku/fast-tier requests to cheaper providers like DeepSeek
+   ($1/M) or Gemini Flash (free tier).
 
-2. **Local Models for Development**: Use Ollama with Llama 3.2 or CodeLlama during development to avoid API costs.
+2. **Local Models for Development**: Use Ollama with Llama 3.2 or CodeLlama during development to avoid API
+   costs.
 
 3. **Provider Comparison** (per 1M tokens, approximate):
    - **DeepSeek**: $1
@@ -1647,14 +1680,14 @@ claude-code-proxy &
 ```json
 // /workspace/projects/active/my-app/.vscode/settings.json
 {
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-        "source.fixAll.eslint": true
-    },
-    "typescript.preferences.importModuleSpecifier": "relative",
-    "files.associations": {
-        "*.css": "postcss"
-    }
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "files.associations": {
+    "*.css": "postcss"
+  }
 }
 ```
 
@@ -1663,12 +1696,12 @@ claude-code-proxy &
 ```json
 // ~/.vscode-server/data/Machine/settings.json
 {
-    "terminal.integrated.shell.linux": "/bin/bash",
-    "remote.SSH.remotePlatform": {
-        "my-sindri-dev.fly.dev": "linux"
-    },
-    "workbench.colorTheme": "Dark+ (default dark)",
-    "editor.minimap.enabled": false
+  "terminal.integrated.shell.linux": "/bin/bash",
+  "remote.SSH.remotePlatform": {
+    "my-sindri-dev.fly.dev": "linux"
+  },
+  "workbench.colorTheme": "Dark+ (default dark)",
+  "editor.minimap.enabled": false
 }
 ```
 
@@ -1679,19 +1712,19 @@ claude-code-proxy &
 ```json
 // /workspace/developer/.claude/settings.json
 {
-    "hooks": {
-        "user-prompt-submit": "prettier --write .",
-        "tool-use-start": "git add -A",
-        "tool-use-end": "npm run lint --fix"
-    },
-    "outputStyles": {
-        "default": {
-            "codeBlock": {
-                "showLineNumbers": true,
-                "theme": "github-dark"
-            }
-        }
+  "hooks": {
+    "user-prompt-submit": "prettier --write .",
+    "tool-use-start": "git add -A",
+    "tool-use-end": "npm run lint --fix"
+  },
+  "outputStyles": {
+    "default": {
+      "codeBlock": {
+        "showLineNumbers": true,
+        "theme": "github-dark"
+      }
     }
+  }
 }
 ```
 

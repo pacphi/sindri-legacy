@@ -4,9 +4,11 @@ This guide explains how to create and publish new releases for Sindri.
 
 ## Overview
 
-Sindri uses **automated releases** triggered by Git tags. The entire release workflow is defined in `.github/workflows/release.yml` and follows semantic versioning principles.
+Sindri uses **automated releases** triggered by Git tags. The entire release workflow is defined in
+`.github/workflows/release.yml` and follows semantic versioning principles.
 
 When you push a version tag, GitHub Actions automatically:
+
 - Validates the tag format
 - Generates a changelog from commit messages
 - Updates CHANGELOG.md
@@ -55,6 +57,7 @@ Use [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH):
 - **PATCH** (v1.0.1): Bug fixes, security updates
 
 Examples:
+
 - Adding a new extension → MINOR version bump
 - Fixing a bug in vm-setup.sh → PATCH version bump
 - Changing the extension API → MAJOR version bump
@@ -99,6 +102,7 @@ git push origin v1.2.3-rc.1
 ```
 
 **Pre-release behavior:**
+
 - Marked as "Pre-release" on GitHub
 - Not set as the "latest" release
 - Documentation is not updated
@@ -137,11 +141,12 @@ curl -fsSL https://github.com/pacphi/sindri/releases/download/v1.2.3/install.sh 
 
 Tags must follow this pattern:
 
-```
+```text
 v[MAJOR].[MINOR].[PATCH](-[PRERELEASE])?
 ```
 
 **Valid tags:**
+
 - `v1.0.0` - Stable release
 - `v1.2.3` - Stable release
 - `v2.0.0-alpha.1` - Alpha pre-release
@@ -149,6 +154,7 @@ v[MAJOR].[MINOR].[PATCH](-[PRERELEASE])?
 - `v1.0.0-rc.1` - Release candidate
 
 **Invalid tags:**
+
 - `1.0.0` - Missing 'v' prefix
 - `v1.0` - Missing patch version
 - `release-1.0.0` - Wrong prefix
@@ -160,7 +166,7 @@ The automation generates changelogs from commit messages. For best results, use 
 
 ### Commit Message Format
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -206,6 +212,7 @@ git commit -m "style: format shell scripts"
 ### Changelog Generation
 
 The workflow automatically:
+
 1. Compares current tag with previous tag
 2. Extracts all commits since last release
 3. Categorizes by commit type
@@ -221,6 +228,7 @@ The workflow automatically:
 ### CHANGELOG.md Updates
 
 For both stable and pre-releases:
+
 - Adds new version section to CHANGELOG.md
 - Preserves existing changelog entries
 - Commits and pushes updates back to main branch
@@ -229,17 +237,20 @@ For both stable and pre-releases:
 
 Three files are automatically created and attached:
 
-**install.sh**
+#### install.sh
+
 - Quick installation script
 - Downloads specific version
 - Validates prerequisites
 - Provides next steps
 
-**fly.toml.example**
+#### fly.toml.example
+
 - Example Fly.io configuration
 - Based on current fly.toml
 
-**QUICK_REFERENCE.md**
+#### QUICK_REFERENCE.md
+
 - Common commands
 - Setup instructions
 - Documentation links
@@ -247,6 +258,7 @@ Three files are automatically created and attached:
 ### Documentation Updates (Stable Releases Only)
 
 For stable releases (not pre-releases):
+
 - Updates version references in README.md
 - Version badges auto-update via shields.io
 - Commits documentation changes to main branch
@@ -277,6 +289,7 @@ If a release has issues:
 1. **Delete the release and tag** (see above)
 2. **Fix the issues** in your code
 3. **Create a new patch version** with the fixes:
+
    ```bash
    git tag v1.2.4
    git push origin v1.2.4
@@ -289,6 +302,7 @@ Never reuse a version number that has already been published.
 Use this checklist for each release:
 
 ### Pre-Release
+
 - [ ] All tests passing on main branch
 - [ ] All planned PRs merged
 - [ ] Documentation reviewed and updated
@@ -298,12 +312,14 @@ Use this checklist for each release:
 - [ ] Commit messages follow conventional format
 
 ### Release
+
 - [ ] Tag created with correct format
 - [ ] Tag pushed to GitHub
 - [ ] Workflow started successfully
 - [ ] All workflow jobs completed
 
 ### Post-Release
+
 - [ ] Release visible on GitHub releases page
 - [ ] Release assets present (install.sh, etc.)
 - [ ] Changelog accurate and complete
@@ -317,12 +333,14 @@ Use this checklist for each release:
 ### Patch Releases (v1.0.x)
 
 Create patch releases for:
+
 - Bug fixes
 - Security updates
 - Documentation corrections
 - Minor script improvements
 
 **Example:**
+
 ```bash
 git tag v1.0.1
 git push origin v1.0.1
@@ -331,12 +349,14 @@ git push origin v1.0.1
 ### Minor Releases (v1.x.0)
 
 Create minor releases for:
+
 - New extensions
 - New features
 - Backward-compatible enhancements
 - Tool updates
 
 **Example:**
+
 ```bash
 git tag v1.1.0
 git push origin v1.1.0
@@ -345,12 +365,14 @@ git push origin v1.1.0
 ### Major Releases (vx.0.0)
 
 Create major releases for:
+
 - Breaking API changes
 - Incompatible extension system changes
 - Major architectural changes
 - Workflow breaking changes
 
 **Example:**
+
 ```bash
 git tag v2.0.0
 git push origin v2.0.0
@@ -359,23 +381,27 @@ git push origin v2.0.0
 ### Pre-releases
 
 Use pre-releases for:
+
 - Testing new features
 - Early access for contributors
 - Release candidates before stable
 
 **Alpha** - Early development, unstable:
+
 ```bash
 git tag v1.2.0-alpha.1
 git push origin v1.2.0-alpha.1
 ```
 
 **Beta** - Feature complete, testing needed:
+
 ```bash
 git tag v1.2.0-beta.1
 git push origin v1.2.0-beta.1
 ```
 
 **Release Candidate** - Stable, final testing:
+
 ```bash
 git tag v1.2.0-rc.1
 git push origin v1.2.0-rc.1
@@ -391,6 +417,7 @@ If the release workflow fails:
 2. Review the failed job logs
 3. Fix the issue
 4. Delete the tag and recreate:
+
    ```bash
    git tag -d v1.2.3
    git push origin :refs/tags/v1.2.3
@@ -412,6 +439,7 @@ git push origin v1.2.3
 ### Changelog Not Generated
 
 The workflow generates changelog from commits. Ensure:
+
 - Commits exist between tags
 - Commit messages are properly formatted
 - Previous tag exists and is valid
@@ -419,6 +447,7 @@ The workflow generates changelog from commits. Ensure:
 ### Release Not Marked as Latest
 
 Only stable releases (without pre-release suffix) are marked as "latest":
+
 - `v1.2.3` → Marked as latest
 - `v1.2.3-beta.1` → Not marked as latest
 
@@ -427,11 +456,13 @@ Only stable releases (without pre-release suffix) are marked as "latest":
 ### Before Each Release
 
 1. **Run Local Tests**
+
    ```bash
    ./scripts/validate-changes.sh
    ```
 
 2. **Test VM Deployment**
+
    ```bash
    ./scripts/vm-setup.sh --app-name release-test
    ssh developer@release-test.fly.dev -p 10022 "/workspace/scripts/vm-configure.sh"
@@ -439,6 +470,7 @@ Only stable releases (without pre-release suffix) are marked as "latest":
    ```
 
 3. **Review Recent Commits**
+
    ```bash
    git log $(git describe --tags --abbrev=0)..HEAD --oneline
    ```
@@ -469,6 +501,7 @@ Sindri follows a rolling release model:
 - **Major releases**: When breaking changes are necessary
 
 There is no fixed schedule. Releases happen when:
+
 1. Sufficient changes have accumulated
 2. All tests pass
 3. Documentation is current

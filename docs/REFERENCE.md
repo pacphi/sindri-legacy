@@ -369,7 +369,8 @@ flyctl secrets unset API_KEY -a <app-name>
 
 ### Extension Management
 
-Sindri uses **Extension API v1.0** with manifest-based activation. Extensions are managed through the `extension-manager` command and controlled via the `active-extensions.conf` manifest.
+Sindri uses **Extension API v1.0** with manifest-based activation. Extensions are managed through the
+`extension-manager` command and controlled via the `active-extensions.conf` manifest.
 
 **List available extensions:**
 
@@ -377,24 +378,20 @@ Sindri uses **Extension API v1.0** with manifest-based activation. Extensions ar
 extension-manager list
 ```
 
-**Activate an extension (adds to manifest):**
+**Install an extension (auto-activates and installs):**
 
 ```bash
-extension-manager activate <name>
-
-# Examples:
-extension-manager activate rust
-extension-manager activate python
-extension-manager activate docker
-```
-
-**Install activated extension:**
-
-```bash
-# Install specific extension
 extension-manager install <name>
 
-# Or install all activated extensions
+# Examples:
+extension-manager install rust
+extension-manager install python
+extension-manager install docker
+
+# Or use interactive mode for guided setup
+extension-manager --interactive
+
+# Or install all extensions from manifest
 extension-manager install-all
 ```
 
@@ -492,12 +489,348 @@ remove() {
 }
 EOF
 
-# Activate and install the custom extension
-extension-manager activate custom
+# Install the custom extension (auto-activates)
 extension-manager install custom
 ```
 
 For detailed extension development, see the [Extension System README](../docker/lib/extensions.d/README.md).
+
+## mise Commands
+
+**mise** (https://mise.jdx.dev) is a modern polyglot tool version manager that provides unified management for language
+runtimes and development tools. Sindri uses mise to standardize tool installation across extensions.
+
+### Core Commands
+
+**List installed tools:**
+
+```bash
+mise ls                          # List all installed tools and versions
+mise ls node                     # List Node.js installations
+mise ls --current               # Show currently active versions
+mise ls --json                  # Output in JSON format
+
+# Examples:
+mise ls                         # Show all tools
+mise ls python                  # Show Python versions
+```
+
+**Install tools:**
+
+```bash
+mise install                     # Install all tools from mise.toml
+mise install node@22            # Install specific Node.js version
+mise install python@3.13        # Install specific Python version
+mise install npm:typescript     # Install npm package globally
+
+# Examples:
+mise install                    # Install from config
+mise install rust@stable        # Install stable Rust
+mise install cargo:ripgrep      # Install ripgrep via cargo
+```
+
+**Use/activate tools:**
+
+```bash
+mise use <tool>@<version>       # Add tool to mise.toml and install
+mise use node@lts               # Use Node.js LTS version
+mise use python@3.13            # Use Python 3.13
+mise use npm:prettier           # Use npm package globally
+
+# Options:
+--global, -g                    # Install globally (~/.config/mise/config.toml)
+--pin                          # Pin exact version
+--path <path>                  # Specify mise.toml location
+
+# Examples:
+mise use node@lts              # Use Node LTS locally
+mise use -g python@3.13        # Use Python 3.13 globally
+mise use npm:typescript --pin  # Pin exact TypeScript version
+```
+
+**Upgrade tools:**
+
+```bash
+mise upgrade                    # Upgrade all tools to latest compatible versions
+mise upgrade node              # Upgrade Node.js only
+mise upgrade --interactive     # Interactive upgrade selection
+
+# Examples:
+mise upgrade                   # Upgrade everything
+mise upgrade python rust       # Upgrade specific tools
+```
+
+**Remove tools:**
+
+```bash
+mise uninstall node@20         # Uninstall specific version
+mise prune                     # Remove unused tool versions
+mise prune --dry-run          # Preview what would be removed
+
+# Examples:
+mise uninstall python@3.12    # Remove Python 3.12
+mise prune                    # Clean up unused versions
+```
+
+### Configuration Commands
+
+**View/edit configuration:**
+
+```bash
+mise config                     # Show current configuration
+mise config ls                 # List all config files
+mise current                   # Show currently active tool versions
+mise current node              # Show current Node.js version
+
+# Examples:
+mise config                    # View active config
+mise current                   # Check active versions
+mise current python rust       # Check specific tools
+```
+
+**Check available versions:**
+
+```bash
+mise ls-remote <tool>          # List all available versions
+mise ls-remote node            # List available Node.js versions
+mise ls-remote python          # List available Python versions
+mise ls-remote --limit 20      # Limit results
+
+# Examples:
+mise ls-remote node           # See all Node versions
+mise ls-remote rust           # See all Rust versions
+```
+
+**System diagnostics:**
+
+```bash
+mise doctor                    # Check mise installation and configuration
+mise doctor --json            # Output diagnostics in JSON
+
+# Checks:
+# - mise installation
+# - Shell integration
+# - Tool installations
+# - Configuration validity
+```
+
+### Tool Installation Patterns
+
+**Language runtimes:**
+
+```bash
+mise use node@22               # Node.js 22.x
+mise use node@lts              # Latest LTS
+mise use python@3.13           # Python 3.13
+mise use ruby@3.4              # Ruby 3.4
+mise use go@1.24               # Go 1.24
+mise use rust@stable           # Rust stable
+```
+
+**Package ecosystem tools:**
+
+```bash
+# npm packages
+mise use npm:typescript        # TypeScript
+mise use npm:prettier          # Prettier
+mise use npm:eslint            # ESLint
+
+# pipx packages (Python CLI tools)
+mise use pipx:poetry           # Poetry
+mise use pipx:black            # Black formatter
+mise use pipx:ruff             # Ruff linter
+
+# cargo packages (Rust tools)
+mise use cargo:ripgrep         # ripgrep
+mise use cargo:fd-find         # fd
+mise use cargo:bat             # bat
+```
+
+**GitHub releases (ubi backend):**
+
+```bash
+mise use ubi:wagoodman/dive    # Docker image analyzer
+mise use ubi:bcicen/ctop       # Container monitoring
+mise use ubi:cli/cli           # GitHub CLI
+```
+
+**Infrastructure tools:**
+
+```bash
+mise use terraform@1.9         # Terraform
+mise use kubectl@1.31          # kubectl
+mise use helm@3.16             # Helm
+```
+
+### Configuration Files
+
+**Project-level configuration:**
+
+```bash
+# /workspace/projects/active/my-project/.mise.toml
+[tools]
+node = "22"
+python = "3.13"
+"npm:typescript" = "latest"
+"pipx:black" = "latest"
+
+[env]
+NODE_ENV = "development"
+```
+
+**Global configuration:**
+
+```bash
+# /workspace/developer/.config/mise/config.toml
+[tools]
+node = "lts"
+python = "3.13"
+rust = "stable"
+
+[settings]
+experimental = true
+```
+
+### Environment Variables
+
+**mise-specific variables:**
+
+```bash
+# Enable experimental features
+export MISE_EXPERIMENTAL=1
+
+# Change data directory
+export MISE_DATA_DIR=/custom/path
+
+# Change cache directory
+export MISE_CACHE_DIR=/custom/cache
+
+# Disable telemetry
+export MISE_TELEMETRY=0
+
+# Verbose output
+export MISE_DEBUG=1
+export MISE_TRACE=1
+
+# Shell integration
+export MISE_SHELL=bash
+```
+
+### Integration with extension-manager
+
+Extensions can use mise for tool installation:
+
+```bash
+# Check if mise is available
+extension-manager status mise-config
+
+# Install mise-managed tools
+extension-manager install nodejs    # Uses mise for Node.js
+extension-manager install python    # Uses mise for Python
+extension-manager install rust      # Uses mise for Rust
+
+# Validate mise-managed installations
+extension-manager validate nodejs
+extension-manager validate-all
+```
+
+### Common Workflows
+
+**Setting up a new project:**
+
+```bash
+cd /workspace/projects/active/my-app
+mise use node@lts python@3.13
+mise use npm:typescript npm:prettier
+mise install
+```
+
+**Switching tool versions:**
+
+```bash
+# Switch to different Node version
+mise use node@20
+node --version  # Now using Node 20
+
+# Switch back to LTS
+mise use node@lts
+```
+
+**Viewing bill of materials:**
+
+```bash
+# See all installed tools and versions
+mise ls
+
+# Export for documentation
+mise ls --json > tools-bom.json
+```
+
+**Upgrading all tools:**
+
+```bash
+# Check what would be upgraded
+mise outdated
+
+# Upgrade everything
+mise upgrade
+
+# Upgrade selectively
+mise upgrade --interactive
+```
+
+### Troubleshooting
+
+**Tool not found after installation:**
+
+```bash
+# Ensure shell integration is active
+mise activate bash >> ~/.bashrc
+source ~/.bashrc
+
+# Or manually add to PATH
+eval "$(mise activate bash)"
+```
+
+**Version conflicts:**
+
+```bash
+# Check current versions
+mise current
+
+# Check configuration files
+mise config ls
+
+# Reset to global config
+rm .mise.toml
+mise current
+```
+
+**Cache issues:**
+
+```bash
+# Clear cache
+rm -rf ~/.cache/mise
+
+# Reinstall tools
+mise install --force
+```
+
+**Registry unavailable:**
+
+```bash
+# Check network connectivity
+mise doctor
+
+# Use alternative registry (if supported)
+export MISE_REGISTRY_URL=https://alternative-registry.example.com
+```
+
+For more information, see:
+
+- mise documentation: https://mise.jdx.dev
+- Available tools: https://mise.jdx.dev/registry.html
+- Extension integration: [Extension System README](../docker/lib/extensions.d/README.md)
 
 ## Networking Commands
 

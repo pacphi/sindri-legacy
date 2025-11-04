@@ -1,0 +1,28 @@
+# nodejs-devtools.toml - npm global dev tools configuration for mise
+# Requires nodejs.toml to be installed first
+
+[tools]
+# npm global development tools
+"npm:typescript" = "latest"
+"npm:ts-node" = "latest"
+"npm:eslint" = "latest"
+"npm:@typescript-eslint/parser" = "latest"
+"npm:@typescript-eslint/eslint-plugin" = "latest"
+"npm:prettier" = "latest"
+"npm:nodemon" = "latest"
+"npm:goalie" = "latest"
+
+[tasks.format]
+description = "Format code with Prettier"
+run = "prettier --write ."
+
+[tasks.lint]
+description = "Lint code with ESLint"
+run = "eslint ."
+
+[tasks.typecheck]
+description = "Type check with TypeScript"
+run = "tsc --noEmit"
+
+[settings]
+experimental = true

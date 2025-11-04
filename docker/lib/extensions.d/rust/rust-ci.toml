@@ -1,0 +1,15 @@
+# rust-ci.toml - Minimal Rust configuration for CI
+# Lightweight config for CI/CD pipelines (no cargo tools)
+
+[tools]
+# Rust stable channel only
+rust = "stable"
+
+[env]
+RUST_BACKTRACE = "1"
+CARGO_HOME = "$HOME/.cargo"
+CI = "true"
+
+[settings]
+experimental = true
+verbose = false

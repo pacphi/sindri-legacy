@@ -1,0 +1,83 @@
+name: "Cleanup Fly.io Test App"
+description: "Destroys Fly.io machines, volumes, and app to clean up test resources"
+
+inputs:
+  app-name:
+    description: "Fly.io app name to cleanup"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  cleanup-ssh-keys:
+    description: "Whether to cleanup SSH key files"
+    required: false
+    default: "true"
+  ssh-key-path:
+    description: "Path to SSH private key"
+    required: false
+    default: "test_key"
+  ssh-pubkey-path:
+    description: "Path to SSH public key"
+    required: false
+    default: "test_key.pub"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Stop and destroy machines
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        app_name="${{ inputs.app-name }}"
+        echo "Stopping and destroying machines for app: $app_name"
+
+        machines=$(flyctl machine list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+        if [ -z "$machines" ]; then
+          echo "No machines found to cleanup"
+        else
+          for machine in $machines; do
+            [[ -z "$machine" ]] && continue
+            echo "Stopping machine: $machine"
+            flyctl machine stop $machine --app $app_name || true
+            sleep 3
+            echo "Destroying machine: $machine"
+            flyctl machine destroy $machine --app $app_name --force || true
+          done
+        fi
+
+    - name: Destroy volumes
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        app_name="${{ inputs.app-name }}"
+        echo "Destroying volumes for app: $app_name"
+
+        volumes=$(flyctl volumes list --app $app_name --json 2>/dev/null | jq -r '.[].id' || echo "")
+        if [ -z "$volumes" ]; then
+          echo "No volumes found to cleanup"
+        else
+          for volume in $volumes; do
+            [[ -z "$volume" ]] && continue
+            echo "Destroying volume: $volume"
+            flyctl volumes destroy $volume --app $app_name --yes || true
+          done
+        fi
+
+    - name: Destroy app
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        app_name="${{ inputs.app-name }}"
+        echo "Destroying app: $app_name"
+        flyctl apps destroy $app_name --yes || true
+
+    - name: Cleanup SSH keys
+      if: inputs.cleanup-ssh-keys == 'true'
+      shell: bash
+      run: |
+        echo "Cleaning up SSH key files"
+        rm -f ${{ inputs.ssh-key-path }} ${{ inputs.ssh-pubkey-path }}
+        echo "✅ SSH keys removed"

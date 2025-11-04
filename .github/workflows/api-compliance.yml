@@ -1,0 +1,197 @@
+name: Extension API Compliance Tests
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+
+jobs:
+  extension-api-tests:
+    name: Test Extension API - ${{ matrix.extension }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        # Test representative sample of extensions for API compliance
+        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # NEW: Using composite action for setup
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: "${{ inputs.test_app_prefix }}-api"
+          extension-name: ${{ matrix.extension }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          vm-memory: "4096"
+          vm-cpu-kind: "shared"
+          vm-cpu-count: "2"
+
+      # NEW: Using composite action for deployment
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "600"
+          pre-built-image: ${{ inputs.pre_built_image }}
+
+      # NEW: Using composite action for waiting
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "420"
+          expected-status: "started"
+
+      - name: Install extension
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension="${{ matrix.extension }}"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            # Add dependencies if needed
+            case \"$extension\" in
+              nodejs|python|rust|golang)
+                echo \"mise-config\" > \$manifest
+                ;;
+              monitoring)
+                echo \"mise-config\" > \$manifest
+                echo \"nodejs\" >> \$manifest
+                echo \"python\" >> \$manifest
+                ;;
+            esac
+
+            echo \"$extension\" >> \$manifest
+            bash extension-manager.sh install-all
+          '"
+
+      # NEW: Using extracted test-api-compliance.sh script
+      - name: Test API compliance (validate, status)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension="${{ matrix.extension }}"
+
+          echo "Testing API compliance for $extension..."
+
+          # Create lib directory first
+          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+
+          # Upload files and fix permissions for developer user
+          flyctl ssh sftp put .github/scripts/extension-tests/test-api-compliance.sh /tmp/test-api-compliance.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
+          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-api-compliance.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            bash /tmp/test-api-compliance.sh $extension
+          '"
+
+      - name: Test uninstall() function
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension="${{ matrix.extension }}"
+
+          echo "Testing uninstall() function for $extension..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+
+            echo \"Running: extension-manager uninstall $extension\"
+            if bash extension-manager.sh uninstall $extension 2>&1 | tee /tmp/uninstall.log; then
+              echo \"✅ uninstall() completed\"
+
+              # Verify remove() function was called
+              if grep -q \"remove\" /tmp/uninstall.log || grep -q \"Uninstall\" /tmp/uninstall.log; then
+                echo \"✅ remove() function executed\"
+              else
+                echo \"⚠️  No evidence of remove() execution\"
+              fi
+            else
+              echo \"❌ uninstall() failed\"
+              exit 1
+            fi
+          '"
+
+      - name: Test deactivate() function
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          extension="${{ matrix.extension }}"
+
+          echo "Testing deactivate() function for $extension..."
+
+          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            cd /workspace/scripts/lib
+            manifest=\"extensions.d/active-extensions.conf\"
+
+            # Re-add extension to manifest (was removed by uninstall)
+            echo \"$extension\" >> \$manifest
+
+            echo \"Running: extension-manager deactivate $extension\"
+            if bash extension-manager.sh deactivate $extension 2>&1; then
+              echo \"✅ deactivate() completed\"
+
+              # Verify extension removed from manifest
+              if grep -q \"^$extension\$\" \$manifest; then
+                echo \"❌ Extension still in manifest after deactivate\"
+                exit 1
+              else
+                echo \"✅ Extension removed from manifest\"
+              fi
+            else
+              echo \"❌ deactivate() failed\"
+              exit 1
+            fi
+          '"
+
+      # NEW: Using composite action for cleanup
+      - name: Cleanup test resources
+        if: always()
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

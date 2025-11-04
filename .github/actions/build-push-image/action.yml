@@ -1,0 +1,76 @@
+name: "Build and Push Docker Image"
+description: "Builds Docker image and pushes to Fly.io registry"
+
+inputs:
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  tag:
+    description: "Image tag (e.g., pr-123-a1b2c3d)"
+    required: true
+  registry-app:
+    description: "Fly registry app name"
+    required: false
+    default: "sindri-registry"
+  dockerfile:
+    description: "Path to Dockerfile"
+    required: false
+    default: "Dockerfile"
+  build-context:
+    description: "Docker build context directory"
+    required: false
+    default: "."
+
+outputs:
+  image-url:
+    description: "Full image URL (registry.fly.io/app:tag)"
+    value: ${{ steps.push.outputs.url }}
+  image-tag:
+    description: "Image tag used"
+    value: ${{ inputs.tag }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Fly CLI
+      uses: superfly/flyctl-actions/setup-flyctl@master
+
+    - name: Authenticate with Fly Docker registry
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Authenticating with Fly.io Docker registry..."
+        flyctl auth docker
+
+    - name: Build and push image
+      id: push
+      shell: bash
+      run: |
+        IMAGE_URL="registry.fly.io/${{ inputs.registry-app }}:${{ inputs.tag }}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Building Docker image"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Image: ${IMAGE_URL}"
+        echo "Dockerfile: ${{ inputs.dockerfile }}"
+        echo "Context: ${{ inputs.build-context }}"
+        echo ""
+
+        # Build image
+        docker build \
+          -f ${{ inputs.dockerfile }} \
+          -t ${IMAGE_URL} \
+          ${{ inputs.build-context }}
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Pushing to Fly.io registry"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Push to registry
+        docker push ${IMAGE_URL}
+
+        # Set outputs
+        echo "url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+        echo ""
+        echo "✅ Image pushed successfully: ${IMAGE_URL}"

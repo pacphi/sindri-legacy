@@ -48,15 +48,17 @@ Thanks for the inspiration [Marcus Patman](https://github.com/marcuspat)!
 ### 🔧 Extension System v1.0
 
 - **Manifest-Based Activation**: Control which tools install via `active-extensions.conf`
-- **Standardized API**: All extensions implement 6 required functions (prerequisites, install, configure, validate, status, remove)
+- **Standardized API**: All extensions implement 6 required functions (prerequisites, install, configure, validate,
+  status, remove)
 - **CLI Management**: Use `extension-manager` for activating, installing, and managing extensions
 - **Dependency Management**: Explicit prerequisite checking before installation
 - **Idempotent Operations**: Safe to re-run installations
 - **Clean Removal**: Proper uninstall with dependency warnings
 
 **Available Extensions:**
+
 - Core: `workspace-structure`, `nodejs`, `ssh-environment`
-- Claude AI: `claude-config`, `nodejs-devtools`, `agent-manager`, `context-loader`
+- Claude AI: `claude`, `nodejs-devtools`, `agent-manager`, `context-loader`
 - Languages: `python`, `rust`, `golang`, `ruby`, `php`, `jvm`, `dotnet`
 - Infrastructure: `docker`, `infra-tools`, `cloud-tools`, `ai-tools`
 - Tools: `monitoring`, `tmux-workspace`, `playwright`
@@ -100,10 +102,9 @@ ssh developer@my-claude-env.fly.dev -p 10022
 # Authenticate Claude Code
 claude
 
-# Activate and install required extensions
-extension-manager activate agent-manager
-extension-manager activate tmux-workspace
-extension-manager install-all
+# Install required extensions (auto-activates)
+extension-manager install agent-manager
+extension-manager install tmux-workspace
 
 # Start the tmux workspace
 tmux-workspace
@@ -119,11 +120,10 @@ cf-swarm "Build a modern web application with authentication"
 
 ### Agent Management
 
-**Prerequisites**: Requires the `agent-manager` extension to be activated and installed.
+**Prerequisites**: Requires the `agent-manager` extension to be installed.
 
 ```bash
-# Activate and install the agent-manager extension
-extension-manager activate agent-manager
+# Install the agent-manager extension (auto-activates)
 extension-manager install agent-manager
 ```
 
@@ -184,11 +184,10 @@ context-hierarchy
 
 ### Tmux Workspace
 
-**Prerequisites**: Requires the `tmux-workspace` extension to be activated and installed.
+**Prerequisites**: Requires the `tmux-workspace` extension to be installed.
 
 ```bash
-# Activate and install the tmux-workspace extension
-extension-manager activate tmux-workspace
+# Install the tmux-workspace extension (auto-activates)
 extension-manager install tmux-workspace
 ```
 
@@ -342,12 +341,12 @@ npx playwright test --ui
 
 ### Key Configuration Files
 
-| File | Purpose | Location |
-|------|---------|----------|
-| `agents-config.yaml` | Agent sources | `/workspace/config/` |
-| `tmux.conf` | Tmux configuration | `/workspace/config/` |
-| `CLAUDE.md` | Global context | `/workspace/context/` |
-| `CCFOREVER.md` | Quality assurance | `/workspace/context/` |
+| File                 | Purpose            | Location              |
+| -------------------- | ------------------ | --------------------- |
+| `agents-config.yaml` | Agent sources      | `/workspace/config/`  |
+| `tmux.conf`          | Tmux configuration | `/workspace/config/`  |
+| `CLAUDE.md`          | Global context     | `/workspace/context/` |
+| `CCFOREVER.md`       | Quality assurance  | `/workspace/context/` |
 
 ### Environment Variables
 
@@ -494,13 +493,16 @@ name: My Custom Agent
 description: Specialized agent for my specific needs
 
 ## Instructions
+
 You are a specialized agent that helps with...
 
 ## Capabilities
+
 - Specific capability 1
 - Specific capability 2
 
 ## Usage Examples
+
 Use this agent when you need to...
 ```
 

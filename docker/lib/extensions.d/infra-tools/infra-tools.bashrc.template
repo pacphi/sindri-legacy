@@ -1,0 +1,43 @@
+
+# Infrastructure aliases
+alias tf="terraform"
+alias tfi="terraform init"
+alias tfp="terraform plan"
+alias tfa="terraform apply"
+alias tfd="terraform destroy"
+alias tfv="terraform validate"
+alias tff="terraform fmt"
+
+# Kubernetes aliases
+alias k="kubectl"
+alias kg="kubectl get"
+alias kd="kubectl describe"
+alias kdel="kubectl delete"
+alias kl="kubectl logs"
+alias kx="kubectx"
+alias kn="kubens"
+
+# Helm aliases
+alias h="helm"
+alias hi="helm install"
+alias hu="helm upgrade"
+alias hls="helm list"
+alias hdel="helm delete"
+alias hs="helm search"
+
+# Ansible aliases
+alias ap="ansible-playbook"
+alias av="ansible-vault"
+alias ag="ansible-galaxy"
+
+# Pulumi aliases
+alias pu="pulumi"
+alias pup="pulumi up"
+alias pud="pulumi destroy"
+alias pus="pulumi stack"
+
+# Carvel aliases
+alias ka="kapp"
+alias kad="kapp deploy"
+alias kal="kapp list"
+alias kadel="kapp delete"

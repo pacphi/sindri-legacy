@@ -13,8 +13,94 @@ This comprehensive guide helps resolve common issues with your Sindri developmen
 7. [Performance Issues](#performance-issues)
 8. [Cost and Billing Issues](#cost-and-billing-issues)
 9. [Claude Tools Issues](#claude-tools-issues)
+10. [mise Troubleshooting](#mise-troubleshooting)
 
 ## SSH Connection Issues
+
+### Understanding SSH Connection Methods
+
+Sindri provides **two ways** to connect to your VM. Understanding when to use each is important for the best experience.
+
+#### Method 1: Regular SSH (Recommended for Daily Use)
+
+```bash
+ssh developer@<app-name>.fly.dev -p 10022
+```
+
+**When to use:**
+
+- ✅ Normal development work
+- ✅ Running extension-manager commands
+- ✅ IDE remote development (VSCode, IntelliJ)
+- ✅ Daily workflow operations
+
+**Benefits:**
+
+- Automatically connects as `developer` user
+- Full shell environment with .bashrc loaded
+- Best performance and user experience
+- Works with IDE remote development
+- No additional flags needed
+
+**How it works:**
+
+- Uses custom SSH daemon on port 10022
+- Configured via `ssh-environment` protected extension
+- Persistent SSH keys in `/workspace/developer/.ssh/`
+
+#### Method 2: flyctl ssh console (Troubleshooting/Emergency)
+
+```bash
+# Default (connects as root)
+flyctl ssh console -a <app-name>
+
+# Connect as developer user (for extension work)
+flyctl ssh console -a <app-name> --user developer
+```
+
+**When to use:**
+
+- ⚠️ Port 10022 SSH is broken
+- ⚠️ Emergency access needed
+- ⚠️ Debugging system-level issues
+- ⚠️ SSH daemon troubleshooting
+
+**Important Notes:**
+
+- **Defaults to root user** - good for system troubleshooting
+- Use `--user developer` flag when running extension commands
+- Uses Fly.io's built-in hallpass service (always available)
+- Fallback when custom SSH daemon fails
+
+**User Context Matters:**
+
+```bash
+# ❌ BAD: Extensions install to /root/.local/ (won't be in developer's PATH)
+flyctl ssh console -a my-app -C "extension-manager install nodejs"
+
+# ✅ GOOD: Extensions install to /workspace/developer/.local/
+flyctl ssh console -a my-app --user developer -C "extension-manager install nodejs"
+
+# ✅ BEST: Use regular SSH instead
+ssh developer@my-app.fly.dev -p 10022
+# Then run: extension-manager install nodejs
+```
+
+#### Quick Decision Guide
+
+| Scenario                   | Use This Method                                          |
+| -------------------------- | -------------------------------------------------------- |
+| Daily development          | `ssh developer@<app>.fly.dev -p 10022`                   |
+| Running extension-manager  | `ssh developer@<app>.fly.dev -p 10022`                   |
+| IDE remote development     | `ssh developer@<app>.fly.dev -p 10022`                   |
+| Port 10022 not working     | `flyctl ssh console -a <app> --user developer`           |
+| System debugging (as root) | `flyctl ssh console -a <app>`                            |
+| Check sshd status          | `flyctl ssh console -a <app> -C "systemctl status sshd"` |
+
+**Key Takeaway:** For regular development, always use standard SSH (port 10022). Only use `flyctl ssh console` as a
+fallback, and remember to add `--user developer` if running extension or development commands.
+
+---
 
 ### Host Key Verification Failed
 
@@ -309,12 +395,14 @@ git config --global user.email "your-email@example.com"
 Your Claude environment provides two SSH access methods:
 
 #### 1. **Custom SSH Daemon** (Primary for Development)
+
 - **External Port**: 10022 (what you connect to)
 - **Internal Port**: 2222 (where SSH daemon runs)
 - **Usage**: `ssh developer@<app-name>.fly.dev -p 10022`
 - **Purpose**: IDE connections, file transfers, persistent sessions
 
 #### 2. **Fly.io Hallpass Service** (Built-in)
+
 - **Internal Port**: 22 (Fly.io's built-in service)
 - **Usage**: `flyctl ssh console -a <app-name>`
 - **Purpose**: Quick access, debugging, CI/CD operations
@@ -328,18 +416,21 @@ Your Claude environment provides two SSH access methods:
 **Cause:** Custom SSH daemon trying to bind to port 22 conflicts with Fly.io's hallpass service.
 
 **Solution:** The system automatically resolves this:
+
 - **Production**: SSH daemon runs on port 2222, no conflicts
 - **CI Mode**: SSH daemon disabled entirely, only hallpass available
 
 #### When to Use Which SSH Method
 
 **Use Custom SSH (`ssh -p 10022`)** for:
+
 - IDE remote development (VSCode, IntelliJ)
 - File transfers (rsync, scp)
 - Long-running sessions
 - Port forwarding
 
 **Use Flyctl SSH (`flyctl ssh console`)** for:
+
 - Quick debugging and inspection
 - CI/CD pipeline access
 - When custom SSH is unavailable
@@ -475,7 +566,6 @@ Common quick fixes:
    ```
 
 4. Review Fly.io dashboard:
-
    - Check at [Fly.io Dashboard](https://fly.io/dashboard)
    - Look for running machines you forgot about
 
@@ -549,6 +639,374 @@ Common quick fixes:
    node --version  # Should be 18.x or later
    ```
 
+## mise Troubleshooting
+
+### Tool Version Conflicts
+
+**Problem:** Multiple tools trying to use different versions of the same dependency.
+
+**Symptoms:**
+
+```bash
+mise: Command failed with exit code 1
+mise: Tool X requires version Y but version Z is installed
+```
+
+**Solutions:**
+
+1. Check which tools are managing the same dependency:
+
+   ```bash
+   mise ls
+   mise current
+   ```
+
+2. Review your `.mise.toml` for conflicting version specifications:
+
+   ```bash
+   cat .mise.toml
+   ```
+
+3. Resolve conflicts by:
+   - Standardizing on a single version across all tools
+   - Using version ranges instead of exact pins
+   - Removing duplicate tool definitions
+
+4. Clear mise cache and reinstall:
+
+   ```bash
+   mise cache clear
+   mise install --force
+   ```
+
+### mise Registry Unavailable
+
+**Problem:** Cannot download tools from mise registry.
+
+**Symptoms:**
+
+```bash
+mise: Failed to fetch registry
+mise: Connection timeout to registry.mise.jdx.dev
+```
+
+**Solutions:**
+
+1. Check network connectivity:
+
+   ```bash
+   curl -I https://registry.mise.jdx.dev
+   ```
+
+2. Verify DNS resolution:
+
+   ```bash
+   nslookup registry.mise.jdx.dev
+   ```
+
+3. Use offline mode with local cache:
+
+   ```bash
+   mise install --offline
+   ```
+
+4. Temporarily use GitHub backend if registry is down:
+
+   ```bash
+   export MISE_USE_GITHUB_BACKEND=1
+   mise install
+   ```
+
+5. Check Fly.io network restrictions:
+
+   ```bash
+   flyctl ssh console -a <app-name>
+   curl -v https://registry.mise.jdx.dev
+   ```
+
+### Tool Not Found After Installation
+
+**Problem:** Tool installed via mise but command not available in PATH.
+
+**Symptoms:**
+
+```bash
+mise install node@20
+# Installation succeeds
+node --version
+# bash: node: command not found
+```
+
+**Solutions:**
+
+1. Verify mise is properly initialized in shell:
+
+   ```bash
+   mise doctor
+   # Look for shell integration status
+   ```
+
+2. Check if mise shims directory is in PATH:
+
+   ```bash
+   echo $PATH | grep mise
+   ```
+
+3. Activate mise in current shell:
+
+   ```bash
+   eval "$(mise activate bash)"
+   # or for zsh
+   eval "$(mise activate zsh)"
+   ```
+
+4. Verify tool is actually installed:
+
+   ```bash
+   mise ls
+   mise which node
+   ```
+
+5. Reload shell configuration:
+
+   ```bash
+   source ~/.bashrc
+   # or
+   exec bash -l
+   ```
+
+6. Check for conflicting tool managers:
+
+   ```bash
+   which -a node  # Shows all instances in PATH
+   ```
+
+### mise doctor Output Interpretation
+
+**Problem:** Understanding `mise doctor` diagnostics.
+
+**Usage:**
+
+```bash
+mise doctor
+```
+
+**Key Indicators:**
+
+1. **Shell Integration**:
+
+   ```text
+   ✓ shell: bash
+   ✓ mise hook: installed
+   ```
+
+   - ✓ means mise is properly integrated
+   - ✗ means shell hook is missing - run `mise activate`
+
+2. **Configuration Files**:
+
+   ```text
+   ✓ config: /workspace/projects/active/myapp/.mise.toml
+   ✓ config: ~/.config/mise/config.toml
+   ```
+
+   - Shows which config files are being loaded
+   - Order matters: project-level overrides global
+
+3. **Tool Installation**:
+
+   ```text
+   ✓ node@20.11.0: installed at /home/developer/.local/share/mise/installs/node/20.11.0
+   ✗ python@3.12: not installed
+   ```
+
+   - ✓ means tool is installed and working
+   - ✗ means tool needs installation
+
+4. **PATH Configuration**:
+
+   ```text
+   ✓ mise shims in PATH
+   ✗ conflicting version managers detected
+   ```
+
+   - Check for conflicts with other version managers (if not using mise)
+
+**Common Issues and Fixes**:
+
+- **Shell hook not installed**: Add to `~/.bashrc`:
+
+  ```bash
+  eval "$(mise activate bash)"
+  ```
+
+- **Config file not found**: Create project config:
+
+  ```bash
+  mise use node@20
+  ```
+
+- **Tool not in PATH**: Verify shims directory:
+
+  ```bash
+  ls -la $(mise config dir)/shims
+  ```
+
+### TOML Syntax Errors
+
+**Problem:** Malformed `.mise.toml` configuration files.
+
+**Symptoms:**
+
+```bash
+mise: TOML parse error at line 5
+mise: Invalid TOML syntax
+```
+
+**Common Mistakes:**
+
+1. **Missing quotes around strings**:
+
+   ```toml
+   # Wrong
+   [tools]
+   node = 20.11.0
+
+   # Correct
+   [tools]
+   node = "20.11.0"
+   ```
+
+2. **Incorrect array syntax**:
+
+   ```toml
+   # Wrong
+   [env]
+   PATH = "$HOME/bin:$PATH"
+
+   # Correct
+   [env]
+   _.path = ["$HOME/bin"]
+   ```
+
+3. **Invalid environment variable format**:
+
+   ```toml
+   # Wrong
+   [env]
+   MY_VAR = value with spaces
+
+   # Correct
+   [env]
+   MY_VAR = "value with spaces"
+   ```
+
+4. **Duplicate keys**:
+
+   ```toml
+   # Wrong - duplicate [tools] section
+   [tools]
+   node = "20"
+   [tools]
+   python = "3.12"
+
+   # Correct
+   [tools]
+   node = "20"
+   python = "3.12"
+   ```
+
+**Validation:**
+
+1. Use mise to validate syntax:
+
+   ```bash
+   mise config validate
+   ```
+
+2. Check for common issues:
+
+   ```bash
+   mise ls --json 2>&1 | grep -i error
+   ```
+
+3. Use TOML linter:
+
+   ```bash
+   # Install taplo (TOML formatter/linter)
+   cargo install taplo-cli
+   taplo check .mise.toml
+   ```
+
+### Permission Issues with ~/.config/mise
+
+**Problem:** Cannot write to mise configuration directory.
+
+**Symptoms:**
+
+```bash
+mise: Permission denied: /home/developer/.config/mise/config.toml
+mise: Failed to create directory /home/developer/.local/share/mise
+```
+
+**Solutions:**
+
+1. Check directory ownership:
+
+   ```bash
+   ls -la ~/.config/mise
+   ls -la ~/.local/share/mise
+   ```
+
+2. Fix ownership if incorrect:
+
+   ```bash
+   sudo chown -R $(whoami):$(whoami) ~/.config/mise
+   sudo chown -R $(whoami):$(whoami) ~/.local/share/mise
+   ```
+
+3. Fix directory permissions:
+
+   ```bash
+   chmod 755 ~/.config/mise
+   chmod 755 ~/.local/share/mise
+   chmod 644 ~/.config/mise/config.toml
+   ```
+
+4. If directories don't exist, create them:
+
+   ```bash
+   mkdir -p ~/.config/mise
+   mkdir -p ~/.local/share/mise/{installs,plugins,shims}
+   ```
+
+5. For VM environment, verify workspace volume is mounted:
+
+   ```bash
+   df -h /workspace
+   mount | grep workspace
+   ```
+
+6. Reset mise directory structure:
+
+   ```bash
+   # Backup existing config
+   cp ~/.config/mise/config.toml ~/mise-config-backup.toml
+
+   # Remove and recreate
+   rm -rf ~/.config/mise ~/.local/share/mise
+   mise doctor  # Will recreate directories
+
+   # Restore config
+   cp ~/mise-config-backup.toml ~/.config/mise/config.toml
+   ```
+
+**Prevention:**
+
+- Always run mise as the developer user, not root
+- Ensure `/workspace` is properly mounted before using mise
+- Add mise directories to backup scripts to preserve configuration
+
 ## Getting More Help
 
 If your issue isn't covered here:
@@ -565,20 +1023,28 @@ If your issue isn't covered here:
    DEBUG=true ./scripts/vm-setup.sh --app-name my-sindri-dev
    ```
 
-3. **Community resources**:
+3. **Enable mise debug output**:
 
+   ```bash
+   MISE_DEBUG=1 mise install
+   MISE_VERBOSE=1 mise doctor
+   ```
+
+4. **Community resources**:
    - [Fly.io Community Forum](https://community.fly.io)
    - [Claude Documentation](https://docs.anthropic.com)
+   - [mise Documentation](https://mise.jdx.dev)
    - [GitHub Issues](https://github.com/pacphi/sindri/issues)
 
-4. **Contact support**:
-
+5. **Contact support**:
    - [Fly.io Support](https://fly.io/docs/about/support/)
    - [Anthropic Support](https://support.anthropic.com)
+   - [mise GitHub Issues](https://github.com/jdx/mise/issues)
 
 Remember to include:
 
 - Exact error messages
 - Commands you ran
 - Output from `flyctl status` and `flyctl logs`
-- Your `fly.toml` configuration (remove any secrets)
+- Output from `mise doctor` if mise-related
+- Your `fly.toml` and `.mise.toml` configurations (remove any secrets)

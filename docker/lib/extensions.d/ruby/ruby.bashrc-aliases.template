@@ -1,0 +1,73 @@
+
+# Ruby aliases
+alias rb="ruby"
+alias r="rails"
+alias b="bundle"
+alias be="bundle exec"
+alias bi="bundle install"
+alias bu="bundle update"
+alias ba="bundle add"
+alias blog="bundle outdated"
+alias bclean="bundle clean --force"
+
+# Rails aliases
+alias rc="rails console"
+alias rs="rails server"
+alias rg="rails generate"
+alias rgm="rails generate migration"
+alias rgmo="rails generate model"
+alias rgc="rails generate controller"
+alias rgs="rails generate scaffold"
+alias rd="rails destroy"
+alias rdb="rails db:create"
+alias rdbm="rails db:migrate"
+alias rdbr="rails db:rollback"
+alias rdbs="rails db:seed"
+alias rdbms="rails db:migrate:status"
+alias rdbreset="rails db:drop db:create db:migrate db:seed"
+alias rt="rails test"
+alias rr="rails routes"
+alias rrg="rails routes | grep"
+
+# Rake aliases
+alias rk="rake"
+alias rkr="rake routes"
+alias rkm="rake db:migrate"
+alias rks="rake db:seed"
+alias rkt="rake test"
+
+# Gem aliases
+alias gi="gem install"
+alias gu="gem update"
+alias gl="gem list"
+alias gs="gem search"
+alias gclean="gem cleanup"
+
+# Bundler aliases
+alias brake="bundle exec rake"
+alias brails="bundle exec rails"
+alias brspec="bundle exec rspec"
+alias bcop="bundle exec rubocop"
+
+# Testing aliases
+alias rspec="bundle exec rspec"
+alias rspecf="bundle exec rspec --fail-fast"
+alias rspeco="bundle exec rspec --only-failures"
+alias cop="bundle exec rubocop"
+alias copa="bundle exec rubocop -a"
+alias copA="bundle exec rubocop -A"
+
+# Development server aliases
+alias pumas="bundle exec puma"
+alias pumac="bundle exec pumactl"
+alias fore="bundle exec foreman start"
+alias sidekiq="bundle exec sidekiq"
+
+# mise Ruby management
+alias rbv="mise ls ruby"
+alias rbi="mise use ruby@"
+alias rbg="mise use -g ruby@"
+
+# Sinatra aliases
+alias sinatra="bundle exec ruby app.rb"
+alias sinatrar="bundle exec rerun ruby app.rb"

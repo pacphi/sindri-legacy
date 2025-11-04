@@ -1,0 +1,218 @@
+name: "Test Volume Persistence"
+description: "Tests volume persistence across machine restarts"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  test-path:
+    description: "Path for test file on volume"
+    required: false
+    default: "/workspace"
+  max-verification-attempts:
+    description: "Maximum attempts to verify file after restart"
+    required: false
+    default: "3"
+  max-ready-attempts:
+    description: "Maximum attempts to wait for machine ready"
+    required: false
+    default: "5"
+
+outputs:
+  status:
+    description: "Test status (success or failure)"
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Test volume persistence across restart
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Testing volume persistence..."
+
+        app_name="${{ inputs.app-name }}"
+        test_file="${{ inputs.test-path }}/test-persistence-$(date +%s).txt"
+        test_content="integration-test-$(date +%s)"
+
+        # ============================================================
+        # PHASE 1: Create test file and sync
+        # ============================================================
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "PHASE 1: Creating test file"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Test file: $test_file"
+        echo "Test content: $test_content"
+        echo ""
+
+        # Create test file with explicit sync operations
+        echo "Creating test file with content..."
+        flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          echo \"Creating and syncing test file...\"
+          echo \"$test_content\" > $test_file
+          sync
+          sleep 2
+          echo \"Verifying file was written correctly...\"
+          if [ -f \"$test_file\" ]; then
+            file_size=\$(wc -c < \"$test_file\")
+            echo \"File created with size: \$file_size bytes\"
+            cat \"$test_file\"
+          else
+            echo \"ERROR: File was not created\"
+            exit 1
+          fi
+        '"
+
+        # Force filesystem sync before restart
+        echo ""
+        echo "Forcing filesystem sync before restart..."
+        flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          echo \"Syncing filesystem before restart...\"
+          sync
+          echo \"Sync completed\"
+          sleep 3
+          echo \"Final file verification before restart:\"
+          ls -la \"$test_file\" 2>/dev/null || echo \"File not found\"
+          wc -c \"$test_file\" 2>/dev/null || echo \"Cannot get file size\"
+          cat \"$test_file\" 2>/dev/null || echo \"Cannot read file\"
+        '"
+
+        # Wait additional time for any remaining buffer flushes
+        echo "Waiting for buffer flush before restart..."
+        sleep 10
+
+        # ============================================================
+        # PHASE 2: Restart machine
+        # ============================================================
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "PHASE 2: Restarting machine"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Restart the machine to test persistence
+        echo "Restarting machine to test persistence..."
+        machine_id=$(flyctl machine list --app $app_name --json | jq -r '.[0].id')
+        flyctl machine restart $machine_id --app $app_name
+
+        # Wait for restart and ensure machine is ready
+        echo "Waiting for machine to restart and become ready..."
+        sleep 45
+
+        # Verify machine is running
+        max_ready_attempts=${{ inputs.max-ready-attempts }}
+        ready_attempt=1
+        while [ $ready_attempt -le $max_ready_attempts ]; do
+          echo "🔍 Checking machine status (attempt $ready_attempt/$max_ready_attempts)..."
+          if flyctl status --app $app_name | grep -q "started"; then
+            echo "✅ Machine is running"
+            break
+          else
+            echo "⚠️  Machine not ready, waiting..."
+            sleep 10
+            ready_attempt=$((ready_attempt + 1))
+          fi
+        done
+
+        if [ $ready_attempt -gt $max_ready_attempts ]; then
+          echo "❌ Machine failed to start after restart"
+          echo "status=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        # ============================================================
+        # PHASE 3: Verify file persistence
+        # ============================================================
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "PHASE 3: Verifying file persistence"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Test volume persistence with retry logic
+        echo "Testing file persistence after restart..."
+        max_verify_attempts=${{ inputs.max-verification-attempts }}
+        verify_attempt=1
+
+        while [ $verify_attempt -le $max_verify_attempts ]; do
+          echo "🔍 Persistence test attempt $verify_attempt/$max_verify_attempts..."
+
+          # Enhanced file verification with metadata
+          echo "Performing comprehensive file verification..."
+
+          verification_result=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+            echo \"=== Post-Restart File Verification ===\"
+            if [ -f \"$test_file\" ]; then
+              echo \"✅ File exists\"
+              echo \"File metadata:\"
+              ls -la \"$test_file\"
+              echo \"File size: \$(wc -c < \"$test_file\") bytes\"
+              echo \"File content:\"
+              content=\$(cat \"$test_file\" 2>/dev/null)
+              if [ -n \"\$content\" ]; then
+                echo \"\$content\"
+                echo \"VERIFICATION_STATUS=SUCCESS\"
+              else
+                echo \"[EMPTY FILE]\"
+                echo \"VERIFICATION_STATUS=EMPTY\"
+              fi
+            else
+              echo \"❌ File missing\"
+              echo \"VERIFICATION_STATUS=MISSING\"
+            fi
+            echo \"=== End Verification ===\"
+          '")
+
+          echo "$verification_result"
+          echo ""
+
+          if echo "$verification_result" | grep -q "VERIFICATION_STATUS=SUCCESS"; then
+            echo "✅ Test file exists with content after restart"
+
+            # Extract and verify content
+            actual_content=$(echo "$verification_result" | grep -A 1 "File content:" | tail -1)
+
+            if [ "$actual_content" = "$test_content" ]; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "✅ Volume persistence test passed - content matches perfectly"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "status=success" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "❌ File content mismatch:"
+              echo "  Expected: '$test_content'"
+              echo "  Actual:   '$actual_content'"
+              echo "  Expected length: ${#test_content}"
+              echo "  Actual length:   ${#actual_content}"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          elif echo "$verification_result" | grep -q "VERIFICATION_STATUS=EMPTY"; then
+            echo "⚠️  File exists but is empty (attempt $verify_attempt/$max_verify_attempts)"
+            echo "This indicates a filesystem sync issue during restart"
+            if [ $verify_attempt -eq $max_verify_attempts ]; then
+              echo "❌ File content lost after restart - filesystem sync failure"
+              echo "Debugging information:"
+              echo "$verification_result"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            echo "⚠️  Test file not found (attempt $verify_attempt/$max_verify_attempts)"
+            if [ $verify_attempt -eq $max_verify_attempts ]; then
+              echo "❌ Test file disappeared after restart"
+              echo "Debugging - workspace contents:"
+              flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc 'ls -la ${{ inputs.test-path }}/ | head -20'"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+
+          sleep 10
+          verify_attempt=$((verify_attempt + 1))
+        done

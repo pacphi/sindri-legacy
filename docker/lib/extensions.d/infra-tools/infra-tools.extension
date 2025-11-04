@@ -1,0 +1,701 @@
+#!/bin/bash
+# infra-tools.sh.example - Infrastructure and DevOps tooling
+# Extension API v1.0
+#
+# This extension installs infrastructure tools with:
+# - IaC tools (Terraform, Pulumi, Crossplane)
+# - Configuration management (Ansible)
+# - Kubernetes tools (kubectl, Helm, k9s, kubectx/kubens)
+# - Carvel suite (kapp, ytt, kbld, vendir, imgpkg)
+# - Infrastructure workspace setup
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="infra-tools"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Infrastructure and DevOps tooling (Terraform, Ansible, Kubernetes)"
+EXT_CATEGORY="infrastructure"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for apt-get
+  if ! command_exists apt-get; then
+    print_error "apt-get is required but not found"
+    print_status "This extension requires a Debian/Ubuntu based system"
+    return 1
+  fi
+
+  # Check for required tools
+  local missing_tools=()
+  for tool in wget curl sudo git gpg lsb_release; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    print_status "Install with: sudo apt-get install wget curl sudo git gnupg lsb-release"
+    return 1
+  fi
+
+  # Check disk space (infra tools need ~1.5GB)
+  check_disk_space 2000
+
+  print_success "All prerequisites met"
+  return 0
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing infrastructure tooling..."
+
+  # mise-managed tools (if mise available)
+  if command_exists mise; then
+    print_status "Using mise for core infrastructure tools..."
+    local toml_dest="$HOME/.config/mise/conf.d/infra-tools.toml"
+    mkdir -p "$(dirname "$toml_dest")"
+
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.mise-config.template" > "$toml_dest"
+
+    print_success "Created mise configuration: $toml_dest"
+
+    # Install mise-managed tools
+    print_status "Installing mise-managed tools (terraform, kubectl, helm, k9s)..."
+    if mise install 2>&1 | grep -v "mise "; then
+      print_success "mise-managed tools installed"
+    else
+      print_warning "Some mise tools may have failed to install"
+    fi
+  else
+    # Fallback: Native installations
+    print_warning "mise not available, using native installations for core tools..."
+
+    # Terraform (via HashiCorp's official apt repository)
+    print_status "Installing Terraform..."
+    if command_exists terraform; then
+      print_warning "Terraform already installed: $(terraform version | head -1)"
+    else
+      # Add HashiCorp GPG key
+      if wget --timeout=60 --tries=2 -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null; then
+        # Add HashiCorp repository
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+          sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+
+        # Update apt and install Terraform
+        apt_update_retry 3
+        if apt_install_retry 3 terraform; then
+          print_success "Terraform installed (latest stable version)"
+        else
+          print_warning "Failed to install Terraform via apt"
+        fi
+      else
+        print_warning "Failed to add HashiCorp repository"
+      fi
+    fi
+
+    # kubectl
+    print_status "Installing kubectl..."
+    if command_exists kubectl; then
+      print_warning "kubectl already installed"
+    else
+      local KUBECTL_VERSION
+      KUBECTL_VERSION=$(curl --max-time 30 --retry 2 -L -s https://dl.k8s.io/release/stable.txt 2>/dev/null)
+      if curl --max-time 120 --retry 2 -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" 2>/dev/null; then
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        print_success "kubectl installed"
+      else
+        print_warning "Failed to install kubectl"
+      fi
+    fi
+
+    # Helm
+    print_status "Installing Helm..."
+    if command_exists helm; then
+      # Use timeout for version check to avoid hanging
+      local helm_version
+      helm_version=$(timeout 3 bash -c 'helm version --short 2>&1' 2>/dev/null | head -n1 || echo "version unknown")
+      print_warning "Helm already installed: ${helm_version}"
+    else
+      if curl --max-time 60 --retry 2 -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 2>/dev/null; then
+        chmod 700 get_helm.sh
+        # Run install script with timeout and check exit status
+        if timeout 180 bash get_helm.sh 2>/dev/null; then
+          rm -f get_helm.sh
+          print_success "Helm installed"
+        else
+          rm -f get_helm.sh
+          print_warning "Failed to install Helm (timeout or error)"
+        fi
+      else
+        print_warning "Failed to download Helm installer"
+      fi
+    fi
+
+    # k9s - Kubernetes TUI
+    print_status "Installing k9s..."
+    if command_exists k9s; then
+      print_warning "k9s already installed"
+    else
+      local K9S_VERSION="v0.32.5"
+      if wget --timeout=120 --tries=2 -q "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz"; then
+        tar xzf k9s_Linux_amd64.tar.gz k9s
+        sudo mv k9s /usr/local/bin/
+        rm k9s_Linux_amd64.tar.gz
+        print_success "k9s installed"
+      else
+        print_warning "Failed to install k9s"
+      fi
+    fi
+  fi
+
+  # Specialized tools - always native installation
+
+  # Ansible
+  print_status "Installing Ansible (apt)..."
+  if command_exists ansible; then
+    print_warning "Ansible already installed: $(ansible --version | head -1)"
+  else
+    apt_update_retry 3
+    apt_install_retry 3 software-properties-common
+    sudo add-apt-repository --yes --update ppa:ansible/ansible 2>/dev/null
+    if apt_install_retry 3 ansible; then
+      print_success "Ansible installed"
+    else
+      print_warning "Failed to install Ansible"
+    fi
+  fi
+
+  # Check if running in CI mode
+  if is_ci_mode; then
+    print_status "CI mode detected - skipping optional tools (Carvel, Crossplane, Pulumi, kubectx)"
+    return 0
+  fi
+
+  # Carvel tools suite
+  print_status "Installing Carvel tools..."
+  local CARVEL_TOOLS=(kapp ytt kbld vendir imgpkg)
+  local carvel_installed=0
+
+  # Download Carvel install script once
+  local carvel_script="/tmp/carvel-install.sh"
+  if wget --timeout=90 -q -O "$carvel_script" "https://carvel.dev/install.sh"; then
+    chmod +x "$carvel_script"
+
+    for tool in "${CARVEL_TOOLS[@]}"; do
+      if command_exists "$tool"; then
+        print_debug "✓ $tool already installed"
+        ((carvel_installed++))
+      else
+        print_debug "Installing $tool..."
+        if timeout 120 bash "$carvel_script" "$tool" 2>&1 | grep -v "Installing linux-amd64 binaries"; then
+          if [[ -f "./$tool" ]]; then
+            sudo mv "./$tool" /usr/local/bin/ 2>/dev/null
+          fi
+          if command_exists "$tool"; then
+            print_debug "✓ $tool installed"
+            ((carvel_installed++))
+          else
+            print_warning "Failed to install $tool - binary not found after installation"
+          fi
+        else
+          print_warning "Failed to install $tool - installation script failed"
+        fi
+      fi
+    done
+
+    rm -f "$carvel_script"
+  else
+    print_warning "Failed to download Carvel install script"
+  fi
+
+  print_status "Carvel tools: $carvel_installed/${#CARVEL_TOOLS[@]}"
+
+  # Crossplane CLI
+  print_status "Installing Crossplane CLI..."
+  if command_exists crossplane; then
+    print_warning "Crossplane CLI already installed"
+  else
+    if timeout 120 curl --max-time 90 -sL "https://raw.githubusercontent.com/crossplane/crossplane/master/install.sh" | sh 2>/dev/null; then
+      sudo mv crossplane /usr/local/bin/ 2>/dev/null
+      print_success "Crossplane CLI installed"
+    else
+      print_warning "Failed to install Crossplane CLI"
+    fi
+  fi
+
+  # Pulumi
+  print_status "Installing Pulumi..."
+  if command_exists pulumi; then
+    print_warning "Pulumi already installed: $(pulumi version)"
+  else
+    if timeout 180 curl --max-time 150 -fsSL https://get.pulumi.com | sh 2>/dev/null; then
+      export PATH=$PATH:$HOME/.pulumi/bin
+      print_success "Pulumi installed"
+    else
+      print_warning "Failed to install Pulumi"
+    fi
+  fi
+
+  # kubectx and kubens
+  print_status "Installing kubectx/kubens..."
+  if command_exists kubectx; then
+    print_warning "kubectx/kubens already installed"
+  else
+    if timeout 60 sudo git clone --depth 1 https://github.com/ahmetb/kubectx /opt/kubectx 2>/dev/null; then
+      sudo ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx
+      sudo ln -s /opt/kubectx/kubens /usr/local/bin/kubens
+      print_success "kubectx/kubens installed"
+    else
+      print_warning "Failed to install kubectx/kubens"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring infrastructure tools..."
+
+  # Ensure critical paths are available in SSH sessions
+  local paths_to_add=(
+    'export PATH="/usr/local/bin:$PATH"'
+  )
+
+  # Add mise activation if mise is installed (with timeout protection)
+  if command_exists mise; then
+    paths_to_add+=('if command -v mise >/dev/null 2>&1; then eval "$(timeout 3 mise activate bash 2>/dev/null || echo "")"; fi')
+  fi
+
+  # Add Pulumi if installed
+  if command_exists pulumi; then
+    paths_to_add+=('export PATH="$PATH:$HOME/.pulumi/bin"')
+    export PATH=$PATH:$HOME/.pulumi/bin
+  fi
+
+  # Setup all paths via helper or bashrc
+  if command_exists setup_tool_path 2>/dev/null; then
+    setup_tool_path "${EXT_NAME}" "${paths_to_add[@]}"
+  else
+    # Fallback: ensure paths are in bashrc (only if not already there)
+    if ! grep -q "# ${EXT_NAME} - PATH setup" "$HOME/.bashrc" 2>/dev/null; then
+      {
+        echo ""
+        echo "# ${EXT_NAME} - PATH setup"
+        printf '%s\n' "${paths_to_add[@]}"
+      } >> "$HOME/.bashrc"
+      print_success "Added infrastructure tools to PATH"
+    fi
+  fi
+
+  # Create SSH wrappers for all installed tools
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    local tools=(ansible terraform kubectl helm pulumi k9s kubectx kubens crossplane kapp ytt kbld vendir imgpkg)
+
+    for tool in "${tools[@]}"; do
+      if command_exists "$tool"; then
+        local tool_path
+        tool_path=$(command -v "$tool")
+        if [[ -n "$tool_path" ]]; then
+          create_tool_wrapper "$tool" "$tool_path"
+        else
+          print_debug "Warning: $tool exists but path not found"
+        fi
+      fi
+    done
+    print_success "Created SSH wrappers for installed tools"
+  fi
+
+  # Create infrastructure aliases
+  if ! grep -q "# Infrastructure aliases" "$HOME/.bashrc" 2>/dev/null; then
+    print_status "Creating infrastructure aliases..."
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.bashrc.template" >> "$HOME/.bashrc"
+    print_success "Infrastructure aliases created"
+  else
+    print_debug "Infrastructure aliases already exist"
+  fi
+
+  # Create infrastructure workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  print_status "Setting up infrastructure workspace..."
+  mkdir -p "$WORKSPACE_DIR/infrastructure"/{terraform,kubernetes,helm-charts,crossplane,pulumi}
+
+  # Create README guide
+  if [[ ! -f "$WORKSPACE_DIR/infrastructure/README.md" ]]; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/infra-tools.readme.template" > "$WORKSPACE_DIR/infrastructure/README.md"
+    print_success "Infrastructure README created"
+  fi
+
+  print_success "Infrastructure tools configured"
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating infrastructure tools installation..."
+
+  local all_valid=true
+
+  # mise-managed tools (if mise available)
+  if command_exists mise; then
+    print_status "Validating mise-managed tools..."
+    local mise_tools=(terraform kubectl helm k9s)
+    for tool in "${mise_tools[@]}"; do
+      if ! command_exists "$tool"; then
+        print_error "$tool not found (mise-managed)"
+        all_valid=false
+      else
+        print_success "$tool: installed (mise)"
+      fi
+    done
+  else
+    # Native installations
+    print_status "Validating native core tools..."
+    local core_tools=(terraform kubectl helm)
+    for tool in "${core_tools[@]}"; do
+      if ! command_exists "$tool"; then
+        print_error "$tool not found"
+        all_valid=false
+      else
+        print_success "$tool: installed (native)"
+      fi
+    done
+  fi
+
+  # Ansible - always native
+  print_status "Validating native tools..."
+  if ! command_exists ansible; then
+    print_error "ansible not found"
+    all_valid=false
+  else
+    print_success "ansible: installed (apt)"
+  fi
+
+  # Optional native tools
+  local optional_tools=(pulumi crossplane kubectx)
+  local optional_found=0
+  for tool in "${optional_tools[@]}"; do
+    if command_exists "$tool"; then
+      print_success "$tool: installed (native)"
+      ((optional_found++))
+    fi
+  done
+  print_status "Optional tools: $optional_found/${#optional_tools[@]}"
+
+  # Carvel tools
+  local carvel_tools=(kapp ytt kbld vendir imgpkg)
+  local carvel_found=0
+  for tool in "${carvel_tools[@]}"; do
+    if command_exists "$tool"; then
+      ((carvel_found++))
+    fi
+  done
+  print_status "Carvel tools: $carvel_found/${#carvel_tools[@]}"
+
+  # Check workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
+    print_success "Infrastructure workspace: exists"
+  else
+    print_warning "Infrastructure workspace: not found"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  local any_installed=false
+  local check_tools=(ansible terraform kubectl helm)
+  for tool in "${check_tools[@]}"; do
+    if command_exists "$tool"; then
+      any_installed=true
+      break
+    fi
+  done
+
+  if [[ "$any_installed" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Infrastructure-specific tool listing with versions, grouped by installation method
+  print_status "Installed tools:"
+
+  # mise-managed tools (if mise available)
+  if command_exists mise; then
+    echo "  mise-managed tools:"
+    local mise_tools=(terraform kubectl helm k9s)
+    for tool in "${mise_tools[@]}"; do
+      if command_exists "$tool"; then
+        local version=""
+        case "$tool" in
+          terraform) version=$(timeout 5 terraform version 2>/dev/null | head -1 || echo "installed") ;;
+          kubectl) version=$(timeout 5 kubectl version --client 2>/dev/null | grep -i "client version" || echo "installed") ;;
+          helm) version=$(timeout 5 helm version --short 2>/dev/null || echo "installed") ;;
+          k9s) version=$(timeout 5 k9s version --short 2>/dev/null || echo "installed") ;;
+        esac
+        echo "    ✓ $tool: $version"
+      fi
+    done
+  else
+    # Native core tools
+    echo "  Core tools (native):"
+    local native_core=(terraform kubectl helm k9s)
+    for tool in "${native_core[@]}"; do
+      if command_exists "$tool"; then
+        local version=""
+        case "$tool" in
+          terraform) version=$(timeout 5 terraform version 2>/dev/null | head -1 || echo "installed") ;;
+          kubectl) version=$(timeout 5 kubectl version --client 2>/dev/null | grep -i "client version" || echo "installed") ;;
+          helm) version=$(timeout 5 helm version --short 2>/dev/null || echo "installed") ;;
+          k9s) version=$(timeout 5 k9s version --short 2>/dev/null || echo "installed") ;;
+        esac
+        echo "    ✓ $tool: $version"
+      fi
+    done
+  fi
+
+  # Native tools
+  echo "  Native tools:"
+  if command_exists ansible; then
+    echo "    ✓ ansible (apt): $(timeout 5 ansible --version 2>/dev/null | head -1 || echo "installed")"
+  fi
+
+  # Optional native tools
+  local optional_tools=(pulumi crossplane kubectx kubens)
+  for tool in "${optional_tools[@]}"; do
+    if command_exists "$tool"; then
+      echo "    ✓ $tool"
+    fi
+  done
+
+  # Carvel tools
+  local carvel_tools=(kapp ytt kbld vendir imgpkg)
+  local carvel_count=0
+  for tool in "${carvel_tools[@]}"; do
+    command_exists "$tool" && ((carvel_count++))
+  done
+  if [[ $carvel_count -gt 0 ]]; then
+    echo "  Carvel tools:"
+    for tool in "${carvel_tools[@]}"; do
+      if command_exists "$tool"; then
+        echo "    ✓ $tool"
+      fi
+    done
+  fi
+
+  # Workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
+    echo ""
+    print_status "Infrastructure workspace:"
+    echo "  $WORKSPACE_DIR/infrastructure/"
+    for dir in terraform kubernetes helm-charts crossplane pulumi; do
+      [[ -d "$WORKSPACE_DIR/infrastructure/$dir" ]] && echo "    ├── $dir/"
+    done
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+# check_dependent_extensions is now provided by extensions-common.sh
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  if ! command_exists mise; then
+    print_error "mise not installed, cannot upgrade"
+    return 1
+  fi
+
+  activate_mise_environment
+
+  # Get current versions
+  print_status "Current versions:"
+  mise current terraform 2>/dev/null || true
+  mise current kubectl 2>/dev/null || true
+  mise current helm 2>/dev/null || true
+  echo ""
+
+  # Upgrade via mise
+  if upgrade_mise_tools "${EXT_NAME}"; then
+    print_success "Infrastructure tools upgraded successfully"
+
+    echo ""
+    print_status "Updated versions:"
+    mise current terraform
+    mise current kubectl
+    mise current helm
+
+    return 0
+  else
+    print_error "Upgrade failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling infrastructure tools..."
+
+  show_dependent_extensions_warning "terraform" "kubectl" "helm" "ansible" "pulumi"
+
+  if ! prompt_confirmation "Continue with infrastructure tools removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Remove mise configuration
+  if [[ -f "$HOME/.config/mise/conf.d/infra-tools.toml" ]]; then
+    print_status "Removing mise configuration..."
+    rm -f "$HOME/.config/mise/conf.d/infra-tools.toml"
+    print_success "mise configuration removed"
+  fi
+
+  # Remove mise-managed tools (if mise was used)
+  if command_exists mise; then
+    print_status "Uninstalling mise-managed tools..."
+    local mise_tools=(terraform kubectl helm "ubi:derailed/k9s")
+    for tool in "${mise_tools[@]}"; do
+      if mise ls "$tool" &>/dev/null; then
+        mise uninstall "$tool" 2>/dev/null || true
+      fi
+    done
+  fi
+
+  # Remove native Ansible installation
+  print_status "Removing Ansible..."
+  sudo apt-get remove -y ansible 2>/dev/null
+  sudo add-apt-repository --remove --yes ppa:ansible/ansible 2>/dev/null
+
+  # Remove native Terraform installation (if not mise-managed)
+  if ! command_exists mise; then
+    print_status "Removing Terraform..."
+    if dpkg -l | grep -q terraform; then
+      # Installed via apt
+      sudo apt-get remove -y terraform 2>/dev/null
+      sudo rm -f /etc/apt/sources.list.d/hashicorp.list
+      sudo rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    else
+      # Legacy binary installation
+      [[ -f /usr/local/bin/terraform ]] && sudo rm -f /usr/local/bin/terraform
+    fi
+
+    # Remove kubectl
+    [[ -f /usr/local/bin/kubectl ]] && sudo rm -f /usr/local/bin/kubectl
+
+    # Remove Helm
+    [[ -f /usr/local/bin/helm ]] && sudo rm -f /usr/local/bin/helm
+
+    # Remove k9s
+    [[ -f /usr/local/bin/k9s ]] && sudo rm -f /usr/local/bin/k9s
+  fi
+
+  # Remove Carvel tools
+  print_status "Removing Carvel tools..."
+  local carvel_tools=(kapp ytt kbld vendir imgpkg)
+  for tool in "${carvel_tools[@]}"; do
+    [[ -f /usr/local/bin/$tool ]] && sudo rm -f /usr/local/bin/$tool
+  done
+
+  # Remove Crossplane
+  print_status "Removing Crossplane..."
+  [[ -f /usr/local/bin/crossplane ]] && sudo rm -f /usr/local/bin/crossplane
+
+  # Remove Pulumi
+  if [[ -d "$HOME/.pulumi" ]]; then
+    read -p "Remove Pulumi installation directory? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "$HOME/.pulumi"
+      print_success "Pulumi removed"
+    fi
+  fi
+
+  # Remove kubectx/kubens
+  if [[ -d /opt/kubectx ]]; then
+    sudo rm -f /usr/local/bin/kubectx /usr/local/bin/kubens
+    sudo rm -rf /opt/kubectx
+    print_success "kubectx/kubens removed"
+  fi
+
+  # Remove aliases
+  cleanup_bashrc "# Infrastructure aliases"
+
+  # Remove Pulumi PATH from bashrc
+  cleanup_bashrc "# ${EXT_NAME}"
+
+  # Remove workspace
+  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
+    read -p "Remove infrastructure workspace directory? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "$WORKSPACE_DIR/infrastructure"
+      print_success "Infrastructure workspace removed"
+    fi
+  fi
+
+  print_success "Infrastructure tools uninstalled"
+  print_warning "Restart shell: source ~/.bashrc"
+  return 0
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"
