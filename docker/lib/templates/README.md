@@ -14,6 +14,7 @@ by `entrypoint.sh`. When extensions check if they're installed by looking for fi
 they find the template copies and incorrectly report "already installed", skipping configuration.
 
 **Solution:** Templates are stored in `/docker/lib/templates/` subdirectory:
+
 - `entrypoint.sh` copies all of `/docker/lib/` including `templates/` subdirectory
 - Template files end up in `/workspace/scripts/lib/templates/` (not the target location)
 - Extensions copy from `/docker/lib/templates/` to their target locations
@@ -39,6 +40,7 @@ When creating a new extension that uses template files:
 ## Not Templates
 
 Files in `/docker/lib/` that are NOT templates (copied by entrypoint for general use):
+
 - Core extension system: `extension-manager.sh`, `extensions-common.sh`
 - Developer utilities: `new-project.sh`, `clone-project.sh`, `git.sh`, etc.
 - Utility libraries: `tmux-*.sh`, `backup.sh`, `system-status.sh`, etc.
