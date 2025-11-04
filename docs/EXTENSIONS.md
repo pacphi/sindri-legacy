@@ -38,7 +38,9 @@ The extension system supports two approaches:
 
 All extensions implement the Extension API, providing consistent installation, validation, and upgrade experiences.
 
-**Extension Versioning**: Extensions use semantic versioning with dual version tracking (`EXT_VERSION` and `EXT_API_VERSION`). See [Extension Versioning Strategy](EXTENSION_VERSIONING.md) for development and release workflows.
+**Extension Versioning**: Extensions use semantic versioning with dual version tracking
+(`EXT_VERSION` and `EXT_API_VERSION`). See [Extension Versioning Strategy](EXTENSION_VERSIONING.md) for development
+and release workflows.
 
 ---
 

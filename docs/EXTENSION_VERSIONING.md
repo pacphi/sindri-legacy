@@ -25,6 +25,7 @@ Format: `MAJOR.MINOR.PATCH[-prerelease]`
 - **prerelease** (optional): Pre-release identifier (alpha, beta, rc, dev)
 
 **Examples:**
+
 ```bash
 EXT_VERSION="2.0.0"         # Stable release
 EXT_VERSION="2.1.0"         # New features added
@@ -43,11 +44,13 @@ Defines the Extension API compatibility level. Extensions with the same API MAJO
 **Current API Version:** `2.0`
 
 **Rules:**
+
 - Extension MAJOR version must match API MAJOR version
 - Extensions can have different MINOR/PATCH versions while using the same API
 - API version changes when extension function signatures or behaviors change
 
 **Examples:**
+
 ```bash
 # All compatible with Extension API v2.0
 EXT_VERSION="2.0.0"  EXT_API_VERSION="2.0"  ✓ Valid
