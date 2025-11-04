@@ -58,8 +58,8 @@ prerequisites() {
     print_status "Configuration will need to be created manually"
   fi
 
-  if [[ ! -f "/docker/lib/agent-discovery.sh" ]]; then
-    print_warning "Template file not found: /docker/lib/agent-discovery.sh"
+  if [[ ! -f "/docker/lib/templates/agent-discovery.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/agent-discovery.sh"
     print_status "Agent discovery utilities will not be available"
   fi
 
@@ -223,7 +223,7 @@ configure() {
 
   # Set up agent discovery utilities
   local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
-  local discovery_template="/docker/lib/agent-discovery.sh"
+  local discovery_template="/docker/lib/templates/agent-discovery.sh"
 
   mkdir -p "/workspace/scripts/lib"
 

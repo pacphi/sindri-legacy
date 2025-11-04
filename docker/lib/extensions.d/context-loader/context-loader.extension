@@ -31,13 +31,13 @@ prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
   # Check template files exist
-  if [[ ! -f "/docker/lib/context-loader.sh" ]]; then
-    print_warning "Template file not found: /docker/lib/context-loader.sh"
+  if [[ ! -f "/docker/lib/templates/context-loader.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/context-loader.sh"
     print_status "Context loading utilities will need to be created manually"
   fi
 
-  if [[ ! -f "/docker/lib/cf-with-context.sh" ]]; then
-    print_warning "Template file not found: /docker/lib/cf-with-context.sh"
+  if [[ ! -f "/docker/lib/templates/cf-with-context.sh" ]]; then
+    print_warning "Template file not found: /docker/lib/templates/cf-with-context.sh"
     print_status "Claude Flow wrapper will need to be created manually"
   fi
 
@@ -66,7 +66,7 @@ configure() {
 
   # Create context loading utilities
   local utilities_script="/workspace/scripts/lib/context-loader.sh"
-  local template_file="/docker/lib/context-loader.sh"
+  local template_file="/docker/lib/templates/context-loader.sh"
 
   mkdir -p "/workspace/scripts/lib"
 
@@ -82,7 +82,7 @@ configure() {
 
   # Create Claude Flow context wrapper
   local wrapper_script="/workspace/scripts/cf-with-context.sh"
-  local wrapper_template="/docker/lib/cf-with-context.sh"
+  local wrapper_template="/docker/lib/templates/cf-with-context.sh"
 
   mkdir -p /workspace/scripts
 
