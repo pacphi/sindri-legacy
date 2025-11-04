@@ -379,6 +379,12 @@ status() {
     return 1
   fi
 
+  # Verify marketplace is configured in settings.json
+  if [[ ! -f "$CLAUDE_SETTINGS" ]] || ! grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
+    echo "Status: ✗ NOT CONFIGURED (marketplace not in settings)"
+    return 1
+  fi
+
   echo "Status: ✓ INSTALLED"
   echo ""
 
