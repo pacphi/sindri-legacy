@@ -33,7 +33,9 @@ fi
 # Verify nodejs installation via mise
 echo ""
 echo "Verifying nodejs via mise..."
-eval "$(mise activate bash)"
+if mise_activation=$(timeout 3 mise activate bash 2>/dev/null); then
+  eval "$mise_activation"
+fi
 if command -v node >/dev/null 2>&1; then
   echo "✅ nodejs available via mise"
   node --version

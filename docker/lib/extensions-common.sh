@@ -119,42 +119,8 @@ is_ci_mode() {
     [[ "${CI_MODE:-false}" == "true" ]]
 }
 
-# Activate mise environment in current shell
-# Usage: activate_mise_environment
-# This function evaluates mise activation and adds shims to PATH
-activate_mise_environment() {
-    if command_exists mise; then
-        # Activate mise with error capture
-        local activation_output
-        if activation_output=$(mise activate bash 2>&1); then
-            eval "$activation_output"
-            print_debug "mise activated successfully"
-        else
-            print_warning "mise activation returned non-zero: $activation_output"
-            # Continue anyway as activation might still work
-        fi
-
-        # Ensure shims directory is in PATH
-        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
-            # Only add if not already in PATH
-            if [[ ":$PATH:" != *":$HOME/.local/share/mise/shims:"* ]]; then
-                export PATH="$HOME/.local/share/mise/shims:$PATH"
-                print_debug "Added mise shims to PATH"
-            fi
-        fi
-
-        # Also add installs directories for tools that don't use shims
-        if [[ -d "$HOME/.local/share/mise/installs" ]]; then
-            for bin_dir in "$HOME/.local/share/mise/installs/"*/*/bin; do
-                if [[ -d "$bin_dir" ]] && [[ ":$PATH:" != *":$bin_dir:"* ]]; then
-                    export PATH="$bin_dir:$PATH"
-                fi
-            done
-        fi
-    else
-        print_debug "mise not available - skipping activation"
-    fi
-}
+# Note: activate_mise_environment() is now defined in common.sh
+# and is automatically available since we source common.sh above
 
 # ============================================================================
 # PREREQUISITE CHECKS

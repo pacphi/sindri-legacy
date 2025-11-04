@@ -144,8 +144,8 @@ configure() {
     fi
 
     # Activate mise for current session
+    activate_mise_environment
     if command_exists mise; then
-        eval "$(mise activate bash)"
         print_success "mise activated for current session"
     fi
 

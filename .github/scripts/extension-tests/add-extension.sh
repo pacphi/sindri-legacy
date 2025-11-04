@@ -13,7 +13,9 @@ fi
 
 # Activate mise if available
 if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate bash 2>/dev/null || true)"
+    if mise_activation=$(timeout 3 mise activate bash 2>/dev/null); then
+        eval "$mise_activation"
+    fi
 fi
 
 extension_name="$1"

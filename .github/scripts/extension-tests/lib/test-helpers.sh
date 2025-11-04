@@ -55,8 +55,10 @@ source_environment() {
     # Explicitly activate mise if available
     if command -v mise >/dev/null 2>&1; then
         print_info "Activating mise environment"
-        # Activate mise for current shell
-        eval "$(mise activate bash)"
+        # Activate mise for current shell with timeout protection
+        if mise_activation=$(timeout 3 mise activate bash 2>/dev/null); then
+            eval "$mise_activation"
+        fi
         # Show mise status
         print_info "mise version: $(mise --version 2>/dev/null || echo 'version check failed')"
         print_info "mise tools: $(mise ls --current 2>/dev/null | head -5 || echo 'no tools configured')"

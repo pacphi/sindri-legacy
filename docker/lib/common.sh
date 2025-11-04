@@ -419,6 +419,47 @@ EOF
     fi
 }
 
+# ============================================================================
+# MISE ENVIRONMENT MANAGEMENT
+# ============================================================================
+
+# Activate mise environment with timeout protection
+# Usage: activate_mise_environment
+# This function evaluates mise activation and adds shims/installs to PATH
+activate_mise_environment() {
+    if command_exists mise; then
+        # Activate mise with error capture and timeout protection
+        local activation_output
+        if activation_output=$(timeout 3 mise activate bash 2>&1); then
+            eval "$activation_output"
+            print_debug "mise activated successfully"
+        else
+            print_warning "mise activation returned non-zero or timed out: $activation_output"
+            # Continue anyway as activation might still work
+        fi
+
+        # Ensure shims directory is in PATH
+        if [[ -d "$HOME/.local/share/mise/shims" ]]; then
+            # Only add if not already in PATH
+            if [[ ":$PATH:" != *":$HOME/.local/share/mise/shims:"* ]]; then
+                export PATH="$HOME/.local/share/mise/shims:$PATH"
+                print_debug "Added mise shims to PATH"
+            fi
+        fi
+
+        # Also add installs directories for tools that don't use shims
+        if [[ -d "$HOME/.local/share/mise/installs" ]]; then
+            for bin_dir in "$HOME/.local/share/mise/installs/"*/*/bin; do
+                if [[ -d "$bin_dir" ]] && [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+                    export PATH="$bin_dir:$PATH"
+                fi
+            done
+        fi
+    else
+        print_debug "mise not available - skipping activation"
+    fi
+}
+
 # Export all functions so they're available to subshells
 export -f print_status print_success print_warning print_error print_debug
 export -f command_exists is_in_vm ensure_permissions create_directory
@@ -426,4 +467,4 @@ export -f safe_copy check_env_var confirm run_command
 export -f get_timestamp get_backup_filename load_config save_config
 export -f check_network retry_with_backoff
 export -f add_to_ssh_environment setup_tool_path
-export -f create_tool_wrapper
+export -f create_tool_wrapper activate_mise_environment
