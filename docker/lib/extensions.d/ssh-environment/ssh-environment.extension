@@ -16,6 +16,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="ssh-environment"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="SSH daemon configuration for non-interactive environment support"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="native"

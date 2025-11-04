@@ -22,6 +22,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="cloud-tools"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Cloud provider CLI tools (AWS, Azure, GCP, OCI, Alibaba, DO, IBM)"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="mixed"  # Binary downloads + apt

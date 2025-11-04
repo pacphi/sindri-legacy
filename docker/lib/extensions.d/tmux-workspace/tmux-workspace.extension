@@ -15,6 +15,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="tmux-workspace"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Tmux workspace management with helper scripts"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="native"  # Installed via apt

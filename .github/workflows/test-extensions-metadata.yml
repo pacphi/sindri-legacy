@@ -66,6 +66,10 @@ jobs:
               echo "✗ Missing EXT_UPGRADE_STRATEGY: $ext"
               MISSING=$((MISSING + 1))
             fi
+            if ! grep -q "^EXT_API_VERSION=" "$ext"; then
+              echo "✗ Missing EXT_API_VERSION: $ext"
+              MISSING=$((MISSING + 1))
+            fi
           done
           if [ $MISSING -gt 0 ]; then
             echo "ERROR: $MISSING metadata fields missing"
@@ -73,21 +77,51 @@ jobs:
           fi
           echo "SUCCESS: All extensions have required metadata"
 
-      - name: Verify all extensions are v2.0.0
+      - name: Verify Extension API compatibility
         run: |
-          OLD_VERSION=0
+          REQUIRED_API_VERSION="2.0"
+          INVALID=0
+
           for ext in docker/lib/extensions.d/*/*.extension; do
             [[ "$(basename "$ext")" == "template.extension" ]] && continue
-            VERSION=$(grep "^EXT_VERSION=" "$ext" | cut -d'"' -f2)
-            if [[ "$VERSION" != "2.0.0" ]]; then
-              echo "✗ Not v2.0.0: $ext (version: $VERSION)"
-              OLD_VERSION=$((OLD_VERSION + 1))
-            else
-              echo "✓ v2.0.0: $ext"
+
+            # Extract metadata
+            EXT_VERSION=$(grep "^EXT_VERSION=" "$ext" | cut -d'"' -f2)
+            API_VERSION=$(grep "^EXT_API_VERSION=" "$ext" | cut -d'"' -f2)
+
+            # Validate API version matches required (2.0)
+            if [[ "$API_VERSION" != "$REQUIRED_API_VERSION" ]]; then
+              echo "✗ Incompatible API: $ext (API v$API_VERSION, expected v$REQUIRED_API_VERSION)"
+              INVALID=$((INVALID + 1))
+              continue
             fi
+
+            # Validate extension version format (MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-prerelease)
+            if [[ ! "$EXT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+              echo "✗ Invalid version format: $ext (version: $EXT_VERSION)"
+              INVALID=$((INVALID + 1))
+              continue
+            fi
+
+            # Extract MAJOR version from extension version
+            MAJOR_VERSION=$(echo "$EXT_VERSION" | cut -d'.' -f1)
+
+            # Ensure extension MAJOR version matches API MAJOR version
+            API_MAJOR=$(echo "$API_VERSION" | cut -d'.' -f1)
+            if [[ "$MAJOR_VERSION" != "$API_MAJOR" ]]; then
+              echo "✗ Version mismatch: $ext (extension v$EXT_VERSION, API v$API_VERSION)"
+              INVALID=$((INVALID + 1))
+              continue
+            fi
+
+            echo "✓ $ext: v$EXT_VERSION (API v$API_VERSION)"
           done
-          if [ $OLD_VERSION -gt 0 ]; then
-            echo "ERROR: $OLD_VERSION extensions not upgraded to v2.0.0"
+
+          if [ $INVALID -gt 0 ]; then
+            echo ""
+            echo "ERROR: $INVALID extensions have incompatible versions"
             exit 1
           fi
-          echo "SUCCESS: All extensions are v2.0.0"
+
+          echo ""
+          echo "SUCCESS: All extensions are compatible with Extension API v$REQUIRED_API_VERSION"

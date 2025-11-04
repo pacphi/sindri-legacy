@@ -19,6 +19,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="dotnet"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION=".NET SDK with ASP.NET Core and development tools"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="apt"

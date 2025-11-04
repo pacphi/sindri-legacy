@@ -63,13 +63,10 @@ alias pumac="bundle exec pumactl"
 alias fore="bundle exec foreman start"
 alias sidekiq="bundle exec sidekiq"
 
-# rbenv aliases
-alias rbv="rbenv versions"
-alias rbi="rbenv install"
-alias rbu="rbenv uninstall"
-alias rbg="rbenv global"
-alias rbl="rbenv local"
-alias rbr="rbenv rehash"
+# mise Ruby management
+alias rbv="mise ls ruby"
+alias rbi="mise use ruby@"
+alias rbg="mise use -g ruby@"
 
 # Sinatra aliases
 alias sinatra="bundle exec ruby app.rb"

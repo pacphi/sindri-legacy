@@ -1,0 +1,17 @@
+# ruby-ci.toml - Minimal Ruby configuration for CI
+# Lightweight config for CI/CD pipelines
+
+[tools]
+# Ruby 3.4.7 for CI
+ruby = "3.4.7"
+
+[env]
+RAILS_ENV = "test"
+RACK_ENV = "test"
+CI = "true"
+# Skip non-essential gems in CI
+BUNDLE_WITHOUT = "development"
+
+[settings]
+experimental = true
+verbose = false

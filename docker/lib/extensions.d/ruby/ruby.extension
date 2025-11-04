@@ -1,14 +1,9 @@
 #!/bin/bash
-# ruby.sh.example - Ruby, Rails, and Sinatra development environment
+# ruby.extension - Ruby development environment via mise
 # Extension API v1.0
 #
-# This extension installs Ruby with:
-# - rbenv for version management
-# - Multiple Ruby versions (3.4.5, 3.3.9)
-# - Bundler, Rails, and Sinatra
-# - Development gems (rubocop, rspec, pry, etc.)
-# - Node.js and Yarn for Rails asset pipeline
-# - CI mode detection for lightweight installs
+# This extension installs Ruby 3.4.7 with Rails, Bundler, and development gems using mise.
+# mise provides unified version management with declarative configuration.
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,9 +15,10 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="ruby"
 EXT_VERSION="2.0.0"
-EXT_DESCRIPTION="Ruby with rbenv, Rails, and Sinatra"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Ruby 3.4.7 via mise with Rails and Bundler"
 EXT_CATEGORY="language"
-EXT_INSTALL_METHOD="mixed"  # apt (build deps) + git (rbenv)
+EXT_INSTALL_METHOD="mise"
 EXT_UPGRADE_STRATEGY="automatic"
 
 # Initialize extension environment
@@ -35,25 +31,11 @@ extension_init
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Check for required tools
-  local missing_tools=()
-  for tool in git sudo apt-get; do
-    if ! command_exists "$tool"; then
-      missing_tools+=("$tool")
-    fi
-  done
+  # Check for mise (required by this extension)
+  check_mise_prerequisite || return 1
 
-  if [[ ${#missing_tools[@]} -gt 0 ]]; then
-    print_error "Missing required tools: ${missing_tools[*]}"
-    return 1
-  fi
-
-  # Check disk space (Ruby needs ~2GB with all gems)
-  local available_space
-  available_space=$(df -BM "$HOME" | awk 'NR==2 {print $4}' | sed 's/M//')
-  if [[ $available_space -lt 2500 ]]; then
-    print_warning "Low disk space: ${available_space}MB available (2.5GB recommended for Ruby)"
-  fi
+  # Check disk space (Ruby + Rails + gems need ~2GB)
+  check_disk_space 2500
 
   print_success "All prerequisites met"
   return 0
@@ -64,93 +46,31 @@ prerequisites() {
 # ============================================================================
 
 install() {
-  print_status "Installing Ruby development environment..."
+  print_status "Installing Ruby development environment via mise..."
 
-  # Install build dependencies
-  print_status "Installing Ruby build dependencies..."
-  sudo apt-get update -qq
+  # Install via mise using shared helper
+  install_mise_config "ruby" || return 1
 
-  local ruby_deps=(
-    build-essential libssl-dev libreadline-dev zlib1g-dev
-    libsqlite3-dev libxml2-dev libxslt1-dev libcurl4-openssl-dev
-    software-properties-common libffi-dev libyaml-dev libgdbm-dev
-    libncurses5-dev automake libtool bison libgmp-dev
-  )
+  # Activate mise for current session
+  activate_mise_environment
 
-  for dep in "${ruby_deps[@]}"; do
-    sudo apt-get install -y "$dep" 2>/dev/null
-  done
-
-  # Install rbenv for Ruby version management
-  if [[ -d "$HOME/.rbenv" ]]; then
-    print_warning "rbenv is already installed"
-  else
-    print_status "Installing rbenv..."
-    if git clone https://github.com/rbenv/rbenv.git ~/.rbenv 2>/dev/null; then
-      print_success "rbenv installed successfully"
-
-      # Install ruby-build plugin
-      print_status "Installing ruby-build plugin..."
-      git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build 2>/dev/null
-
-      # Install rbenv-vars plugin
-      git clone https://github.com/rbenv/rbenv-vars.git ~/.rbenv/plugins/rbenv-vars 2>/dev/null || true
-    else
-      print_error "Failed to install rbenv"
-      return 1
-    fi
-  fi
-
-  # Set up environment
-  export PATH="$HOME/.rbenv/bin:$PATH"
-  eval "$(rbenv init - bash)"
-
-  # Install Ruby versions
-  print_status "Installing Ruby versions..."
-
-  local ruby_versions
-  if is_ci_mode; then
-    print_status "CI mode detected - installing single Ruby version only"
-    ruby_versions=("3.4.5")
-  else
-    ruby_versions=("3.4.5" "3.3.9")
-  fi
-
-  # Optimize Ruby compilation with parallel jobs
-  local cpu_count
-  cpu_count=$(nproc 2>/dev/null || echo "2")
-  export MAKE_OPTS="-j$cpu_count"
-  export RUBY_BUILD_CACHE_PATH="$HOME/.rbenv/cache"
-  mkdir -p "$RUBY_BUILD_CACHE_PATH"
-
-  for version in "${ruby_versions[@]}"; do
-    print_debug "Installing Ruby $version (using $cpu_count parallel jobs)..."
-    if rbenv install "$version" 2>/dev/null; then
-      print_debug "✓ Ruby $version installed"
-    else
-      print_debug "Ruby $version already installed or failed"
-    fi
-  done
-
-  # Set default Ruby version
-  rbenv global 3.4.5
-  rbenv rehash
-
-  # Verify Ruby is available
-  export PATH="$HOME/.rbenv/shims:$PATH"
+  # Verify core Ruby is available
   if ! command_exists ruby; then
-    print_error "Ruby installation verification failed"
+    print_error "ruby not found after mise install"
     return 1
   fi
 
-  print_success "Ruby $(ruby -v) set as default"
+  print_success "Ruby $(ruby -v | awk '{print $2}') installed via mise"
 
   # Install Bundler
   print_status "Installing Bundler..."
-  gem install bundler 2>/dev/null && rbenv rehash
-  print_success "Bundler installed: $(bundler -v 2>&1 | head -n1)"
+  gem install bundler 2>/dev/null || {
+    print_error "Failed to install Bundler"
+    return 1
+  }
+  print_success "Bundler installed: $(bundle -v 2>&1 | head -n1)"
 
-  # Check if running in CI mode - skip Rails, gems, and additional setup
+  # Check if running in CI mode - skip Rails, Sinatra, and development gems
   if is_ci_mode; then
     print_status "CI mode detected - skipping Rails, Sinatra, and development gems"
     return 0
@@ -159,7 +79,6 @@ install() {
   # Install Rails
   print_status "Installing Ruby on Rails..."
   if gem install rails 2>/dev/null; then
-    rbenv rehash
     print_success "Rails installed: $(rails -v 2>&1 | head -n1)"
   else
     print_warning "Failed to install Rails"
@@ -167,7 +86,7 @@ install() {
 
   # Install Sinatra
   print_status "Installing Sinatra..."
-  gem install sinatra sinatra-contrib 2>/dev/null && rbenv rehash
+  gem install sinatra sinatra-contrib 2>/dev/null || print_warning "Failed to install Sinatra"
 
   # Install Ruby development gems
   print_status "Installing Ruby development gems..."
@@ -183,24 +102,10 @@ install() {
     gem install "$gem" 2>/dev/null && print_debug "✓ $gem installed"
   done
 
-  rbenv rehash
-
-  # Install Node.js and Yarn for Rails asset pipeline
-  if ! command_exists node; then
-    print_status "Installing Node.js for Rails asset pipeline..."
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null
-    sudo apt-get install -y nodejs 2>/dev/null
-    print_success "Node.js installed: $(node -v)"
-  fi
-
-  if ! command_exists yarn; then
-    print_status "Installing Yarn..."
-    npm install -g yarn 2>/dev/null
-  fi
-
   # Install PostgreSQL client for Rails database
   print_status "Installing PostgreSQL client..."
-  sudo apt-get install -y postgresql-client libpq-dev 2>/dev/null
+  sudo apt-get update -qq 2>/dev/null
+  sudo apt-get install -y postgresql-client libpq-dev 2>/dev/null || print_warning "PostgreSQL client install failed"
 
   return 0
 }
@@ -212,36 +117,19 @@ install() {
 configure() {
   print_status "Configuring Ruby environment..."
 
-  # Configure PATH for SSH sessions
-  if command_exists setup_tool_path 2>/dev/null; then
-    # Use timeout protection to prevent hanging during shell initialization
-    setup_tool_path "rbenv" \
-      'export PATH="$HOME/.rbenv/bin:$PATH"' \
-      'if command -v rbenv >/dev/null 2>&1; then eval "$(timeout 3 rbenv init - bash 2>/dev/null || echo "")"; fi'
-  else
-    # Fallback: add to bashrc with timeout protection
-    if ! grep -q "rbenv" "$HOME/.bashrc" 2>/dev/null; then
-      echo "" >> "$HOME/.bashrc"
-      echo "# ${EXT_NAME} - rbenv" >> "$HOME/.bashrc"
-      echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> "$HOME/.bashrc"
-      echo '# Protect against rbenv init hanging with timeout' >> "$HOME/.bashrc"
-      echo 'if command -v rbenv >/dev/null 2>&1; then' >> "$HOME/.bashrc"
-      echo '  rbenv_init=$(timeout 3 rbenv init - bash 2>/dev/null || echo "")' >> "$HOME/.bashrc"
-      echo '  [ -n "$rbenv_init" ] && eval "$rbenv_init"' >> "$HOME/.bashrc"
-      echo 'fi' >> "$HOME/.bashrc"
-      print_success "Added rbenv to PATH with timeout protection"
+  # Setup SSH wrapper for ruby/gem/bundle
+  if command_exists ruby; then
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "${EXT_NAME}" \
+        "eval \"\$(mise activate bash --shims)\""
     fi
-  fi
 
-  # Create SSH wrappers - use dynamic wrappers since rbenv manages versions
-  if command_exists create_tool_wrapper 2>/dev/null; then
-    create_tool_wrapper "ruby" "" "dynamic"
-    create_tool_wrapper "gem" "" "dynamic"
-    create_tool_wrapper "bundle" "" "dynamic"
-    create_tool_wrapper "bundler" "" "dynamic"
-    create_tool_wrapper "rails" "" "dynamic"
-    create_tool_wrapper "rake" "" "dynamic"
-    create_tool_wrapper "irb" "" "dynamic"
+    if command_exists create_tool_wrapper 2>/dev/null; then
+      create_tool_wrapper "ruby" "$(which ruby)"
+      create_tool_wrapper "gem" "$(which gem)"
+      create_tool_wrapper "bundle" "$(which bundle)"
+      command_exists rails && create_tool_wrapper "rails" "$(which rails)"
+    fi
   fi
 
   # Create Ruby/Rails aliases
@@ -274,24 +162,33 @@ configure() {
 validate() {
   print_status "Validating Ruby installation..."
 
+  # Ensure mise environment is activated
+  activate_mise_environment
+
   local all_valid=true
 
-  # Check rbenv
-  if [[ -d "$HOME/.rbenv" ]]; then
-    print_success "rbenv: installed"
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init - bash)"
-  else
-    print_error "rbenv not found"
+  # Check mise shows Ruby
+  if ! mise ls ruby 2>/dev/null | grep -q "ruby"; then
+    print_error "Ruby not installed via mise"
     all_valid=false
+  else
+    print_success "Ruby managed by mise"
   fi
 
-  # Check Ruby
+  # Check ruby command
   if ! command_exists ruby; then
-    print_error "ruby not found"
+    print_error "ruby command not found"
     all_valid=false
   else
     print_success "Ruby: $(ruby -v)"
+  fi
+
+  # Check gem
+  if ! command_exists gem; then
+    print_error "gem not found"
+    all_valid=false
+  else
+    print_success "gem: $(gem -v)"
   fi
 
   # Check Bundler
@@ -299,23 +196,13 @@ validate() {
     print_error "bundler not found"
     all_valid=false
   else
-    print_success "Bundler: $(bundler -v 2>&1 | head -n1)"
+    print_success "Bundler: $(bundle -v 2>&1 | head -n1)"
   fi
 
-  # Check Rails
+  # Check Rails (optional)
   if command_exists rails; then
     print_success "Rails: $(rails -v 2>&1 | head -n1)"
-  else
-    print_warning "Rails not found"
   fi
-
-  # Check gems
-  local gems=(rubocop rspec pry)
-  local gems_found=0
-  for gem in "${gems[@]}"; do
-    command_exists "$gem" && ((gems_found++))
-  done
-  print_status "Development gems: $gems_found/${#gems[@]}"
 
   if [[ "$all_valid" == "true" ]]; then
     print_success "Validation passed"
@@ -332,51 +219,58 @@ validate() {
 
 status() {
   print_extension_header
+  echo "Version Manager: mise"
+  echo ""
 
-  # Check installation status
-  if [[ ! -d "$HOME/.rbenv" ]] || ! command_exists ruby; then
+  # Activate mise for status
+  activate_mise_environment
+
+  # Check installation status - must be mise-managed
+  if ! command_exists ruby; then
     echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Verify Ruby is managed by mise
+  if ! mise ls ruby 2>/dev/null | grep -q "ruby"; then
+    echo "Status: ✗ NOT INSTALLED (system Ruby detected, but mise-managed Ruby required)"
     return 1
   fi
 
   echo "Status: ✓ INSTALLED"
   echo ""
 
-  export PATH="$HOME/.rbenv/bin:$PATH"
-
-  # Protect against rbenv init hanging - use timeout
-  local rbenv_init_output
-  if rbenv_init_output=$(timeout 3 rbenv init - bash 2>/dev/null); then
-    eval "$rbenv_init_output"
-  else
-    print_warning "rbenv init timed out, skipping initialization"
-  fi
-
-  # Show installed tools with versions
-  print_status "Installed tools:"
-  echo "  ✓ rbenv"
-
-  if command_exists ruby; then
-    echo "  ✓ Ruby $(ruby -v | awk '{print $2}' 2>/dev/null || echo 'installed')"
-  fi
-
-  command_exists bundle && echo "  ✓ Bundler $(bundler -v 2>&1 | head -n1 | awk '{print $3}' 2>/dev/null || echo 'installed')"
-  command_exists rails && echo "  ✓ Rails $(rails -v 2>&1 | head -n1 | awk '{print $2}' 2>/dev/null || echo 'installed')"
-
+  # Show version manager
+  print_status "Version Manager:"
+  echo "  • mise (managing Ruby)"
   echo ""
-  print_status "Installed development gems:"
 
-  # Use single gem list call with timeout instead of individual checks
-  local gem_list
-  if gem_list=$(timeout 10 gem list --local --no-versions 2>/dev/null); then
-    for gem_name in rubocop rspec pry pry-byebug solargraph yard foreman sidekiq puma; do
-      if echo "$gem_list" | grep -q "^${gem_name}$"; then
-        echo "  ✓ $gem_name"
-      fi
-    done
+  # Show mise-managed Ruby
+  print_status "mise-Managed Ruby:"
+  local ruby_info
+  ruby_info=$(mise ls ruby 2>/dev/null)
+  if [[ -n "$ruby_info" ]]; then
+    echo "$ruby_info" | sed 's/^/  • /'
   else
-    print_warning "Gem list timed out or unavailable"
+    echo "  (none)"
   fi
+  echo ""
+
+  # Show available commands
+  print_status "Available Commands:"
+  command_exists ruby && echo "  ✓ ruby $(ruby -v | awk '{print $2}')"
+  command_exists gem && echo "  ✓ gem $(gem -v)"
+  command_exists bundle && echo "  ✓ bundler $(bundle -v 2>&1 | head -n1 | awk '{print $3}')"
+  command_exists rails && echo "  ✓ rails $(rails -v 2>&1 | head -n1 | awk '{print $2}')"
+
+  # Show development gems count
+  echo ""
+  local gem_count
+  gem_count=$(gem list --local --no-versions 2>/dev/null | wc -l || echo "0")
+  print_status "Development gems installed: $gem_count"
+
+  [[ -f "$HOME/.rubocop.yml" ]] && echo "" && print_status "Rubocop config: installed"
+  [[ -f "$HOME/.gemfile_template" ]] && print_status "Gemfile template: installed"
 
   return 0
 }
@@ -388,110 +282,79 @@ status() {
 remove() {
   print_warning "Uninstalling Ruby..."
 
-  local dependent_exts=()
-  mapfile -t dependent_exts < <(check_dependent_extensions "ruby" "gem" "bundle" "rails")
-  if [[ ${#dependent_exts[@]} -gt 0 ]]; then
-    print_warning "The following extensions depend on Ruby and may stop working:"
-    for ext in "${dependent_exts[@]}"; do
-      echo "  - $ext"
-    done
-    echo ""
-  fi
+  # Show dependent extensions warning
+  show_dependent_extensions_warning "ruby" "gem" "bundle" "rails"
 
+  # Confirm removal
   if ! prompt_confirmation "Continue with Ruby removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Remove rbenv
-  if [[ -d "$HOME/.rbenv" ]]; then
-    print_status "Removing rbenv and all Ruby versions..."
-    rm -rf "$HOME/.rbenv"
-    print_success "rbenv removed"
+  # Remove mise configuration using shared helper
+  remove_mise_config "ruby"
+
+  # Clean up SSH wrappers
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    print_status "Cleaning up SSH wrappers..."
+    rm -f /usr/local/bin/ruby 2>/dev/null || true
+    rm -f /usr/local/bin/gem 2>/dev/null || true
+    rm -f /usr/local/bin/bundle 2>/dev/null || true
+    rm -f /usr/local/bin/rails 2>/dev/null || true
   fi
 
   # Remove aliases
   cleanup_bashrc "# Ruby aliases"
 
-  # Remove rbenv from bashrc
-  cleanup_bashrc "# ${EXT_NAME}"
-
   # Remove configs
   rm -f "$HOME/.rubocop.yml"
   rm -f "$HOME/.gemfile_template"
 
-  print_success "Ruby uninstalled"
-  print_warning "Restart shell: source ~/.bashrc"
+  print_success "Ruby extension configuration removed"
+  print_warning "Run 'mise prune' to remove unused Ruby installations"
+  print_warning "Restart your shell or run: exec bash"
+
   return 0
 }
 
 # ============================================================================
-# UPGRADE
+# UPGRADE - Extension API v2.0
 # ============================================================================
 
 upgrade() {
     print_status "Upgrading ${EXT_NAME}..."
 
-    local upgrade_failed=0
-
-    # Part 1: Upgrade build dependencies via APT
-    print_status "Upgrading Ruby build dependencies..."
-    local build_deps=(
-        "build-essential"
-        "libssl-dev"
-        "libreadline-dev"
-        "zlib1g-dev"
-        "libyaml-dev"
-        "libffi-dev"
-    )
-
-    if upgrade_apt_packages "${build_deps[@]}"; then
-        print_success "Build dependencies upgraded"
-    else
-        print_warning "Build dependency upgrade failed"
-        upgrade_failed=1
+    # Check if mise is available
+    if ! command_exists mise; then
+        print_error "mise not installed, cannot upgrade"
+        return 1
     fi
 
+    # Activate mise environment
+    activate_mise_environment
+
+    # Get current version
+    print_status "Current version:"
+    mise current ruby 2>/dev/null || echo "  ruby: not installed"
     echo ""
 
-    # Part 2: Upgrade rbenv and ruby-build
-    print_status "Upgrading rbenv..."
-    if upgrade_git_repo "$HOME/.rbenv" ""; then
-        print_success "rbenv upgraded"
-    else
-        print_warning "rbenv upgrade failed"
-        upgrade_failed=1
-    fi
+    # Use helper function for mise upgrades
+    if upgrade_mise_tools "${EXT_NAME}"; then
+        print_success "Ruby upgraded successfully"
 
-    echo ""
+        # Show new version
+        echo ""
+        print_status "Updated version:"
+        mise current ruby
 
-    print_status "Upgrading ruby-build..."
-    if upgrade_git_repo "$HOME/.rbenv/plugins/ruby-build" ""; then
-        print_success "ruby-build upgraded"
-    else
-        print_warning "ruby-build upgrade failed"
-        upgrade_failed=1
-    fi
+        # Upgrade gems
+        print_status "Upgrading installed gems..."
+        gem update --system 2>/dev/null || print_warning "RubyGems update failed"
+        gem update 2>/dev/null || print_warning "Some gems failed to update"
 
-    echo ""
-
-    # Part 3: Check for Ruby version updates (informational only)
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init - bash)"
-
-    local current_ruby
-    current_ruby=$(rbenv version 2>/dev/null | awk '{print $1}')
-
-    print_status "Current Ruby version: ${current_ruby}"
-    print_status "To upgrade Ruby itself, run:"
-    print_status "  rbenv install <version>"
-    print_status "  rbenv global <version>"
-
-    if [[ $upgrade_failed -eq 0 ]]; then
-        print_success "Ruby toolchain upgraded successfully"
         return 0
     else
-        print_warning "Some Ruby components failed to upgrade"
+        print_error "Upgrade failed"
         return 1
     fi
 }

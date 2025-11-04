@@ -53,7 +53,7 @@ jobs:
           # Core extensions (always needed)
           - { name: "workspace-structure", commands: "mkdir,ls", key_tool: "mkdir", timeout: "10m" }
           - { name: "ssh-environment", commands: "ssh,sshd", key_tool: "ssh", timeout: "15m" }
-          - { name: "mise-config", commands: "mise", key_tool: "mise", timeout: "10m", uses_mise: "true" }
+          - { name: "mise-config", commands: "mise", key_tool: "mise", timeout: "10m" }
           # mise-powered language extensions (faster with mise)
           - {
               name: "nodejs",
@@ -61,7 +61,6 @@ jobs:
               key_tool: "node",
               timeout: "15m",
               depends_on: "mise-config",
-              uses_mise: "true",
             }
           - {
               name: "python",
@@ -69,7 +68,6 @@ jobs:
               key_tool: "python3",
               timeout: "15m",
               depends_on: "mise-config",
-              uses_mise: "true",
             }
           - {
               name: "rust",
@@ -77,7 +75,6 @@ jobs:
               key_tool: "rustc",
               timeout: "20m",
               depends_on: "mise-config",
-              uses_mise: "true",
             }
           - {
               name: "golang",
@@ -85,7 +82,6 @@ jobs:
               key_tool: "go",
               timeout: "20m",
               depends_on: "mise-config",
-              uses_mise: "true",
             }
           - {
               name: "nodejs-devtools",
@@ -93,12 +89,11 @@ jobs:
               key_tool: "tsc",
               timeout: "15m",
               depends_on: "mise-config,nodejs",
-              uses_mise: "true",
             }
           # Claude AI extensions
           - { name: "claude", commands: "claude", key_tool: "claude", timeout: "15m" }
           # Traditional extensions (unchanged)
-          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 5 }
+          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2 }
           - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }
           - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m" }
           - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m" }

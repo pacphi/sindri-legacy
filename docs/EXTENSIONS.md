@@ -9,6 +9,7 @@
 - [mise Integration Guide](#mise-integration-guide)
 - [Troubleshooting](#troubleshooting)
 - [Extension API Specification](#extension-api-specification)
+- [Extension Versioning Strategy](EXTENSION_VERSIONING.md)
 - [Creating Extensions](#creating-extensions)
 - [Upgrading Extensions to API v2.0](#upgrading-extensions-to-api-v20)
 - [TOML Configuration Reference](#toml-configuration-reference)
@@ -26,7 +27,8 @@ runtimes, development tools, infrastructure utilities, and AI coding assistants.
 
 The extension system supports two approaches:
 
-- **Traditional extensions**: Using language-specific version managers (NVM, rbenv, SDKMAN, etc.)
+- **mise-powered extensions**: Using mise for unified version management (Node.js, Python, Rust, Go, Ruby)
+- **Traditional extensions**: Using language-specific version managers (SDKMAN, etc.)
 - **mise-powered extensions**: Using mise for unified tool management with declarative TOML configuration
 
 ### Extension API Versions
@@ -35,6 +37,8 @@ The extension system supports two approaches:
 - **API v2.0**: Adds standardized upgrade support with `upgrade()` function and installation metadata
 
 All extensions implement the Extension API, providing consistent installation, validation, and upgrade experiences.
+
+**Extension Versioning**: Extensions use semantic versioning with dual version tracking (`EXT_VERSION` and `EXT_API_VERSION`). See [Extension Versioning Strategy](EXTENSION_VERSIONING.md) for development and release workflows.
 
 ---
 
@@ -183,8 +187,8 @@ While not protected, these are highly recommended as many tools depend on them.
 | --------- | ---------------------------------------------- | ---------------- | ------- | ------------ |
 | `rust`    | Rust toolchain with cargo, clippy, rustfmt     | mise             | 2.0.0   | mise-config  |
 | `golang`  | Go 1.24 with gopls, delve, golangci-lint       | mise             | 2.0.0   | mise-config  |
-| `ruby`    | Ruby 3.4/3.3 with rbenv, Rails, Bundler        | rbenv            | 2.0.0   | N/A          |
-| `php`     | PHP 8.3 with Composer, Symfony CLI             | apt (Ondrej PPA) | 2.0.0   | N/A          |
+| `ruby`    | Ruby 3.4.7 with mise, Rails, Bundler           | mise             | 2.0.0   | automatic    |
+| `php`     | PHP 8.4 with Composer, Symfony CLI             | apt (Ondrej PPA) | 2.1.0   | automatic    |
 | `jvm`     | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN           | 2.0.0   | N/A          |
 | `dotnet`  | .NET SDK 9.0/8.0 with ASP.NET Core             | apt (Microsoft)  | 2.0.0   | N/A          |
 
@@ -234,7 +238,7 @@ While not protected, these are highly recommended as many tools depend on them.
 
 The following extensions use mise for tool installation and version management (all require `mise-config`):
 
-- **nodejs**: Node.js LTS via mise (replaces NVM)
+- **nodejs**: Node.js LTS via mise
 - **python**: Python 3.13 + pipx tools via mise
 - **rust**: Rust stable + cargo tools via mise
 - **golang**: Go 1.24 + go tools via mise
@@ -480,7 +484,7 @@ Valid values for `EXT_INSTALL_METHOD`:
 - `mise` - Tools managed by mise (Node.js, Python, Rust, Go, etc.)
 - `apt` - APT package manager (Docker, PHP, .NET, monitoring tools)
 - `binary` - Direct binary downloads (GitHub releases, CDN, etc.)
-- `git` - Git clone + manual build (rbenv, Ollama, etc.)
+- `git` - Git clone + manual build (Ollama, etc.)
 - `native` - Pre-installed in Docker image (GitHub CLI, system tools)
 - `mixed` - Multiple methods (Docker: APT + binaries)
 - `manual` - Custom installation requiring manual intervention
@@ -1014,7 +1018,7 @@ EXT_UPGRADE_STRATEGY="automatic"
 upgrade() {
     print_status "Upgrading ${EXT_NAME}..."
 
-    local repo_path="$HOME/.rbenv"
+    local repo_path="$HOME/.some-tool"
     local rebuild_cmd="cd $repo_path && src/configure && make -C src"
 
     if upgrade_git_repo "$repo_path" "$rebuild_cmd"; then
@@ -1384,8 +1388,7 @@ mise --version
 
 Follow semantic versioning:
 
-- **Major** (X.0.0): Breaking changes, different tool manager, API version change
-  - Example: v2.x → v3.x (NVM → mise for nodejs)
+- **Major** (X.0.0): Breaking changes, API version change
   - Example: v1.x → v2.x (API v1.0 → API v2.0)
 - **Minor** (x.Y.0): New tools, features, configuration options
   - Example: v3.0 → v3.1 (added new npm tools)
@@ -1523,41 +1526,6 @@ Order extensions by installation time:
 1. **Fast** (< 1 min): workspace-structure, ssh-environment, mise-config
 2. **Medium** (1-3 min): nodejs, python, golang
 3. **Slow** (> 3 min): rust, docker, jvm
-
-### Migration from Traditional to mise
-
-#### Upgrade Path
-
-Extensions can be migrated from traditional tool managers to mise:
-
-1. **Install mise-config**: `extension-manager install mise-config`
-2. **Uninstall traditional extension**: `extension-manager uninstall <name>`
-3. **Install mise-powered version**: `extension-manager install <name>`
-4. **Validate migration**: `extension-manager validate <name>`
-
-#### Coexistence Period
-
-Traditional and mise extensions can coexist:
-
-```bash
-# Example: Ruby still uses rbenv, Node.js uses mise
-workspace-structure
-mise-config
-nodejs        # v3.x (mise-powered)
-ruby          # v2.x (rbenv-based)
-python        # v2.x (mise-powered)
-```
-
-#### Breaking Changes
-
-When upgrading to mise-powered versions:
-
-| Extension | Traditional   | mise-Powered | Breaking Change                  |
-| --------- | ------------- | ------------ | -------------------------------- |
-| nodejs    | v2.x (NVM)    | v3.x (mise)  | NVM commands no longer available |
-| python    | v1.x (apt)    | v2.x (mise)  | System Python not used           |
-| rust      | v1.x (rustup) | v2.x (mise)  | rustup not installed             |
-| golang    | v1.x (manual) | v2.x (mise)  | Manual installation replaced     |
 
 ---
 

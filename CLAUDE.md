@@ -136,8 +136,8 @@ extension-manager upgrade-history        # View upgrade history
 - `github-cli` - GitHub CLI authentication and workflow configuration
 - `rust` - Rust toolchain with cargo, clippy, rustfmt (requires mise-config)
 - `golang` - Go 1.24 with gopls, delve, golangci-lint (requires mise-config)
-- `ruby` - Ruby 3.4/3.3 with rbenv, Rails, Bundler
-- `php` - PHP 8.3 with Composer, Symfony CLI
+- `ruby` - Ruby 3.4.7 via mise with Rails, Bundler (requires mise-config)
+- `php` - PHP 8.4 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - `dotnet` - .NET SDK 9.0/8.0 with ASP.NET Core
 
@@ -255,8 +255,8 @@ extension-manager --interactive
 ## mise Tool Manager
 
 Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management across multiple languages and runtimes.
-mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, and their associated tools,
-replacing multiple version managers (NVM, pyenv, rustup, etc.) with one tool.
+mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, Ruby, and their associated tools,
+replacing multiple version managers (NVM, pyenv, rbenv, rustup, etc.) with one tool.
 
 **Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed.
 It must be installed before any mise-powered extensions.
@@ -285,6 +285,12 @@ The following extensions use mise for tool installation and version management (
   - Go toolchain utilities
   - Development tools (gopls, delve, golangci-lint)
 
+- **ruby**: Ruby 3.4.7 + Rails + gems via mise
+  - Ruby runtime versions
+  - gem and bundle package managers
+  - Rails framework (development mode only)
+  - Development gems (rubocop, rspec, pry, etc.)
+
 - **nodejs-devtools**: npm global tools via mise
   - TypeScript, ESLint, Prettier
   - nodemon, goalie
@@ -301,12 +307,14 @@ mise ls node
 mise ls python
 mise ls rust
 mise ls go
+mise ls ruby
 
 # Install or switch tool versions
 mise use node@20          # Switch to Node.js 20
 mise use python@3.11      # Switch to Python 3.11
 mise use rust@stable      # Switch to stable Rust
 mise use go@1.24          # Switch to Go 1.24
+mise use ruby@3.4.7       # Switch to Ruby 3.4.7
 
 # Update all tools to latest versions
 mise upgrade

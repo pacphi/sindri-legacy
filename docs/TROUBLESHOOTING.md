@@ -830,7 +830,7 @@ mise doctor
    ✗ conflicting version managers detected
    ```
 
-   - Check for conflicts with nvm, rbenv, pyenv, etc.
+   - Check for conflicts with other version managers (if not using mise)
 
 **Common Issues and Fixes**:
 

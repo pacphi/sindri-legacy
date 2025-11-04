@@ -18,6 +18,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="ai-tools"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="AI CLI tools and coding assistants (hybrid: native + mise-managed)"
 EXT_CATEGORY="ai-tools"
 EXT_INSTALL_METHOD="mixed"  # Native + mise

@@ -175,8 +175,8 @@ extension-manager status <name>     # Check status
 - `rust` - Rust stable (mise-powered)
 - `golang` - Go 1.24 (mise-powered)
 - `nodejs-devtools` - Node.js dev tools (mise-powered)
-- `ruby` - Ruby 3.4/3.3 (rbenv)
-- `php` - PHP 8.3
+- `ruby` - Ruby 3.4.7 (mise)
+- `php` - PHP 8.4
 - `jvm` - Java/Kotlin/Scala (SDKMAN)
 - `dotnet` - .NET SDK 9.0/8.0
 

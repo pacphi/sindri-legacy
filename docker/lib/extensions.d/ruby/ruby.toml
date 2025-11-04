@@ -1,0 +1,15 @@
+# ruby.toml - Ruby 3.4.7 development environment via mise
+# Full development environment with Ruby, Rails, and gems
+
+[tools]
+# Ruby 3.4.7 (latest stable in 3.4.x series)
+ruby = "3.4.7"
+
+[env]
+# Gem configuration
+GEM_HOME = "{{config_root}}/gems"
+GEM_PATH = "{{config_root}}/gems"
+BUNDLE_PATH = "{{config_root}}/bundle"
+
+[settings]
+experimental = true

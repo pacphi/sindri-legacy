@@ -15,6 +15,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="workspace-structure"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Creates workspace directory structure"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="native"

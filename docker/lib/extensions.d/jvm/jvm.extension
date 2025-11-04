@@ -19,6 +19,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="jvm"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="JVM languages (Java, Kotlin, Scala, Clojure) with SDKMAN"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="native"  # SDKMAN manages everything

@@ -313,7 +313,7 @@ EOF
 
 
 # Function to setup PATH for a tool/language (handles both interactive and non-interactive sessions)
-# Usage: setup_tool_path "Ruby" 'export PATH="$HOME/.rbenv/bin:$PATH"' 'eval "$(rbenv init -)"'
+# Usage: setup_tool_path "nodejs" 'eval "$(mise activate bash --shims)"'
 setup_tool_path() {
     local tool_name="$1"
     local path_export="$2"

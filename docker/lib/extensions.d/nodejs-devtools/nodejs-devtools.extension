@@ -16,6 +16,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="nodejs-devtools"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="TypeScript, ESLint, Prettier, and Node.js development tools via mise npm backend"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mise"

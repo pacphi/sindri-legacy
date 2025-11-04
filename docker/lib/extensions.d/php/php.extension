@@ -3,9 +3,9 @@
 # Extension API v1.0
 #
 # This extension installs PHP with:
-# - PHP 8.3 with essential extensions
-# - Composer package manager
-# - Symfony CLI
+# - PHP 8.4.14 with essential extensions
+# - Composer package manager (latest)
+# - Symfony CLI (latest)
 # - Development tools (phpstan, psalm, phpunit, php-cs-fixer)
 # - Framework aliases (Symfony, Laravel)
 
@@ -18,8 +18,9 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="php"
-EXT_VERSION="2.0.0"
-EXT_DESCRIPTION="PHP 8.3 with Composer, Symfony CLI, and dev tools"
+EXT_VERSION="2.1.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="PHP 8.4.14 with Composer, Symfony CLI, and dev tools"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="apt"
 EXT_UPGRADE_STRATEGY="automatic"
@@ -92,8 +93,8 @@ install() {
 
   # PRE-FLIGHT: Verify repository accessibility
   print_status "Verifying PHP repository accessibility..."
-  if ! timeout 30s apt-cache search php8.3 > /dev/null 2>&1; then
-    print_warning "PHP 8.3 packages not found in repositories"
+  if ! timeout 30s apt-cache search php8.4 > /dev/null 2>&1; then
+    print_warning "PHP 8.4 packages not found in repositories"
     print_warning "Repository may not be accessible from this network"
   fi
 
@@ -101,13 +102,13 @@ install() {
   apt_update_retry 3
 
   # Install PHP and essential extensions
-  print_status "Installing PHP 8.3 and extensions..."
+  print_status "Installing PHP 8.4 and extensions..."
   local php_packages=(
-    php8.3 php8.3-cli php8.3-common php8.3-curl php8.3-mbstring
-    php8.3-mysql php8.3-pgsql php8.3-sqlite3 php8.3-xml php8.3-zip
-    php8.3-bcmath php8.3-gd php8.3-intl php8.3-opcache php8.3-readline
-    php8.3-soap php8.3-xdebug php8.3-redis php8.3-amqp
-    php8.3-mongodb php8.3-imagick
+    php8.4 php8.4-cli php8.4-common php8.4-curl php8.4-mbstring
+    php8.4-mysql php8.4-pgsql php8.4-sqlite3 php8.4-xml php8.4-zip
+    php8.4-bcmath php8.4-gd php8.4-intl php8.4-opcache php8.4-readline
+    php8.4-soap php8.4-xdebug php8.4-redis php8.4-amqp
+    php8.4-mongodb php8.4-imagick
   )
 
   local installed_count=0
@@ -123,8 +124,8 @@ install() {
 
   print_status "Installed $installed_count/${#php_packages[@]} PHP packages"
 
-  # Check if core PHP package failed (php8.3 and php8.3-cli are critical)
-  if [[ " ${failed_packages[*]} " =~ \ php8.3\  ]] || [[ " ${failed_packages[*]} " =~ \ php8.3-cli\  ]]; then
+  # Check if core PHP package failed (php8.4 and php8.4-cli are critical)
+  if [[ " ${failed_packages[*]} " =~ \ php8.4\  ]] || [[ " ${failed_packages[*]} " =~ \ php8.4-cli\  ]]; then
     print_error "Failed to install core PHP packages: ${failed_packages[*]}"
     return 1
   fi
@@ -286,7 +287,7 @@ configure() {
   print_status "Configuring PHP for development..."
   cat "$(dirname "${BASH_SOURCE[0]}")/php.development-ini.template" > /tmp/development.ini
 
-  sudo mv /tmp/development.ini /etc/php/8.3/mods-available/development.ini
+  sudo mv /tmp/development.ini /etc/php/8.4/mods-available/development.ini
   sudo phpenmod development 2>/dev/null
 
   # Create PHP/Symfony/Laravel aliases
@@ -443,7 +444,7 @@ remove() {
 
   # Remove PHP packages
   print_status "Removing PHP packages..."
-  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq php8.3* 2>/dev/null
+  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq php8.4* 2>/dev/null
   sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq 2>/dev/null
 
   # Remove Composer
@@ -485,7 +486,7 @@ upgrade() {
 
     # Upgrade PHP packages via APT
     print_status "Upgrading PHP packages..."
-    if upgrade_apt_packages "php8.3" "php8.3-cli" "php8.3-common" "php8.3-curl" "php8.3-mbstring" "php8.3-xml" "php8.3-zip"; then
+    if upgrade_apt_packages "php8.4" "php8.4-cli" "php8.4-common" "php8.4-curl" "php8.4-mbstring" "php8.4-xml" "php8.4-zip"; then
         print_success "PHP packages upgraded"
     else
         print_warning "PHP package upgrade failed"

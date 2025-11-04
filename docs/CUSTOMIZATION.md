@@ -76,7 +76,7 @@ While not protected, these are highly recommended:
 - **rust** - Rust toolchain with cargo, clippy, rustfmt
 - **golang** - Go 1.24 with gopls, delve, golangci-lint
 - **ruby** - Ruby 3.4/3.3 with rbenv, Rails, Bundler
-- **php** - PHP 8.3 with Composer, Symfony CLI
+- **php** - PHP 8.4 with Composer, Symfony CLI
 - **jvm** - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - **dotnet** - .NET SDK 9.0/8.0 with ASP.NET Core
 

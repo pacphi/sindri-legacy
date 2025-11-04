@@ -17,6 +17,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="monitoring"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Claude monitoring and usage tracking tools"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="apt"

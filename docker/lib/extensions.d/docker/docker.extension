@@ -18,6 +18,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="docker"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Docker Engine with compose and utilities"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="mixed"  # apt (docker-ce) + binary (compose, dive, ctop)

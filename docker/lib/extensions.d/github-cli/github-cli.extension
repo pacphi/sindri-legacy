@@ -24,6 +24,7 @@ fi
 
 EXT_NAME="github-cli"
 EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="GitHub CLI authentication and workflow configuration"
 EXT_CATEGORY="development"
 EXT_INSTALL_METHOD="native"  # Pre-installed in Docker image
