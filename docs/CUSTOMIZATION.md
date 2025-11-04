@@ -69,6 +69,8 @@ While not protected, these are highly recommended:
 #### Claude AI
 
 - **claude** - Claude Code CLI with developer configuration
+- **claude-marketplace** - Plugin installer for https://claudecodemarketplace.com/
+  (depends on claude, git)
 - **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
   (depends on nodejs 20.6+, git)
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)

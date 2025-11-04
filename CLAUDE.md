@@ -129,6 +129,7 @@ extension-manager upgrade-history        # View upgrade history
 **Claude AI:**
 
 - `claude` - Claude Code CLI with developer configuration
+- `claude-marketplace` - Plugin installer for https://claudecodemarketplace.com/ (requires claude, git)
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
@@ -160,7 +161,7 @@ extension-manager upgrade-history        # View upgrade history
 ### Activation Manifest
 
 Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development)
- or `active-extensions.ci.conf` (CI mode).
+or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
 
@@ -239,6 +240,49 @@ Provides:
 - Global preferences (~/.claude/CLAUDE.md)
 - Auto-formatting hooks (Prettier, TypeScript)
 - Authentication management
+
+**claude-marketplace** (Optional):
+
+```bash
+extension-manager install claude-marketplace
+```
+
+Provides:
+
+- Plugin marketplace integration for https://claudecodemarketplace.com/
+- Automated plugin installation from `.plugins` configuration file
+- Curated collection of high-quality Claude Code plugins
+- Support for GitHub-hosted plugin repositories
+
+Common workflow:
+
+```bash
+# Copy template and customize
+cp /workspace/.plugins.example /workspace/.plugins
+vim /workspace/.plugins
+
+# Install extension (auto-installs plugins from .plugins file)
+extension-manager install claude-marketplace
+
+# Browse and install plugins interactively
+claude /plugin
+
+# List installed plugins
+claude /plugin list
+
+# Manage marketplaces
+claude /plugin marketplace list
+claude /plugin marketplace add owner/repo
+```
+
+Curated plugins in `.plugins.example`:
+
+- `steveyegge/beads` - Natural language programming
+- `croffasia/cc-blueprint-toolkit` - Project scaffolding templates
+- `quant-sentiment-ai/claude-equity-research` - Financial analysis tools
+- `czlonkowski/n8n-skills` - Workflow automation integration
+- `anthropics/life-sciences` - Life sciences research plugins
+- `ComposioHQ/awesome-claude-skills` - Community-curated skills collection
 
 **openskills** (Optional):
 

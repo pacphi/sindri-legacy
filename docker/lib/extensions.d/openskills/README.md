@@ -97,17 +97,17 @@ Once skills are installed and synced:
 
 The extension provides convenient aliases:
 
-| Alias              | Command                                             | Description                          |
-| ------------------ | --------------------------------------------------- | ------------------------------------ |
-| `skills`           | `openskills`                                        | Short alias for openskills           |
-| `skill-install`    | `openskills install`                                | Install skills                       |
-| `skill-list`       | `openskills list`                                   | List installed skills                |
-| `skill-sync`       | `openskills sync`                                   | Sync skills to AGENTS.md             |
-| `skill-read`       | `openskills read`                                   | Read skill content                   |
-| `skill-manage`     | `openskills manage`                                 | Manage/remove skills                 |
-| `skill-marketplace`| `openskills install anthropics/anthropic-skills-marketplace` | Quick access to Anthropic marketplace|
-| `skills-help`      | `openskills --help`                                 | Show help                            |
-| `skills-version`   | `openskills --version`                              | Show version                         |
+| Alias               | Command                                                      | Description                           |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------- |
+| `skills`            | `openskills`                                                 | Short alias for openskills            |
+| `skill-install`     | `openskills install`                                         | Install skills                        |
+| `skill-list`        | `openskills list`                                            | List installed skills                 |
+| `skill-sync`        | `openskills sync`                                            | Sync skills to AGENTS.md              |
+| `skill-read`        | `openskills read`                                            | Read skill content                    |
+| `skill-manage`      | `openskills manage`                                          | Manage/remove skills                  |
+| `skill-marketplace` | `openskills install anthropics/anthropic-skills-marketplace` | Quick access to Anthropic marketplace |
+| `skills-help`       | `openskills --help`                                          | Show help                             |
+| `skills-version`    | `openskills --version`                                       | Show version                          |
 
 ## Configuration
 

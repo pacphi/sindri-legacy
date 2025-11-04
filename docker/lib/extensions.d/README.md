@@ -233,6 +233,7 @@ Extensions are organized by category in the activation manifest.
 ### Claude AI
 
 - **claude** - Claude Code CLI with developer configuration
+- **claude-marketplace** - Plugin installer for https://claudecodemarketplace.com/
 - **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie
 
@@ -264,7 +265,7 @@ Extensions are organized by category in the activation manifest.
 ## Activation Manifest
 
 Extensions are controlled via `docker/lib/extensions.d/active-extensions.conf.example` (development)
- or `active-extensions.ci.conf` (CI mode):
+or `active-extensions.ci.conf` (CI mode):
 
 ```bash
 # Protected extensions (required, cannot be removed):

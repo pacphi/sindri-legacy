@@ -167,6 +167,7 @@ extension-manager status <name>     # Check status
 
 - `ai-tools` - AI coding assistants
 - `claude` - Claude Code CLI
+- `claude-marketplace` - Claude plugin marketplace integration
 - `openskills` - Claude Code skills management
 
 **Development Tools:**

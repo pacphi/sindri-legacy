@@ -178,11 +178,12 @@ While not protected, these are highly recommended as many tools depend on them.
 
 ### Claude AI Tools
 
-| Extension         | Description                                                         | Tool Manager       | Version | Dependencies                 |
-| ----------------- | ------------------------------------------------------------------- | ------------------ | ------- | ---------------------------- |
-| `claude`          | Claude Code CLI with developer configuration                        | native             | 2.0.0   | -                            |
-| `openskills`      | OpenSkills CLI for managing Claude Code skills from marketplace     | npm                | 2.0.0   | nodejs (20.6+), git          |
-| `nodejs-devtools` | TypeScript, ESLint, Prettier, nodemon, goalie                       | mise (npm backend) | 2.0.0   | nodejs, mise-config          |
+| Extension            | Description                                                     | Tool Manager       | Version | Dependencies        |
+| -------------------- | --------------------------------------------------------------- | ------------------ | ------- | ------------------- |
+| `claude`             | Claude Code CLI with developer configuration                    | native             | 2.0.0   | -                   |
+| `claude-marketplace` | Plugin installer for https://claudecodemarketplace.com/         | native             | 2.0.0   | claude, git         |
+| `openskills`         | OpenSkills CLI for managing Claude Code skills from marketplace | npm                | 2.0.0   | nodejs (20.6+), git |
+| `nodejs-devtools`    | TypeScript, ESLint, Prettier, nodemon, goalie                   | mise (npm backend) | 2.0.0   | nodejs, mise-config |
 
 ### Additional Language Runtimes
 

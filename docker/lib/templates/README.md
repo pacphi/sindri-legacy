@@ -22,11 +22,11 @@ they find the template copies and incorrectly report "already installed", skippi
 
 ## Template Files
 
-| File | Used By | Target Location |
-|------|---------|-----------------|
-| `context-loader.sh` | context-loader | `/workspace/scripts/lib/context-loader.sh` |
-| `cf-with-context.sh` | context-loader | `/workspace/scripts/cf-with-context.sh` |
-| `agent-discovery.sh` | agent-manager | `/workspace/scripts/lib/agent-discovery.sh` |
+| File                 | Used By        | Target Location                             |
+| -------------------- | -------------- | ------------------------------------------- |
+| `context-loader.sh`  | context-loader | `/workspace/scripts/lib/context-loader.sh`  |
+| `cf-with-context.sh` | context-loader | `/workspace/scripts/cf-with-context.sh`     |
+| `agent-discovery.sh` | agent-manager  | `/workspace/scripts/lib/agent-discovery.sh` |
 
 ## Adding New Templates
 

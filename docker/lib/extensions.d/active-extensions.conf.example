@@ -55,6 +55,11 @@ python
 # Creates ~/.claude/CLAUDE.md and ~/.claude/settings.json with hooks
 claude
 
+# Claude plugin marketplace for installing curated plugins from claudecodemarketplace.com
+# Automatically installs plugins listed in /workspace/.plugins file
+# Depends on: claude, git
+# claude-marketplace
+
 # OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
 # Implements Agent Skills specification for progressive skill disclosure
 # Depends on: nodejs (requires Node.js 20.6+, npm, git)
