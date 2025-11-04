@@ -69,6 +69,8 @@ While not protected, these are highly recommended:
 #### Claude AI
 
 - **claude** - Claude Code CLI with developer configuration
+- **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
+  (depends on nodejs 20.6+, git)
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
 
 #### Language Runtimes
@@ -625,9 +627,8 @@ prerequisites() {
 install() {
   print_status "Installing ${EXT_NAME}..."
 
-  # Load NVM
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # Node.js is available globally via mise (from nodejs extension)
+  # No need to load NVM - mise handles version management
 
   # Global packages
   print_status "Installing global npm packages..."

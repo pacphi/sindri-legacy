@@ -15,6 +15,7 @@ useradd -r -g systemd-network -u 998 -s /usr/sbin/nologin systemd-network 2>/dev
 apt_update_retry 3
 
 # Install system dependencies with retry
+# Note: libssl-dev, zlib1g-dev, libyaml-dev, libreadline-dev are required for compiling language runtimes and their native extensions
 apt_install_retry 3 \
     openssh-server \
     sudo \
@@ -29,6 +30,10 @@ apt_install_retry 3 \
     unzip \
     build-essential \
     pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    libyaml-dev \
+    libreadline-dev \
     pipx \
     sqlite3 \
     postgresql-client \

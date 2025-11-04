@@ -1,0 +1,20 @@
+#!/bin/bash
+# openskills.aliases - Shell aliases for OpenSkills CLI
+# Sourced by ~/.bashrc when openskills extension is installed
+
+# Short alias for openskills command
+alias skills='openskills'
+
+# Common operations
+alias skill-install='openskills install'
+alias skill-list='openskills list'
+alias skill-sync='openskills sync'
+alias skill-read='openskills read'
+alias skill-manage='openskills manage'
+
+# Quick access to Anthropic's official marketplace
+alias skill-marketplace='openskills install anthropics/anthropic-skills-marketplace'
+
+# Help and version
+alias skills-help='openskills --help'
+alias skills-version='openskills --version'

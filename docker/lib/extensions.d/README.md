@@ -233,6 +233,7 @@ Extensions are organized by category in the activation manifest.
 ### Claude AI
 
 - **claude** - Claude Code CLI with developer configuration
+- **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie
 
 ### Development Tools
@@ -277,6 +278,7 @@ python
 
 # Claude AI
 claude
+openskills
 nodejs-devtools
 
 # Languages
@@ -600,16 +602,16 @@ sudo pip install package
 sudo gem install package
 ```
 
-**Important for Node.js/NVM**: Do NOT set npm prefix when using NVM:
+**Important for Node.js/mise**: Do NOT set npm prefix when using mise:
 
 ```bash
-# WRONG: Conflicts with NVM
+# WRONG: Conflicts with mise
 npm config set prefix "$HOME/.npm-global"
 
-# CORRECT: Let NVM manage global packages
-# NVM already provides user-space global installs without sudo
-# Global packages install to: $NVM_DIR/versions/node/vX.X.X/bin
-npm install -g package  # No sudo needed, installs to NVM directory
+# CORRECT: Let mise manage global packages
+# mise already provides user-space global installs without sudo
+# Global packages install to: ~/.local/share/mise/installs/node/<version>/bin
+npm install -g package  # No sudo needed, installs to mise directory
 ```
 
 ### 6. SSH Session Support

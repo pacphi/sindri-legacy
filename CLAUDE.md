@@ -129,6 +129,7 @@ extension-manager upgrade-history        # View upgrade history
 **Claude AI:**
 
 - `claude` - Claude Code CLI with developer configuration
+- `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
 **Development Tools:**
@@ -238,6 +239,47 @@ Provides:
 - Global preferences (~/.claude/CLAUDE.md)
 - Auto-formatting hooks (Prettier, TypeScript)
 - Authentication management
+
+**openskills** (Optional):
+
+```bash
+extension-manager install openskills
+```
+
+Provides:
+
+- OpenSkills CLI (`openskills` command, aliased as `skills`)
+- Install and manage Claude Code skills from Anthropic's marketplace
+- Progressive skill disclosure (loads instructions only when needed)
+- SKILL.md format support with YAML frontmatter
+- Skills installed to ~/.openskills/
+
+Common commands:
+
+```bash
+# Install skills from Anthropic's marketplace (interactive)
+openskills install anthropics/anthropic-skills-marketplace
+
+# List installed skills
+openskills list
+
+# Sync skills to AGENTS.md
+openskills sync
+
+# Read skill content for agents
+openskills read <skill-name>
+
+# Remove skills interactively
+openskills manage
+```
+
+Shell aliases available:
+
+- `skills` - Short alias for openskills
+- `skill-install` - Install skills
+- `skill-list` - List skills
+- `skill-sync` - Sync to AGENTS.md
+- `skill-marketplace` - Quick install from Anthropic's marketplace
 
 **Typical Setup**:
 
