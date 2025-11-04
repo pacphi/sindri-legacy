@@ -19,9 +19,23 @@ It provides:
 
 ## Prerequisites
 
-- **Claude CLI** (installed via `claude` extension)
-- **git** (for cloning plugin repositories)
-- **Authenticated Claude session** (run `claude` first if needed)
+- **Claude CLI** (installed via `claude` extension) - **Required**
+- **git** (for cloning plugin repositories) - **Required**
+- **Claude Authentication** - **Optional** (but required for plugin installation)
+
+### Authentication Requirements
+
+The extension works in two modes:
+
+1. **With Authentication** (Recommended):
+   - Plugin installation fully functional
+   - Set `ANTHROPIC_API_KEY` environment variable, OR
+   - Run `claude` command to authenticate interactively
+
+2. **Without Authentication** (Limited):
+   - Marketplace configuration still works
+   - Plugin installation is skipped with clear guidance
+   - Suitable for environments where API keys aren't available
 
 ## Installation
 
@@ -59,23 +73,38 @@ claude /plugin marketplace list
 
 The extension automatically installs plugins listed in `/workspace/.plugins`:
 
-1. **Create your plugins file** (or use the template):
+1. **Ensure Claude is authenticated** (for plugin installation):
+
+   ```bash
+   # Check if authenticated
+   claude /plugin marketplace list
+
+   # If not authenticated, run:
+   export ANTHROPIC_API_KEY="your-api-key"
+   # OR authenticate interactively:
+   claude
+   ```
+
+2. **Create your plugins file** (or use the template):
 
    ```bash
    cp /workspace/.plugins.example /workspace/.plugins
    ```
 
-2. **Edit the file** to select desired plugins:
+3. **Edit the file** to select desired plugins:
 
    ```bash
    vim /workspace/.plugins
    ```
 
-3. **Install** (happens automatically during extension install):
+4. **Install** (happens automatically during extension install):
 
    ```bash
    extension-manager install claude-marketplace
    ```
+
+**Note**: If not authenticated, the marketplace will be configured but plugin
+installation will be skipped. You can install plugins later with `claude /plugin`.
 
 ### Manual Plugin Management
 
@@ -155,13 +184,47 @@ When `CI_MODE=true`, the extension automatically:
 
 1. Uses `.plugins.ci.example` (3 plugins) instead of `.plugins.example` (6 plugins)
 2. Creates `/workspace/.plugins` from CI template if it doesn't exist
-3. Installs the minimal CI test set for faster, more reliable testing
+3. Checks for Claude authentication before attempting plugin installation
+4. **With `ANTHROPIC_API_KEY` set**: Installs plugins automatically
+5. **Without authentication**: Skips plugin installation with informative message
 
 **CI Test Plugins (3 selected for reliability)**:
 
 - `steveyegge/beads` - Natural language programming
 - `anthropics/life-sciences` - Official Anthropic plugin
 - `ComposioHQ/awesome-claude-skills` - Community-curated collection
+
+#### Enabling Plugin Installation in CI
+
+To enable automatic plugin installation in CI/CD:
+
+```yaml
+# In your GitHub Actions workflow:
+jobs:
+  test:
+    steps:
+      - name: Run tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          extension-manager install claude-marketplace
+```
+
+**Without authentication**, you'll see:
+
+```
+⚠️  Claude is not authenticated - skipping plugin installation
+
+Plugin installation requires Claude Code authentication.
+To enable plugin installation in CI:
+  1. Set ANTHROPIC_API_KEY as a repository secret
+  2. Pass it to the workflow:
+     env:
+       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+The marketplace will still be configured, but plugins
+will need to be installed manually or in an authenticated context.
+```
 
 ### Marketplace Configuration
 
@@ -194,11 +257,11 @@ This extension implements **Extension API v2.0** with the following features:
 
 ### Functions
 
-- ✅ `prerequisites()` - Check Claude CLI, git, authentication
-- ✅ `install()` - Configure marketplace, install plugins from `.plugins` file
-- ✅ `configure()` - Update Claude settings, verify marketplace access
-- ✅ `validate()` - Test marketplace access and configuration
-- ✅ `status()` - Display marketplace status and installed plugins
+- ✅ `prerequisites()` - Check Claude CLI and git (authentication optional)
+- ✅ `install()` - Configure marketplace, install plugins if authenticated
+- ✅ `configure()` - Check authentication, install plugins if available, configure marketplace
+- ✅ `validate()` - Verify marketplace configuration, check plugins if authenticated
+- ✅ `status()` - Display marketplace status, configuration, and plugin information
 - ✅ `upgrade()` - Update marketplace metadata, re-sync plugins
 - ✅ `remove()` - Remove marketplace configuration, optionally uninstall plugins
 
@@ -210,6 +273,32 @@ The extension has explicit dependencies checked in `prerequisites()`:
 - `git` command (for cloning repositories)
 
 ## Troubleshooting
+
+### Authentication Issues
+
+**Symptom**: `Claude is not authenticated - skipping plugin installation`
+
+**Solution**:
+
+```bash
+# Option 1: Set API key environment variable
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# Option 2: Authenticate interactively
+claude
+
+# Option 3: For CI/CD, set as secret
+# In GitHub: Settings → Secrets → New repository secret
+# Name: ANTHROPIC_API_KEY
+# Value: your-api-key
+
+# Then in workflow:
+# env:
+#   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+**Note**: The extension will still configure the marketplace even without
+authentication. Plugins can be installed later once authenticated.
 
 ### Marketplace Not Accessible
 

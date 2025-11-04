@@ -131,6 +131,24 @@ install() {
 # HELPER FUNCTIONS
 # ============================================================================
 
+# Check if Claude is authenticated
+# Returns: 0 if authenticated, 1 if not
+is_claude_authenticated() {
+  # Method 1: Check if ANTHROPIC_API_KEY is set
+  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    return 0
+  fi
+
+  # Method 2: Try to list marketplaces (requires auth)
+  if command_exists claude; then
+    if timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 configure_marketplace() {
   # Ensure settings.json exists with valid JSON
   if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
@@ -231,10 +249,28 @@ configure() {
       fi
     fi
 
-    # Install plugins if .plugins file exists
+    # Check if Claude is authenticated before attempting plugin installation
     if [[ -f "$PLUGINS_FILE" ]]; then
-      print_status "CI mode: Installing plugins from .plugins file..."
-      install_plugins_from_file
+      if is_claude_authenticated; then
+        print_status "CI mode: Claude authenticated, installing plugins from .plugins file..."
+        install_plugins_from_file
+      else
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_warning "Claude is not authenticated - skipping plugin installation"
+        echo ""
+        echo "Plugin installation requires Claude Code authentication."
+        echo "To enable plugin installation in CI:"
+        echo "  1. Set ANTHROPIC_API_KEY as a repository secret"
+        echo "  2. Pass it to the workflow:"
+        echo "     env:"
+        echo "       ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}"
+        echo ""
+        echo "The marketplace will still be configured, but plugins"
+        echo "will need to be installed manually or in an authenticated context."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+      fi
     fi
   fi
 
@@ -334,24 +370,31 @@ validate() {
       expected_count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
       print_status "Expected plugins: $expected_count"
 
-      # List installed plugins
-      if command_exists claude; then
-        print_status "Installed plugins:"
-        if timeout 10s claude /plugin list 2>&1 | tee /tmp/plugins.txt; then
-          # Count installed plugins (look for owner/repo pattern)
-          installed_count=$(grep -c '/' /tmp/plugins.txt || echo "0")
-          echo "  Installed count: $installed_count"
+      # Check if Claude is authenticated
+      if ! is_claude_authenticated; then
+        print_warning "Claude not authenticated - plugin installation was skipped"
+        print_status "Set ANTHROPIC_API_KEY to enable plugin installation testing"
+        # Don't fail validation if not authenticated - this is expected behavior
+      else
+        # List installed plugins only if authenticated
+        if command_exists claude; then
+          print_status "Installed plugins:"
+          if timeout 10s claude /plugin list 2>&1 | tee /tmp/plugins.txt; then
+            # Count installed plugins (look for owner/repo pattern)
+            installed_count=$(grep -c '/' /tmp/plugins.txt || echo "0")
+            echo "  Installed count: $installed_count"
 
-          if [ "$installed_count" -ge "$expected_count" ]; then
-            print_success "All expected plugins installed ($installed_count/$expected_count)"
+            if [ "$installed_count" -ge "$expected_count" ]; then
+              print_success "All expected plugins installed ($installed_count/$expected_count)"
+            else
+              print_error "Expected $expected_count plugins, found $installed_count"
+              cat /tmp/plugins.txt || true
+              all_valid=false
+            fi
           else
-            print_error "Expected $expected_count plugins, found $installed_count"
-            cat /tmp/plugins.txt || true
+            print_error "Could not list plugins"
             all_valid=false
           fi
-        else
-          print_error "Could not list plugins"
-          all_valid=false
         fi
       fi
     fi

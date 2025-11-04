@@ -73,26 +73,43 @@ case "$key_tool" in
             fi
         fi
 
-        # Test 3: List and count installed plugins
-        print_info "Listing installed plugins..."
-        if timeout 15s claude /plugin list 2>&1 | tee /tmp/plugin-list.txt; then
-            plugin_count=$(grep -c '/' /tmp/plugin-list.txt || echo "0")
-            echo ""
-            print_info "Found $plugin_count installed plugins:"
-            cat /tmp/plugin-list.txt
-            echo ""
+        # Test 3: Check authentication and list plugins
+        print_info "Checking Claude authentication..."
+        authenticated=false
 
-            if [ -n "$CI_MODE" ]; then
-                if [ "$plugin_count" -lt 3 ]; then
-                    print_error "Expected at least 3 plugins in CI mode, found $plugin_count"
+        if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            print_success "ANTHROPIC_API_KEY is set"
+            authenticated=true
+        elif timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
+            print_success "Claude is authenticated via session"
+            authenticated=true
+        else
+            print_warning "Claude is not authenticated"
+            print_info "Plugin installation requires authentication"
+            print_info "Set ANTHROPIC_API_KEY to enable plugin testing"
+        fi
+
+        # Only test plugin installation if authenticated
+        if [ "$authenticated" = true ]; then
+            print_info "Listing installed plugins..."
+            if timeout 15s claude /plugin list 2>&1 | tee /tmp/plugin-list.txt; then
+                plugin_count=$(grep -c '/' /tmp/plugin-list.txt || echo "0")
+                echo ""
+                print_info "Found $plugin_count installed plugins:"
+                cat /tmp/plugin-list.txt
+                echo ""
+
+                if [ -n "$CI_MODE" ] && [ "$plugin_count" -lt "$expected_count" ]; then
+                    print_error "Expected $expected_count plugins, found $plugin_count"
                     exit 1
                 fi
-                print_success "Plugin count verified: $plugin_count (expected: $expected_count)"
+                print_success "Plugin count verified: $plugin_count"
             else
-                print_success "Plugin listing successful: $plugin_count plugins"
+                print_error "Could not list plugins"
+                exit 1
             fi
         else
-            print_warning "Could not list plugins (may need authentication)"
+            print_info "Skipping plugin installation tests (not authenticated)"
         fi
 
         print_success "Claude marketplace functionality verified"
