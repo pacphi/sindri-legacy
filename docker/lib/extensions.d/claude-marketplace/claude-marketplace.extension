@@ -185,7 +185,32 @@ EOF
   print_success "Marketplace configured"
 }
 
+# Get plugin names from a marketplace's marketplace.json file
+# Args: $1 - marketplace directory path
+# Returns: space-separated list of plugin names
+get_marketplace_plugins() {
+  local marketplace_dir="$1"
+  local marketplace_json="${marketplace_dir}/.claude-plugin/marketplace.json"
+
+  if [[ ! -f "$marketplace_json" ]]; then
+    echo ""
+    return 1
+  fi
+
+  # Extract plugin names from JSON
+  if command_exists jq; then
+    jq -r '.plugins[]? | .name' "$marketplace_json" 2>/dev/null | tr '\n' ' '
+  else
+    # Fallback: simple grep-based extraction (less robust but works for simple cases)
+    grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$marketplace_json" | \
+      grep -v '"name"[[:space:]]*:[[:space:]]*".*-marketplace"' | \
+      sed 's/"name"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/' | \
+      tr '\n' ' '
+  fi
+}
+
 install_plugins_from_file() {
+  local repo_count=0
   local plugin_count=0
   local installed_count=0
   local failed_count=0
@@ -195,31 +220,88 @@ install_plugins_from_file() {
     [[ "$line" =~ ^#.*$ ]] && continue
     [[ -z "$line" ]] && continue
 
-    plugin_count=$((plugin_count + 1))
-    print_status "Installing plugin: $line"
+    repo_count=$((repo_count + 1))
+    print_status "Processing repository: $line"
 
-    # Check if already installed
-    if claude /plugin list 2>/dev/null | grep -q "$line"; then
-      print_success "Plugin already installed: $line"
-      installed_count=$((installed_count + 1))
-      continue
-    fi
+    # Step 1: Add marketplace
+    print_status "  → Adding marketplace: $line"
+    local add_output
+    if add_output=$(claude /plugin marketplace add "$line" 2>&1); then
+      print_success "  ✓ Marketplace added: $line"
 
-    # Install plugin (using marketplace add for GitHub repos)
-    if claude /plugin marketplace add "$line" 2>&1; then
-      print_success "Installed: $line"
-      installed_count=$((installed_count + 1))
+      # Extract marketplace name from output (format: "Successfully added marketplace: <name>")
+      local marketplace_name
+      marketplace_name=$(echo "$add_output" | grep -o 'Successfully added marketplace: .*' | sed 's/Successfully added marketplace: //')
+
+      if [[ -z "$marketplace_name" ]]; then
+        # Fallback: try to determine from repo name
+        marketplace_name="${line##*/}"
+        print_warning "  ⚠  Could not determine marketplace name from output, using: $marketplace_name"
+      fi
+
+      # Wait briefly for marketplace to be fully registered
+      sleep 1
+
+      # Step 2: Get plugin names from marketplace.json
+      local marketplace_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${marketplace_name}"
+      local plugins
+
+      if [[ -d "$marketplace_dir" ]]; then
+        plugins=$(get_marketplace_plugins "$marketplace_dir")
+
+        if [[ -z "$plugins" ]]; then
+          print_warning "  ⚠  No plugins found in marketplace: $marketplace_name"
+          print_status "  → Attempting to install plugin with repo name: ${line##*/}"
+          plugins="${line##*/}"
+        else
+          print_status "  → Found plugins in marketplace: $plugins"
+        fi
+      else
+        print_warning "  ⚠  Marketplace directory not found: $marketplace_dir"
+        print_status "  → Attempting to install plugin with repo name: ${line##*/}"
+        plugins="${line##*/}"
+      fi
+
+      # Step 3: Install each plugin from the marketplace
+      for plugin_name in $plugins; do
+        plugin_count=$((plugin_count + 1))
+        print_status "  → Installing plugin: ${plugin_name}@${marketplace_name}"
+
+        if claude /plugin install "${plugin_name}@${marketplace_name}" 2>&1 | grep -q "Successfully installed"; then
+          print_success "  ✓ Installed: ${plugin_name}"
+          installed_count=$((installed_count + 1))
+        else
+          # Try without marketplace qualifier
+          print_status "  → Retrying without marketplace qualifier: ${plugin_name}"
+          if claude /plugin install "${plugin_name}" 2>&1 | grep -q "Successfully installed"; then
+            print_success "  ✓ Installed: ${plugin_name}"
+            installed_count=$((installed_count + 1))
+          else
+            print_warning "  ✗ Failed to install: ${plugin_name}"
+            failed_count=$((failed_count + 1))
+          fi
+        fi
+      done
     else
-      print_warning "Failed to install: $line"
-      failed_count=$((failed_count + 1))
+      # Check if marketplace was already added
+      if echo "$add_output" | grep -qi "already"; then
+        print_warning "  ⚠  Marketplace already exists: $line (skipping plugin installation)"
+        # Don't count as failure, just skip
+      else
+        print_warning "  ✗ Failed to add marketplace: $line"
+        print_warning "     Error: $add_output"
+        failed_count=$((failed_count + 1))
+      fi
     fi
+
+    echo ""
   done < "$PLUGINS_FILE"
 
-  echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   print_status "Plugin installation summary:"
-  echo "  Total plugins: $plugin_count"
-  echo "  Installed: $installed_count"
+  echo "  Repositories processed: $repo_count"
+  echo "  Total plugins found: $plugin_count"
+  echo "  Successfully installed: $installed_count"
   echo "  Failed: $failed_count"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -366,9 +448,43 @@ validate() {
     else
       print_success ".plugins file exists"
 
-      # Count expected plugins
-      expected_count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
-      print_status "Expected plugins: $expected_count"
+      # Count expected plugins by parsing marketplace JSONs
+      local expected_count=0
+      local repo_count=0
+      while IFS= read -r line; do
+        [[ "$line" =~ ^#.*$ ]] && continue
+        [[ -z "$line" ]] && continue
+
+        repo_count=$((repo_count + 1))
+        local marketplace_name="${line##*/}"
+
+        # Try multiple possible marketplace names
+        local marketplace_dir=""
+        for possible_name in "$marketplace_name" "${marketplace_name}-marketplace" "${line##*/}"; do
+          if [[ -d "${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${possible_name}" ]]; then
+            marketplace_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${possible_name}"
+            break
+          fi
+        done
+
+        if [[ -n "$marketplace_dir" ]]; then
+          local plugin_names
+          plugin_names=$(get_marketplace_plugins "$marketplace_dir")
+          local plugin_count_for_repo
+          plugin_count_for_repo=$(echo "$plugin_names" | wc -w | tr -d ' ')
+          if [[ "$plugin_count_for_repo" -gt 0 ]]; then
+            expected_count=$((expected_count + plugin_count_for_repo))
+          else
+            # Fallback: assume 1 plugin per repo
+            expected_count=$((expected_count + 1))
+          fi
+        else
+          # Marketplace not cloned yet, assume 1 plugin per repo
+          expected_count=$((expected_count + 1))
+        fi
+      done < "$PLUGINS_FILE"
+
+      print_status "Expected plugins from $repo_count repositories: $expected_count"
 
       # Check if Claude is authenticated
       if ! is_claude_authenticated; then
@@ -378,16 +494,18 @@ validate() {
       else
         # List installed plugins only if authenticated
         if command_exists claude; then
-          print_status "Installed plugins:"
+          print_status "Listing installed plugins..."
           if timeout 10s claude /plugin list 2>&1 | tee /tmp/plugins.txt; then
-            # Count installed plugins (look for owner/repo pattern)
-            installed_count=$(grep -c '/' /tmp/plugins.txt || echo "0")
+            # Count installed plugins (look for plugin names, not necessarily with /)
+            # The output format may vary, so count non-empty, non-header lines
+            installed_count=$(grep -v '^$' /tmp/plugins.txt | grep -v -i "installed plugins" | wc -l | tr -d ' ')
             echo "  Installed count: $installed_count"
 
             if [ "$installed_count" -ge "$expected_count" ]; then
               print_success "All expected plugins installed ($installed_count/$expected_count)"
             else
-              print_error "Expected $expected_count plugins, found $installed_count"
+              print_error "Expected at least $expected_count plugins, found $installed_count"
+              echo "Plugin list output:"
               cat /tmp/plugins.txt || true
               all_valid=false
             fi

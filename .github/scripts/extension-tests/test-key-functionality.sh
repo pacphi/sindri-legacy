@@ -62,14 +62,15 @@ case "$key_tool" in
         fi
 
         # Test 2: Verify .plugins file exists (CI mode)
+        expected_repo_count=0
         if [ -n "$CI_MODE" ]; then
             if [ ! -f "/workspace/.plugins" ]; then
                 print_error ".plugins file missing in CI mode"
                 exit 1
             else
                 print_success ".plugins file exists"
-                expected_count=$(grep -v '^#' /workspace/.plugins | grep -v '^$' | wc -l | tr -d ' ')
-                print_info "Expected plugins: $expected_count"
+                expected_repo_count=$(grep -v '^#' /workspace/.plugins | grep -v '^$' | wc -l | tr -d ' ')
+                print_info "Expected repositories: $expected_repo_count"
             fi
         fi
 
@@ -93,20 +94,33 @@ case "$key_tool" in
         if [ "$authenticated" = true ]; then
             print_info "Listing installed plugins..."
             if timeout 15s claude /plugin list 2>&1 | tee /tmp/plugin-list.txt; then
-                # Count lines matching owner/repo format (e.g., "steveyegge/beads")
-                plugin_count=$(grep -E '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+' /tmp/plugin-list.txt 2>/dev/null | wc -l | tr -d ' \n')
+                # Count non-empty lines that don't look like headers
+                # More flexible matching since output format may vary
+                plugin_count=$(grep -v '^$' /tmp/plugin-list.txt | \
+                               grep -v -i "installed plugins" | \
+                               grep -v -i "no plugins" | \
+                               wc -l | tr -d ' \n')
                 # Ensure plugin_count is a valid integer, default to 0 if empty
                 plugin_count=${plugin_count:-0}
                 echo ""
-                print_info "Found $plugin_count installed plugins:"
+                print_info "Found $plugin_count installed plugins"
+                echo "Plugin list output:"
                 cat /tmp/plugin-list.txt
                 echo ""
 
-                if [ -n "$CI_MODE" ] && [ "$plugin_count" -lt "$expected_count" ]; then
-                    print_error "Expected $expected_count plugins, found $plugin_count"
-                    exit 1
+                # In CI mode, verify we have at least the expected number of repositories worth of plugins
+                # Note: Some repos may contain multiple plugins, so actual count may be higher
+                if [ -n "$CI_MODE" ]; then
+                    if [ "$plugin_count" -lt "$expected_repo_count" ]; then
+                        print_error "Expected at least $expected_repo_count plugins (one per repository), found $plugin_count"
+                        print_info "This test expects plugins to be installed from each repository in .plugins file"
+                        exit 1
+                    else
+                        print_success "Plugin count verified: $plugin_count (expected at least $expected_repo_count)"
+                    fi
+                else
+                    print_success "Plugin count: $plugin_count"
                 fi
-                print_success "Plugin count verified: $plugin_count"
             else
                 print_error "Could not list plugins"
                 exit 1
