@@ -139,16 +139,62 @@ is_claude_authenticated() {
   return 1
 }
 
+# Wait for marketplace directory to be cloned after adding
+# Args: $1 - owner/repo string (e.g., "steveyegge/beads")
+# Returns: 0 if directory exists with marketplace.json, 1 if timeout
+wait_for_marketplace_clone() {
+  local repo="$1"
+  local timeout=30  # seconds
+  local interval=2  # seconds
+  local elapsed=0
+
+  while [ $elapsed -lt $timeout ]; do
+    if find_marketplace_directory "$repo" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    sleep $interval
+    elapsed=$((elapsed + interval))
+  done
+
+  return 1
+}
+
 # Find marketplace directory after it's been added
 # Args: $1 - owner/repo string (e.g., "steveyegge/beads")
 # Returns: full path to marketplace directory
 # Exits with error if not found
 find_marketplace_directory() {
   local repo="$1"
+  local known_marketplaces="${CLAUDE_CONFIG_DIR}/plugins/known_marketplaces.json"
+
+  # Method 1: Check known_marketplaces.json for installLocation
+  if [[ -f "$known_marketplaces" ]]; then
+    local install_location=""
+
+    if command_exists jq; then
+      # Use jq to find marketplace by repo
+      install_location=$(jq -r --arg repo "$repo" '.[] | select(.source.repo == $repo) | .installLocation' "$known_marketplaces" 2>/dev/null | head -1)
+    else
+      # Fallback: grep for repo and extract installLocation
+      # This is a simple heuristic and might not work for all cases
+      local entry
+      entry=$(grep -A 5 "\"repo\": \"$repo\"" "$known_marketplaces" 2>/dev/null)
+      if [[ -n "$entry" ]]; then
+        install_location=$(echo "$entry" | grep -o '"installLocation": "[^"]*"' | cut -d'"' -f4)
+      fi
+    fi
+
+    if [[ -n "$install_location" ]] && [[ -d "$install_location" ]] && [[ -f "$install_location/.claude-plugin/marketplace.json" ]]; then
+      echo "$install_location"
+      return 0
+    fi
+  fi
+
+  # Method 2: Try common patterns (fallback)
   local repo_basename="${repo##*/}"
   local marketplaces_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces"
 
-  # Try common patterns first
   local common_patterns=(
     "${repo_basename}-marketplace"
     "${repo_basename}"
@@ -163,7 +209,7 @@ find_marketplace_directory() {
     fi
   done
 
-  # Fall back to finding the most recently modified directory with marketplace.json
+  # Method 3: Fall back to finding the most recently modified directory with marketplace.json
   local newest_dir
   newest_dir=$(find "$marketplaces_dir" -mindepth 1 -maxdepth 1 -type d -exec test -f {}/.claude-plugin/marketplace.json \; -print -quit 2>/dev/null | head -1)
 
@@ -235,10 +281,39 @@ install_marketplaces_from_file() {
       print_success "  ✓ Marketplace added: $line"
     fi
 
-    # Wait briefly for marketplace to be fully registered
-    sleep 2
+    # Step 2: Wait for marketplace to be cloned and find directory
+    print_status "  → Waiting for marketplace to be cloned..."
+    if ! wait_for_marketplace_clone "$line"; then
+      print_error "  ✗ Marketplace clone timeout for: $line"
+      print_error "     Waited 30 seconds for clone to complete"
 
-    # Step 2: Find marketplace directory
+      # Debug: Check if marketplace was registered
+      local known_marketplaces="${CLAUDE_CONFIG_DIR}/plugins/known_marketplaces.json"
+      if [[ -f "$known_marketplaces" ]]; then
+        print_status "     Debug: Checking known_marketplaces.json..."
+        if command_exists jq; then
+          local registered
+          registered=$(jq -r --arg repo "$line" '.[] | select(.source.repo == $repo) | .installLocation' "$known_marketplaces" 2>/dev/null)
+          if [[ -n "$registered" ]]; then
+            print_status "     Registered at: $registered"
+            if [[ -d "$registered" ]]; then
+              print_status "     Directory exists but marketplace.json missing"
+            else
+              print_status "     Directory does not exist - clone may have failed"
+            fi
+          else
+            print_status "     Not found in known_marketplaces.json"
+          fi
+        fi
+      fi
+
+      print_error "     Checked: ${CLAUDE_CONFIG_DIR}/plugins/marketplaces/"
+      failed_count=$((failed_count + 1))
+      echo ""
+      continue
+    fi
+
+    # Step 3: Get marketplace directory
     print_status "  → Locating marketplace directory..."
     local marketplace_dir
     if ! marketplace_dir=$(find_marketplace_directory "$line"); then
@@ -250,7 +325,7 @@ install_marketplaces_from_file() {
     fi
     print_success "  ✓ Found: $marketplace_dir"
 
-    # Step 3: Parse marketplace.json
+    # Step 4: Parse marketplace.json
     print_status "  → Parsing marketplace.json..."
     local MARKETPLACE_NAME=""
     local PLUGIN_NAMES=""
@@ -266,7 +341,7 @@ install_marketplaces_from_file() {
     print_success "  ✓ Marketplace name: $MARKETPLACE_NAME"
     print_status "  → Plugins found: $PLUGIN_NAMES"
 
-    # Step 4: Install each plugin from the marketplace
+    # Step 5: Install each plugin from the marketplace
     for plugin_name in $PLUGIN_NAMES; do
       plugin_count=$((plugin_count + 1))
       print_status "  → Installing plugin: ${plugin_name}@${MARKETPLACE_NAME}"
