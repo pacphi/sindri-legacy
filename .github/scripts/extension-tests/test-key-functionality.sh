@@ -62,15 +62,15 @@ case "$key_tool" in
         fi
 
         # Test 2: Verify .plugins file exists (CI mode)
-        expected_repo_count=0
+        expected_marketplace_count=0
         if [ -n "$CI_MODE" ]; then
             if [ ! -f "/workspace/.plugins" ]; then
                 print_error ".plugins file missing in CI mode"
                 exit 1
             else
                 print_success ".plugins file exists"
-                expected_repo_count=$(grep -v '^#' /workspace/.plugins | grep -v '^$' | wc -l | tr -d ' ')
-                print_info "Expected repositories: $expected_repo_count"
+                expected_marketplace_count=$(grep -v '^#' /workspace/.plugins | grep -v '^$' | wc -l | tr -d ' ')
+                print_info "Expected marketplaces: $expected_marketplace_count"
             fi
         fi
 
@@ -108,15 +108,15 @@ case "$key_tool" in
                 cat /tmp/plugin-list.txt
                 echo ""
 
-                # In CI mode, verify we have at least the expected number of repositories worth of plugins
-                # Note: Some repos may contain multiple plugins, so actual count may be higher
+                # In CI mode, verify we have at least the expected number of marketplaces worth of plugins
+                # Note: Each marketplace may contain multiple plugins, so actual count may be higher
                 if [ -n "$CI_MODE" ]; then
-                    if [ "$plugin_count" -lt "$expected_repo_count" ]; then
-                        print_error "Expected at least $expected_repo_count plugins (one per repository), found $plugin_count"
-                        print_info "This test expects plugins to be installed from each repository in .plugins file"
+                    if [ "$plugin_count" -lt "$expected_marketplace_count" ]; then
+                        print_error "Expected at least $expected_marketplace_count plugins (one per marketplace minimum), found $plugin_count"
+                        print_info "This test expects plugins to be installed from each marketplace in .plugins file"
                         exit 1
                     else
-                        print_success "Plugin count verified: $plugin_count (expected at least $expected_repo_count)"
+                        print_success "Plugin count verified: $plugin_count (expected at least $expected_marketplace_count)"
                     fi
                 else
                     print_success "Plugin count: $plugin_count"

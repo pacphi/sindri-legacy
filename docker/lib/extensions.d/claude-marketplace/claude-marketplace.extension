@@ -185,28 +185,69 @@ EOF
   print_success "Marketplace configured"
 }
 
-# Get plugin names from a marketplace's marketplace.json file
+# Find marketplace directory after it's been added
+# Args: $1 - owner/repo string (e.g., "steveyegge/beads")
+# Returns: full path to marketplace directory
+# Exits with error if not found
+find_marketplace_directory() {
+  local repo="$1"
+  local repo_basename="${repo##*/}"
+  local marketplaces_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces"
+
+  # Try common patterns first
+  local common_patterns=(
+    "${repo_basename}-marketplace"
+    "${repo_basename}"
+    "${repo_basename}-plugins"
+  )
+
+  for pattern in "${common_patterns[@]}"; do
+    local candidate="${marketplaces_dir}/${pattern}"
+    if [[ -d "$candidate" ]] && [[ -f "$candidate/.claude-plugin/marketplace.json" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  # Fall back to finding the most recently modified directory with marketplace.json
+  local newest_dir
+  newest_dir=$(find "$marketplaces_dir" -mindepth 1 -maxdepth 1 -type d -exec test -f {}/.claude-plugin/marketplace.json \; -print -quit 2>/dev/null | head -1)
+
+  if [[ -n "$newest_dir" ]] && [[ -f "$newest_dir/.claude-plugin/marketplace.json" ]]; then
+    echo "$newest_dir"
+    return 0
+  fi
+
+  return 1
+}
+
+# Get marketplace info from marketplace.json
 # Args: $1 - marketplace directory path
-# Returns: space-separated list of plugin names
-get_marketplace_plugins() {
+# Outputs: marketplace_name and plugin_names (space-separated)
+# Sets global variables: MARKETPLACE_NAME, PLUGIN_NAMES
+parse_marketplace_json() {
   local marketplace_dir="$1"
   local marketplace_json="${marketplace_dir}/.claude-plugin/marketplace.json"
 
   if [[ ! -f "$marketplace_json" ]]; then
-    echo ""
     return 1
   fi
 
-  # Extract plugin names from JSON
+  # Extract marketplace name
   if command_exists jq; then
-    jq -r '.plugins[]? | .name' "$marketplace_json" 2>/dev/null | tr '\n' ' '
+    MARKETPLACE_NAME=$(jq -r '.name' "$marketplace_json" 2>/dev/null)
+    PLUGIN_NAMES=$(jq -r '.plugins[]? | .name' "$marketplace_json" 2>/dev/null | tr '\n' ' ')
   else
-    # Fallback: simple grep-based extraction (less robust but works for simple cases)
-    grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$marketplace_json" | \
-      grep -v '"name"[[:space:]]*:[[:space:]]*".*-marketplace"' | \
+    # Fallback: simple grep-based extraction
+    MARKETPLACE_NAME=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$marketplace_json" | head -1 | sed 's/"name"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+    # Extract plugin names (skip the marketplace name itself)
+    PLUGIN_NAMES=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$marketplace_json" | \
+      tail -n +2 | \
       sed 's/"name"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/' | \
-      tr '\n' ' '
+      tr '\n' ' ')
   fi
+
+  [[ -n "$MARKETPLACE_NAME" ]] && [[ -n "$PLUGIN_NAMES" ]]
 }
 
 install_plugins_from_file() {
@@ -221,86 +262,84 @@ install_plugins_from_file() {
     [[ -z "$line" ]] && continue
 
     repo_count=$((repo_count + 1))
-    print_status "Processing repository: $line"
+    print_status "Processing marketplace: $line"
 
     # Step 1: Add marketplace
     print_status "  → Adding marketplace: $line"
     local add_output
-    if add_output=$(claude /plugin marketplace add "$line" 2>&1); then
-      print_success "  ✓ Marketplace added: $line"
-
-      # Extract marketplace name from output (format: "Successfully added marketplace: <name>")
-      local marketplace_name
-      marketplace_name=$(echo "$add_output" | grep -o 'Successfully added marketplace: .*' | sed 's/Successfully added marketplace: //')
-
-      if [[ -z "$marketplace_name" ]]; then
-        # Fallback: try to determine from repo name
-        marketplace_name="${line##*/}"
-        print_warning "  ⚠  Could not determine marketplace name from output, using: $marketplace_name"
-      fi
-
-      # Wait briefly for marketplace to be fully registered
-      sleep 1
-
-      # Step 2: Get plugin names from marketplace.json
-      local marketplace_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${marketplace_name}"
-      local plugins
-
-      if [[ -d "$marketplace_dir" ]]; then
-        plugins=$(get_marketplace_plugins "$marketplace_dir")
-
-        if [[ -z "$plugins" ]]; then
-          print_warning "  ⚠  No plugins found in marketplace: $marketplace_name"
-          print_status "  → Attempting to install plugin with repo name: ${line##*/}"
-          plugins="${line##*/}"
-        else
-          print_status "  → Found plugins in marketplace: $plugins"
-        fi
+    if ! add_output=$(claude /plugin marketplace add "$line" 2>&1); then
+      if echo "$add_output" | grep -qi "already"; then
+        print_warning "  ⚠  Marketplace already exists: $line"
       else
-        print_warning "  ⚠  Marketplace directory not found: $marketplace_dir"
-        print_status "  → Attempting to install plugin with repo name: ${line##*/}"
-        plugins="${line##*/}"
+        print_error "  ✗ Failed to add marketplace: $line"
+        print_error "     Error: $add_output"
+        failed_count=$((failed_count + 1))
+        echo ""
+        continue
       fi
+    else
+      print_success "  ✓ Marketplace added: $line"
+    fi
 
-      # Step 3: Install each plugin from the marketplace
-      for plugin_name in $plugins; do
-        plugin_count=$((plugin_count + 1))
-        print_status "  → Installing plugin: ${plugin_name}@${marketplace_name}"
+    # Wait briefly for marketplace to be fully registered
+    sleep 2
 
-        if claude /plugin install "${plugin_name}@${marketplace_name}" 2>&1 | grep -q "Successfully installed"; then
+    # Step 2: Find marketplace directory
+    print_status "  → Locating marketplace directory..."
+    local marketplace_dir
+    if ! marketplace_dir=$(find_marketplace_directory "$line"); then
+      print_error "  ✗ Cannot find marketplace directory for: $line"
+      print_error "     Checked: ${CLAUDE_CONFIG_DIR}/plugins/marketplaces/"
+      failed_count=$((failed_count + 1))
+      echo ""
+      continue
+    fi
+    print_success "  ✓ Found: $marketplace_dir"
+
+    # Step 3: Parse marketplace.json
+    print_status "  → Parsing marketplace.json..."
+    local MARKETPLACE_NAME=""
+    local PLUGIN_NAMES=""
+
+    if ! parse_marketplace_json "$marketplace_dir"; then
+      print_error "  ✗ Failed to parse marketplace.json from: $marketplace_dir"
+      print_error "     Missing or invalid: $marketplace_dir/.claude-plugin/marketplace.json"
+      failed_count=$((failed_count + 1))
+      echo ""
+      continue
+    fi
+
+    print_success "  ✓ Marketplace name: $MARKETPLACE_NAME"
+    print_status "  → Plugins found: $PLUGIN_NAMES"
+
+    # Step 4: Install each plugin from the marketplace
+    for plugin_name in $PLUGIN_NAMES; do
+      plugin_count=$((plugin_count + 1))
+      print_status "  → Installing plugin: ${plugin_name}@${MARKETPLACE_NAME}"
+
+      local install_output
+      if install_output=$(timeout 30s claude /plugin install "${plugin_name}@${MARKETPLACE_NAME}" 2>&1); then
+        if echo "$install_output" | grep -qE "(Successfully installed|already installed)"; then
           print_success "  ✓ Installed: ${plugin_name}"
           installed_count=$((installed_count + 1))
         else
-          # Try without marketplace qualifier
-          print_status "  → Retrying without marketplace qualifier: ${plugin_name}"
-          if claude /plugin install "${plugin_name}" 2>&1 | grep -q "Successfully installed"; then
-            print_success "  ✓ Installed: ${plugin_name}"
-            installed_count=$((installed_count + 1))
-          else
-            print_warning "  ✗ Failed to install: ${plugin_name}"
-            failed_count=$((failed_count + 1))
-          fi
+          print_warning "  ✗ Failed to install: ${plugin_name}"
+          print_warning "     Output: $install_output"
+          failed_count=$((failed_count + 1))
         fi
-      done
-    else
-      # Check if marketplace was already added
-      if echo "$add_output" | grep -qi "already"; then
-        print_warning "  ⚠  Marketplace already exists: $line (skipping plugin installation)"
-        # Don't count as failure, just skip
       else
-        print_warning "  ✗ Failed to add marketplace: $line"
-        print_warning "     Error: $add_output"
+        print_warning "  ✗ Installation timed out: ${plugin_name}"
         failed_count=$((failed_count + 1))
       fi
-    fi
+    done
 
     echo ""
   done < "$PLUGINS_FILE"
 
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   print_status "Plugin installation summary:"
-  echo "  Repositories processed: $repo_count"
-  echo "  Total plugins found: $plugin_count"
+  echo "  Marketplaces processed: $repo_count"
+  echo "  Total plugins: $plugin_count"
   echo "  Successfully installed: $installed_count"
   echo "  Failed: $failed_count"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -450,41 +489,36 @@ validate() {
 
       # Count expected plugins by parsing marketplace JSONs
       local expected_count=0
-      local repo_count=0
+      local marketplace_count=0
       while IFS= read -r line; do
         [[ "$line" =~ ^#.*$ ]] && continue
         [[ -z "$line" ]] && continue
 
-        repo_count=$((repo_count + 1))
-        local marketplace_name="${line##*/}"
+        marketplace_count=$((marketplace_count + 1))
 
-        # Try multiple possible marketplace names
-        local marketplace_dir=""
-        for possible_name in "$marketplace_name" "${marketplace_name}-marketplace" "${line##*/}"; do
-          if [[ -d "${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${possible_name}" ]]; then
-            marketplace_dir="${CLAUDE_CONFIG_DIR}/plugins/marketplaces/${possible_name}"
-            break
-          fi
-        done
-
-        if [[ -n "$marketplace_dir" ]]; then
-          local plugin_names
-          plugin_names=$(get_marketplace_plugins "$marketplace_dir")
-          local plugin_count_for_repo
-          plugin_count_for_repo=$(echo "$plugin_names" | wc -w | tr -d ' ')
-          if [[ "$plugin_count_for_repo" -gt 0 ]]; then
-            expected_count=$((expected_count + plugin_count_for_repo))
+        # Find marketplace directory
+        local marketplace_dir
+        if marketplace_dir=$(find_marketplace_directory "$line"); then
+          # Parse marketplace.json
+          local MARKETPLACE_NAME=""
+          local PLUGIN_NAMES=""
+          if parse_marketplace_json "$marketplace_dir"; then
+            local plugin_count_for_marketplace
+            plugin_count_for_marketplace=$(echo "$PLUGIN_NAMES" | wc -w | tr -d ' ')
+            expected_count=$((expected_count + plugin_count_for_marketplace))
           else
-            # Fallback: assume 1 plugin per repo
+            print_warning "Could not parse marketplace.json for: $line"
+            # Assume 1 plugin if we can't parse
             expected_count=$((expected_count + 1))
           fi
         else
-          # Marketplace not cloned yet, assume 1 plugin per repo
+          print_warning "Marketplace directory not found for: $line"
+          # Assume 1 plugin if marketplace not found
           expected_count=$((expected_count + 1))
         fi
       done < "$PLUGINS_FILE"
 
-      print_status "Expected plugins from $repo_count repositories: $expected_count"
+      print_status "Expected plugins from $marketplace_count marketplaces: $expected_count"
 
       # Check if Claude is authenticated
       if ! is_claude_authenticated; then
