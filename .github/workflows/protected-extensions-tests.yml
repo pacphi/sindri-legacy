@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   protected-extensions-tests:
     name: Test Protected Extension Enforcement

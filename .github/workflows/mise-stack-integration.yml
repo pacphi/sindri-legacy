@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   mise-stack-integration:
     name: mise-Stack Integration Test

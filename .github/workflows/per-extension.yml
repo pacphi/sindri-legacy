@@ -39,6 +39,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   per-extension-tests:
     name: Test Extension - ${{ matrix.extension.name }}

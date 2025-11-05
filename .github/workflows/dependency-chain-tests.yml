@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   dependency-chain-tests:
     name: Test Dependency Chain Resolution

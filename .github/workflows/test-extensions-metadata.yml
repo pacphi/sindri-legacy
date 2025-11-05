@@ -27,6 +27,9 @@ on:
       FLYIO_AUTH_TOKEN:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   test-extensions-metadata:
     name: Verify Extension API v2.0 Compliance

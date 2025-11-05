@@ -30,6 +30,9 @@ on:
       FLYIO_AUTH_TOKEN:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   report-results:
     name: Report Test Results

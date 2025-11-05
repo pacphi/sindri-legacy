@@ -75,6 +75,9 @@ on:
         default: "sjc"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   # ============================================================================
   # Setup Configuration

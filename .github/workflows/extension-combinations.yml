@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   extension-combinations:
     name: Test Combination - ${{ matrix.combination.name }}

@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   manifest-operations-tests:
     name: Test Manifest Operations

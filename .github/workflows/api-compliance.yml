@@ -29,6 +29,9 @@ on:
       ANTHROPIC_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   extension-api-tests:
     name: Test Extension API - ${{ matrix.extension }}
