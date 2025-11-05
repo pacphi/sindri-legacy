@@ -212,7 +212,7 @@ jobs:
 
 **Without authentication**, you'll see:
 
-```
+```text
 ⚠️  Claude is not authenticated - skipping plugin installation
 
 Plugin installation requires Claude Code authentication.

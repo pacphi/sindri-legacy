@@ -93,7 +93,10 @@ case "$key_tool" in
         if [ "$authenticated" = true ]; then
             print_info "Listing installed plugins..."
             if timeout 15s claude /plugin list 2>&1 | tee /tmp/plugin-list.txt; then
-                plugin_count=$(grep -c '/' /tmp/plugin-list.txt || echo "0")
+                # Count lines matching owner/repo format (e.g., "steveyegge/beads")
+                plugin_count=$(grep -E '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+' /tmp/plugin-list.txt 2>/dev/null | wc -l | tr -d ' \n')
+                # Ensure plugin_count is a valid integer, default to 0 if empty
+                plugin_count=${plugin_count:-0}
                 echo ""
                 print_info "Found $plugin_count installed plugins:"
                 cat /tmp/plugin-list.txt
