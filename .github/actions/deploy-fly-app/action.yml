@@ -40,6 +40,10 @@ inputs:
     description: "Pre-built Docker image URL (e.g., registry.fly.io/app:tag). If provided, skips build."
     required: false
     default: ""
+  anthropic-api-key:
+    description: "Anthropic API key for Claude authentication (optional, enables plugin installation)"
+    required: false
+    default: ""
 
 outputs:
   deployment-status:
@@ -81,6 +85,16 @@ runs:
           --app ${{ inputs.app-name }}
         flyctl secrets set CI_MODE="true" \
           --app ${{ inputs.app-name }}
+
+        # Set ANTHROPIC_API_KEY if provided (required for claude-marketplace plugin installation)
+        if [ -n "${{ inputs.anthropic-api-key }}" ]; then
+          echo "Setting ANTHROPIC_API_KEY for Claude authentication..."
+          flyctl secrets set ANTHROPIC_API_KEY="${{ inputs.anthropic-api-key }}" \
+            --app ${{ inputs.app-name }}
+          echo "✓ Claude authentication enabled"
+        else
+          echo "Note: ANTHROPIC_API_KEY not provided - claude/claude-marketplace will have limited functionality"
+        fi
 
     - name: Deploy app with retry logic
       id: deploy

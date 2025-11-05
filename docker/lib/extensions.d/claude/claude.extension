@@ -117,6 +117,24 @@ configure() {
     print_status "Claude hooks already exist: ~/.claude/settings.json"
   fi
 
+  # Configure API key helper if ANTHROPIC_API_KEY is set (required for CI/automation)
+  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    print_status "Configuring API key helper for Claude authentication..."
+
+    if command_exists jq; then
+      # Add apiKeyHelper to settings.json (merge with existing)
+      jq '. + {"apiKeyHelper": "echo $ANTHROPIC_API_KEY"}' "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp"
+      mv "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+      print_success "API key helper configured in settings.json"
+    else
+      print_warning "jq not available - cannot configure API key helper"
+      print_status "Install jq to enable API key helper configuration"
+    fi
+  else
+    print_status "ANTHROPIC_API_KEY not set - skipping API key helper configuration"
+    print_status "Set ANTHROPIC_API_KEY environment variable to enable auto-authentication"
+  fi
+
   # Create SSH wrapper
   if command_exists create_tool_wrapper 2>/dev/null; then
     if command_exists claude || [[ -f "$HOME/.local/bin/claude" ]]; then
@@ -313,6 +331,16 @@ remove() {
     local claude_path=$(which claude)
     print_warning "Claude still found at: $claude_path"
     print_status "You may need to manually remove it"
+  fi
+
+  # Clean up apiKeyHelper from settings.json if it exists
+  if [[ -f "$HOME/.claude/settings.json" ]] && command_exists jq; then
+    if jq -e '.apiKeyHelper' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
+      print_status "Removing API key helper from settings.json..."
+      jq 'del(.apiKeyHelper)' "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp"
+      mv "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+      print_success "API key helper removed from settings.json"
+    fi
   fi
 
   # Prompt for config removal

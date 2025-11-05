@@ -219,6 +219,7 @@ jobs:
           deploy-timeout: "600"
           retry-attempts: "3"
           pre-built-image: ${{ needs.setup-config.outputs.pre_built_image }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Wait for deployment
         uses: ./.github/actions/wait-fly-deployment

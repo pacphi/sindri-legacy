@@ -289,7 +289,8 @@ Allows manual VM deployment directly from GitHub Actions interface.
 
 **Requirements**:
 
-- `FLYIO_AUTH_TOKEN` secret configured in repository settings
+- `FLYIO_AUTH_TOKEN` secret configured in repository settings (required)
+- `ANTHROPIC_API_KEY` secret configured for Claude authentication (optional, enables plugin installation)
 - Fly.io account with available resources
 
 **Performance**: ~10 minutes (full deployment)
@@ -340,6 +341,35 @@ Located in `.github/scripts/extension-tests/`, these provide reusable test utili
 **Documentation**: [Test Scripts README](.github/scripts/extension-tests/README.md)
 
 ## CI/CD Best Practices
+
+### Required GitHub Secrets
+
+Configure these secrets in repository settings for full workflow functionality:
+
+**Required**:
+
+- `FLYIO_AUTH_TOKEN` - Fly.io API token for VM deployment and management
+  - Get from: `flyctl auth token`
+  - Required for: All deployment workflows
+
+**Optional**:
+
+- `ANTHROPIC_API_KEY` - Claude API key for authentication
+  - Get from: https://console.anthropic.com/
+  - Format: `sk-ant-...`
+  - Enables: Claude Code authentication, plugin installation via `claude-marketplace` extension
+  - Without it: Workflows run successfully but Claude extensions have limited functionality
+
+**Setting Secrets**:
+
+```bash
+# Via GitHub UI:
+# Settings → Secrets and variables → Actions → New repository secret
+
+# Or via GitHub CLI:
+gh secret set FLYIO_AUTH_TOKEN < flyctl auth token
+gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
+```
 
 ### Pre-Built Images
 

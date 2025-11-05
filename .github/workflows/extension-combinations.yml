@@ -26,6 +26,8 @@ on:
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true
+      ANTHROPIC_API_KEY:
+        required: false
 
 jobs:
   extension-combinations:
@@ -100,6 +102,7 @@ jobs:
           deploy-timeout: "600"
           retry-attempts: "3"
           pre-built-image: ${{ inputs.pre_built_image }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       # Using composite action for waiting
       - name: Wait for deployment
