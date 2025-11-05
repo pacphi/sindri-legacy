@@ -453,6 +453,19 @@ extension-manager install claude-marketplace
 
 ## Advanced Usage
 
+### Discovering New Marketplaces
+
+Browse the official Claude Code Plugin Marketplace directory to discover new marketplaces:
+
+**[https://claudecodemarketplace.com/](https://claudecodemarketplace.com/)**
+
+The directory provides:
+
+- Curated list of available plugin marketplaces
+- Marketplace descriptions and categories
+- Installation instructions
+- Community ratings and reviews
+
 ### Adding Custom Marketplaces
 
 You can add additional marketplaces beyond the default:
@@ -496,6 +509,7 @@ To develop and test your own plugins:
 
 ## Resources
 
+- **Claude Code Plugin Marketplace**: https://claudecodemarketplace.com/ - Discover new marketplaces
 - **Plugin Marketplace Docs**: https://docs.claude.com/en/docs/claude-code/plugin-marketplaces
 - **Claude Code Documentation**: https://docs.claude.com/en/docs/claude-code
 - **GitHub Marketplace Repositories**: Listed in `.marketplaces.example`

@@ -513,10 +513,56 @@ validate() {
 status() {
   print_extension_header
 
-  # Check installation status
+  # Check dependency
   if ! command_exists claude; then
     echo "Status: ✗ NOT INSTALLED (claude dependency missing)"
     return 1
+  fi
+
+  # Check if Claude has any known marketplaces registered
+  local known_marketplaces_file="${CLAUDE_CONFIG_DIR}/plugins/known_marketplaces.json"
+
+  if [[ ! -f "$known_marketplaces_file" ]]; then
+    echo "Status: ✗ NOT INSTALLED (no marketplaces registered)"
+    return 1
+  fi
+
+  # If .marketplaces file exists, verify all marketplaces are registered
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    local all_registered=true
+    local missing_marketplaces=""
+
+    while IFS= read -r line; do
+      # Skip comments and empty lines
+      [[ "$line" =~ ^#.*$ ]] && continue
+      [[ -z "$line" ]] && continue
+
+      # Check if this marketplace (owner/repo format) is in known_marketplaces.json
+      local repo="$line"
+
+      # Use jq to check if any entry has source.repo matching this line
+      if command_exists jq; then
+        if ! jq -e --arg repo "$repo" '.[] | select(.source.repo == $repo)' "$known_marketplaces_file" >/dev/null 2>&1; then
+          all_registered=false
+          missing_marketplaces="${missing_marketplaces}${repo}\n"
+        fi
+      else
+        # Fallback: simple grep check
+        if ! grep -q "\"$repo\"" "$known_marketplaces_file"; then
+          all_registered=false
+          missing_marketplaces="${missing_marketplaces}${repo}\n"
+        fi
+      fi
+    done < "$MARKETPLACES_FILE"
+
+    if [[ "$all_registered" != "true" ]]; then
+      echo "Status: ✗ NOT FULLY INSTALLED (missing marketplaces)"
+      if [[ -n "$missing_marketplaces" ]]; then
+        echo "Missing:"
+        echo -e "$missing_marketplaces" | grep -v '^$' | sed 's/^/  - /'
+      fi
+      return 1
+    fi
   fi
 
   echo "Status: ✓ INSTALLED"
