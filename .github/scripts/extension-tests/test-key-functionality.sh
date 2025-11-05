@@ -53,28 +53,20 @@ case "$key_tool" in
     claude-marketplace)
         print_info "Testing Claude marketplace integration..."
 
-        # Test 1: Verify marketplace is configured
-        if grep -q "claudecodemarketplace" ~/.claude/settings.json; then
-            print_success "Marketplace configured in settings.json"
-        else
-            print_error "Marketplace not configured"
-            exit 1
-        fi
-
-        # Test 2: Verify .plugins file exists (CI mode)
+        # Test 1: Verify .marketplaces file exists (CI mode)
         expected_marketplace_count=0
         if [ -n "$CI_MODE" ]; then
-            if [ ! -f "/workspace/.plugins" ]; then
-                print_error ".plugins file missing in CI mode"
+            if [ ! -f "/workspace/.marketplaces" ]; then
+                print_error ".marketplaces file missing in CI mode"
                 exit 1
             else
-                print_success ".plugins file exists"
-                expected_marketplace_count=$(grep -v '^#' /workspace/.plugins | grep -v '^$' | wc -l | tr -d ' ')
+                print_success ".marketplaces file exists"
+                expected_marketplace_count=$(grep -v '^#' /workspace/.marketplaces | grep -v '^$' | wc -l | tr -d ' ')
                 print_info "Expected marketplaces: $expected_marketplace_count"
             fi
         fi
 
-        # Test 3: Check authentication and list plugins
+        # Test 2: Check authentication and list plugins
         print_info "Checking Claude authentication..."
         authenticated=false
 
@@ -113,7 +105,7 @@ case "$key_tool" in
                 if [ -n "$CI_MODE" ]; then
                     if [ "$plugin_count" -lt "$expected_marketplace_count" ]; then
                         print_error "Expected at least $expected_marketplace_count plugins (one per marketplace minimum), found $plugin_count"
-                        print_info "This test expects plugins to be installed from each marketplace in .plugins file"
+                        print_info "This test expects plugins to be installed from each marketplace in .marketplaces file"
                         exit 1
                     else
                         print_success "Plugin count verified: $plugin_count (expected at least $expected_marketplace_count)"

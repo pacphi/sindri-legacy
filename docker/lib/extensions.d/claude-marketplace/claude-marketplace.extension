@@ -2,8 +2,8 @@
 # claude-marketplace.extension - Claude Code plugin marketplace integration
 # Extension API v2.0
 #
-# This extension configures Claude Code to use plugins from claudecodemarketplace.com
-# and installs curated plugins specified in a .plugins file.
+# This extension installs curated plugins from marketplaces specified in a .marketplaces file.
+# Each marketplace is a GitHub repository containing .claude-plugin/marketplace.json.
 # Requires the claude extension to be installed first.
 
 # Source shared extension library
@@ -17,7 +17,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 EXT_NAME="claude-marketplace"
 EXT_VERSION="2.0.0"
 EXT_API_VERSION="2.0"
-EXT_DESCRIPTION="Claude Code plugin marketplace integration for claudecodemarketplace.com"
+EXT_DESCRIPTION="Claude Code plugin marketplace integration via .marketplaces configuration file"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="native"
 EXT_UPGRADE_STRATEGY="manual"
@@ -29,17 +29,15 @@ extension_init
 # CONFIGURATION
 # ============================================================================
 
-MARKETPLACE_NAME="claudecodemarketplace"
-MARKETPLACE_URL="https://claudecodemarketplace.com/"
 CLAUDE_CONFIG_DIR="$HOME/.claude"
 CLAUDE_SETTINGS="$CLAUDE_CONFIG_DIR/settings.json"
-PLUGINS_FILE="/workspace/.plugins"
+MARKETPLACES_FILE="/workspace/.marketplaces"
 
 # Select appropriate example file based on CI mode
 if is_ci_mode; then
-  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.ci.example"
+  MARKETPLACES_EXAMPLE="$SCRIPT_DIR/.marketplaces.ci.example"
 else
-  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.example"
+  MARKETPLACES_EXAMPLE="$SCRIPT_DIR/.marketplaces.example"
 fi
 
 # ============================================================================
@@ -85,42 +83,34 @@ prerequisites() {
 install() {
   print_status "Installing ${EXT_NAME}..."
 
-  # Check if marketplace is already configured
-  if [[ -f "$CLAUDE_SETTINGS" ]] && grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-    print_warning "Marketplace already configured in settings.json"
-  else
-    print_status "Configuring marketplace in Claude settings..."
-    configure_marketplace
-  fi
-
-  # Copy .plugins.example to workspace if it doesn't exist
-  if [[ ! -f "/workspace/.plugins.example" ]]; then
-    print_status "Creating .plugins.example template..."
-    if cp "$PLUGINS_EXAMPLE" /workspace/.plugins.example; then
-      print_success "Created /workspace/.plugins.example"
+  # Copy .marketplaces.example to workspace if it doesn't exist
+  if [[ ! -f "/workspace/.marketplaces.example" ]]; then
+    print_status "Creating .marketplaces.example template..."
+    if cp "$MARKETPLACES_EXAMPLE" /workspace/.marketplaces.example; then
+      print_success "Created /workspace/.marketplaces.example"
     else
-      print_warning "Could not create .plugins.example template"
+      print_warning "Could not create .marketplaces.example template"
     fi
   fi
 
-  # In CI mode, automatically create .plugins file from CI template
-  if is_ci_mode && [[ ! -f "$PLUGINS_FILE" ]]; then
-    print_status "CI mode: Creating .plugins from CI template..."
-    if cp "$SCRIPT_DIR/.plugins.ci.example" "$PLUGINS_FILE"; then
-      print_success "Created $PLUGINS_FILE from CI template (3 test plugins)"
+  # In CI mode, automatically create .marketplaces file from CI template
+  if is_ci_mode && [[ ! -f "$MARKETPLACES_FILE" ]]; then
+    print_status "CI mode: Creating .marketplaces from CI template..."
+    if cp "$SCRIPT_DIR/.marketplaces.ci.example" "$MARKETPLACES_FILE"; then
+      print_success "Created $MARKETPLACES_FILE from CI template (3 test marketplaces)"
     else
-      print_warning "Could not create CI plugins file"
+      print_warning "Could not create CI marketplaces file"
     fi
   fi
 
-  # Install plugins from .plugins file if it exists
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    print_status "Found .plugins file, installing specified plugins..."
-    install_plugins_from_file
+  # Install plugins from marketplaces specified in .marketplaces file if it exists
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    print_status "Found .marketplaces file, installing marketplaces and their plugins..."
+    install_marketplaces_from_file
   else
-    print_status "No .plugins file found (optional)"
-    print_status "Create $PLUGINS_FILE to auto-install plugins"
-    print_status "See /workspace/.plugins.example for template"
+    print_status "No .marketplaces file found (optional)"
+    print_status "Create $MARKETPLACES_FILE to auto-install marketplaces and plugins"
+    print_status "See /workspace/.marketplaces.example for template"
   fi
 
   print_success "${EXT_NAME} installation complete"
@@ -147,42 +137,6 @@ is_claude_authenticated() {
   fi
 
   return 1
-}
-
-configure_marketplace() {
-  # Ensure settings.json exists with valid JSON
-  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
-    echo "{}" > "$CLAUDE_SETTINGS"
-  fi
-
-  # Add marketplace to settings.json
-  # Note: This is a simplified approach. In production, we'd use jq for proper JSON manipulation
-  print_status "Adding marketplace to Claude settings..."
-
-  # Create temporary settings with marketplace
-  cat > "${CLAUDE_SETTINGS}.tmp" << EOF
-{
-  "extraKnownMarketplaces": {
-    "${MARKETPLACE_NAME}": {
-      "source": {
-        "url": "${MARKETPLACE_URL}marketplace.json"
-      }
-    }
-  }
-}
-EOF
-
-  # Merge with existing settings if they exist and are valid JSON
-  if command_exists jq && jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
-    jq -s '.[0] * .[1]' "$CLAUDE_SETTINGS" "${CLAUDE_SETTINGS}.tmp" > "${CLAUDE_SETTINGS}.new"
-    mv "${CLAUDE_SETTINGS}.new" "$CLAUDE_SETTINGS"
-    rm "${CLAUDE_SETTINGS}.tmp"
-  else
-    # Fallback: just use the new settings if jq not available or invalid JSON
-    mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
-  fi
-
-  print_success "Marketplace configured"
 }
 
 # Find marketplace directory after it's been added
@@ -250,7 +204,7 @@ parse_marketplace_json() {
   [[ -n "$MARKETPLACE_NAME" ]] && [[ -n "$PLUGIN_NAMES" ]]
 }
 
-install_plugins_from_file() {
+install_marketplaces_from_file() {
   local repo_count=0
   local plugin_count=0
   local installed_count=0
@@ -334,7 +288,7 @@ install_plugins_from_file() {
     done
 
     echo ""
-  done < "$PLUGINS_FILE"
+  done < "$MARKETPLACES_FILE"
 
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   print_status "Plugin installation summary:"
@@ -358,23 +312,23 @@ install_plugins_from_file() {
 configure() {
   print_status "Configuring ${EXT_NAME}..."
 
-  # In CI mode, ensure .plugins file exists and install plugins
+  # In CI mode, ensure .marketplaces file exists and install marketplaces/plugins
   # This handles the case where extension was pre-installed
   if is_ci_mode; then
-    if [[ ! -f "$PLUGINS_FILE" ]]; then
-      print_status "CI mode: Creating .plugins from CI template..."
-      if cp "$SCRIPT_DIR/.plugins.ci.example" "$PLUGINS_FILE"; then
-        print_success "Created $PLUGINS_FILE from CI template (3 test plugins)"
+    if [[ ! -f "$MARKETPLACES_FILE" ]]; then
+      print_status "CI mode: Creating .marketplaces from CI template..."
+      if cp "$SCRIPT_DIR/.marketplaces.ci.example" "$MARKETPLACES_FILE"; then
+        print_success "Created $MARKETPLACES_FILE from CI template (3 test marketplaces)"
       else
-        print_warning "Could not create CI plugins file"
+        print_warning "Could not create CI marketplaces file"
       fi
     fi
 
     # Check if Claude is authenticated before attempting plugin installation
-    if [[ -f "$PLUGINS_FILE" ]]; then
+    if [[ -f "$MARKETPLACES_FILE" ]]; then
       if is_claude_authenticated; then
-        print_status "CI mode: Claude authenticated, installing plugins from .plugins file..."
-        install_plugins_from_file
+        print_status "CI mode: Claude authenticated, installing marketplaces from .marketplaces file..."
+        install_marketplaces_from_file
       else
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -441,24 +395,15 @@ validate() {
   # Check settings file exists
   if [[ -f "$CLAUDE_SETTINGS" ]]; then
     print_success "Claude settings file exists"
-
-    # Check for marketplace configuration
-    if grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-      print_success "Marketplace configured in settings"
-    else
-      print_warning "Marketplace not found in settings"
-      all_valid=false
-    fi
   else
-    print_error "Claude settings file not found"
-    all_valid=false
+    print_warning "Claude settings file not found (will be created on first use)"
   fi
 
-  # Check .plugins.example exists
-  if [[ -f "/workspace/.plugins.example" ]]; then
-    print_success "Plugin template exists: /workspace/.plugins.example"
+  # Check .marketplaces.example exists
+  if [[ -f "/workspace/.marketplaces.example" ]]; then
+    print_success "Marketplaces template exists: /workspace/.marketplaces.example"
   else
-    print_warning "Plugin template not found"
+    print_warning "Marketplaces template not found"
   fi
 
   # Test plugin system access
@@ -480,12 +425,12 @@ validate() {
   if is_ci_mode; then
     print_status "CI mode: Verifying plugin installation..."
 
-    # Check .plugins file exists
-    if [[ ! -f "$PLUGINS_FILE" ]]; then
-      print_error ".plugins file not found (expected in CI mode)"
+    # Check .marketplaces file exists
+    if [[ ! -f "$MARKETPLACES_FILE" ]]; then
+      print_error ".marketplaces file not found (expected in CI mode)"
       all_valid=false
     else
-      print_success ".plugins file exists"
+      print_success ".marketplaces file exists"
 
       # Count expected plugins by parsing marketplace JSONs
       local expected_count=0
@@ -516,7 +461,7 @@ validate() {
           # Assume 1 plugin if marketplace not found
           expected_count=$((expected_count + 1))
         fi
-      done < "$PLUGINS_FILE"
+      done < "$MARKETPLACES_FILE"
 
       print_status "Expected plugins from $marketplace_count marketplaces: $expected_count"
 
@@ -574,19 +519,7 @@ status() {
     return 1
   fi
 
-  # Verify marketplace is configured in settings.json
-  if [[ ! -f "$CLAUDE_SETTINGS" ]] || ! grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-    echo "Status: ✗ NOT CONFIGURED (marketplace not in settings)"
-    return 1
-  fi
-
   echo "Status: ✓ INSTALLED"
-  echo ""
-
-  # Show marketplace configuration
-  print_status "Marketplace configuration:"
-  echo "  Name: $MARKETPLACE_NAME"
-  echo "  URL: $MARKETPLACE_URL"
   echo ""
 
   # Show registered marketplaces
@@ -600,16 +533,16 @@ status() {
     fi
   fi
 
-  # Show .plugins file status
-  print_status "Plugin configuration:"
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    echo "  .plugins file: ✓ exists"
+  # Show .marketplaces file status
+  print_status "Marketplaces configuration:"
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    echo "  .marketplaces file: ✓ exists"
     local count
-    count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
-    echo "  Plugins specified: $count"
+    count=$(grep -v '^#' "$MARKETPLACES_FILE" | grep -v '^$' | wc -l | tr -d ' ')
+    echo "  Marketplaces specified: $count"
   else
-    echo "  .plugins file: ✗ not found"
-    echo "  Template: /workspace/.plugins.example"
+    echo "  .marketplaces file: ✗ not found"
+    echo "  Template: /workspace/.marketplaces.example"
   fi
   echo ""
 
@@ -625,7 +558,7 @@ status() {
   # Show config file location
   print_status "Configuration:"
   echo "  Settings: $CLAUDE_SETTINGS"
-  echo "  Plugins file: $PLUGINS_FILE"
+  echo "  Marketplaces file: $MARKETPLACES_FILE"
 
   return 0
 }
@@ -637,24 +570,12 @@ status() {
 upgrade() {
   print_status "Upgrading ${EXT_NAME}..."
 
-  # Update marketplace configuration
-  print_status "Updating marketplace configuration..."
-  configure_marketplace
-
-  # Re-sync plugins from .plugins file
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    print_status "Re-syncing plugins from .plugins file..."
-    install_plugins_from_file
-  fi
-
-  # Update marketplace metadata
-  if command_exists claude; then
-    print_status "Updating marketplace metadata..."
-    if timeout 10s claude /plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
-      print_success "Marketplace metadata updated"
-    else
-      print_warning "Could not update marketplace metadata (may be normal)"
-    fi
+  # Re-sync marketplaces and plugins from .marketplaces file
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    print_status "Re-syncing marketplaces and plugins from .marketplaces file..."
+    install_marketplaces_from_file
+  else
+    print_status "No .marketplaces file found - nothing to upgrade"
   fi
 
   print_success "${EXT_NAME} upgraded successfully"
@@ -668,36 +589,76 @@ upgrade() {
 remove() {
   print_warning "Uninstalling ${EXT_NAME}..."
 
-  # Remove marketplace from settings.json
-  if [[ -f "$CLAUDE_SETTINGS" ]] && command_exists jq; then
-    print_status "Removing marketplace from Claude settings..."
-    if jq "del(.extraKnownMarketplaces.\"$MARKETPLACE_NAME\")" "$CLAUDE_SETTINGS" > "${CLAUDE_SETTINGS}.tmp"; then
-      mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
-      print_success "Marketplace removed from settings"
+  # Optionally remove plugins from marketplaces
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    echo ""
+    if prompt_confirmation "Remove all plugins from marketplaces in .marketplaces file?"; then
+      print_status "Uninstalling plugins from marketplaces..."
+      local plugin_count=0
+      local removed_count=0
+      local failed_count=0
+
+      while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^#.*$ ]] && continue
+        [[ -z "$line" ]] && continue
+
+        print_status "Processing marketplace: $line"
+
+        # Find marketplace directory
+        local marketplace_dir
+        if ! marketplace_dir=$(find_marketplace_directory "$line"); then
+          print_warning "  ⚠  Cannot find marketplace directory for: $line"
+          continue
+        fi
+
+        # Parse marketplace.json
+        local MARKETPLACE_NAME=""
+        local PLUGIN_NAMES=""
+        if ! parse_marketplace_json "$marketplace_dir"; then
+          print_warning "  ⚠  Cannot parse marketplace.json for: $line"
+          continue
+        fi
+
+        print_status "  → Found plugins in $MARKETPLACE_NAME: $PLUGIN_NAMES"
+
+        # Uninstall each plugin
+        for plugin_name in $PLUGIN_NAMES; do
+          plugin_count=$((plugin_count + 1))
+          print_status "  → Uninstalling plugin: ${plugin_name}"
+
+          if claude /plugin uninstall "${plugin_name}" 2>&1; then
+            print_success "  ✓ Uninstalled: ${plugin_name}"
+            removed_count=$((removed_count + 1))
+          else
+            print_warning "  ✗ Failed to uninstall: ${plugin_name}"
+            failed_count=$((failed_count + 1))
+          fi
+        done
+
+        echo ""
+      done < "$MARKETPLACES_FILE"
+
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      print_status "Plugin removal summary:"
+      echo "  Total plugins: $plugin_count"
+      echo "  Successfully removed: $removed_count"
+      echo "  Failed: $failed_count"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     else
-      print_warning "Could not remove marketplace from settings"
-      rm -f "${CLAUDE_SETTINGS}.tmp"
+      print_status "Skipping plugin removal"
     fi
-  fi
-
-  # Optionally remove plugins
-  echo ""
-  if prompt_confirmation "Remove installed plugins from this marketplace?"; then
-    if command_exists claude; then
-      # This would require listing and removing each plugin individually
-      # For now, inform the user
-      print_status "To remove individual plugins, use:"
-      print_status "  claude /plugin uninstall <plugin-name>"
-    fi
-  fi
-
-  # Optionally remove .plugins files
-  echo ""
-  if prompt_confirmation "Remove .plugins and .plugins.example files?"; then
-    rm -f "$PLUGINS_FILE" /workspace/.plugins.example
-    print_success "Plugin configuration files removed"
   else
-    print_status "Plugin configuration files preserved"
+    print_status "No .marketplaces file found - no plugins to remove"
+  fi
+
+  # Optionally remove .marketplaces files
+  echo ""
+  if prompt_confirmation "Remove .marketplaces and .marketplaces.example files?"; then
+    rm -f "$MARKETPLACES_FILE" /workspace/.marketplaces.example
+    print_success "Marketplaces configuration files removed"
+  else
+    print_status "Marketplaces configuration files preserved"
   fi
 
   print_success "${EXT_NAME} uninstalled"

@@ -1,19 +1,20 @@
-# Claude Code Plugin Marketplace - Curated Plugins
+# Claude Code Plugin Marketplace - Curated Marketplaces
 #
-# This file specifies plugins to install from various Claude Code marketplaces.
+# This file specifies marketplaces to add.
 # Each line should contain a GitHub repository in the format: owner/repo
 # Lines starting with # are comments and will be ignored.
 #
 # To use this file:
-# 1. Copy to /workspace/.plugins: cp /workspace/.plugins.example /workspace/.plugins
-# 2. Customize the list (comment out unwanted plugins with #)
+# 1. Copy to /workspace/.marketplaces: cp /workspace/.marketplaces.example /workspace/.marketplaces
+# 2. Customize the list (comment out unwanted marketplaces with #)
 # 3. Run: extension-manager install claude-marketplace
 #
-# Plugins are installed via: claude /plugin marketplace add <github-repo>
+# Each marketplace is added via: claude /plugin marketplace add <github-repo>
+# Then all plugins from each marketplace's .claude-plugin/marketplace.json are automatically installed.
 #
 
 # ============================================================================
-# CURATED PLUGINS
+# CURATED MARKETPLACES
 # ============================================================================
 
 # Beads - Natural language programming with Claude
@@ -41,7 +42,7 @@ anthropics/life-sciences
 ComposioHQ/awesome-claude-skills
 
 # ============================================================================
-# CUSTOM PLUGINS
+# OTHER MARKETPLACES
 # ============================================================================
-# Add your own custom plugins below:
+# Add your own plugins below:
 

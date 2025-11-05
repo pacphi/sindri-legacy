@@ -1,13 +1,13 @@
-# Claude Code Plugin Marketplace - CI/CD Test Plugins
+# Claude Code Plugin Marketplace - CI/CD Test Marketplaces
 #
-# This file specifies a minimal set of plugins for automated testing.
+# This file specifies a minimal set of marketplaces for automated testing.
 # Used when CI_MODE=true to ensure fast, reliable CI/CD runs.
 #
 # Format: owner/repo (one per line)
 # Lines starting with # are comments
 
 # ============================================================================
-# CI TEST PLUGINS (3 selected for reliability and speed)
+# CI TEST MARKETPLACES (3 selected for reliability and speed)
 # ============================================================================
 
 # Beads - Natural language programming with Claude

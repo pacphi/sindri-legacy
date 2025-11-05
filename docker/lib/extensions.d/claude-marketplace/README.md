@@ -1,21 +1,21 @@
 # Claude Marketplace Extension
 
-This extension integrates Claude Code with https://claudecodemarketplace.com/ and automatically installs
-curated plugins from GitHub repositories.
+This extension automatically installs curated plugins from Claude Code plugin marketplaces
+hosted in GitHub repositories.
 
 ## Overview
 
-This extension configures Claude Code to access plugins from the Claude Code Plugin Marketplace and provides
-automated installation of curated plugins specified in a `.plugins` configuration file.
+This extension provides automated installation of plugins from marketplaces specified in a
+`.marketplaces` configuration file. Each marketplace is a GitHub repository containing a
+`.claude-plugin/marketplace.json` file that defines available plugins.
 
 It provides:
 
-- **Marketplace Integration**: Automatic configuration of https://claudecodemarketplace.com/
-- **Automated Installation**: Install plugins from a `.plugins` file (one per line)
-- **Curated Collection**: Pre-selected high-quality plugins for various use cases
-- **GitHub Support**: Install plugins directly from GitHub repositories
-- **Idempotent**: Safe to re-run installation without duplicating plugins
-- **Team Consistency**: Share `.plugins` file across team for consistent tooling
+- **Automated Installation**: Install plugins from marketplaces listed in a `.marketplaces` file
+- **Curated Collection**: Pre-selected high-quality marketplaces for various use cases
+- **GitHub Support**: Install plugins directly from GitHub repository marketplaces
+- **Idempotent**: Safe to re-run installation without duplicating marketplaces
+- **Team Consistency**: Share `.marketplaces` file across team for consistent tooling
 
 ## Prerequisites
 
@@ -71,7 +71,7 @@ claude /plugin marketplace list
 
 ### Automated Plugin Installation
 
-The extension automatically installs plugins listed in `/workspace/.plugins`:
+The extension automatically installs plugins listed in `/workspace/.marketplaces`:
 
 1. **Ensure Claude is authenticated** (for plugin installation):
 
@@ -85,16 +85,16 @@ The extension automatically installs plugins listed in `/workspace/.plugins`:
    claude
    ```
 
-2. **Create your plugins file** (or use the template):
+2. **Create your marketplaces file** (or use the template):
 
    ```bash
-   cp /workspace/.plugins.example /workspace/.plugins
+   cp /workspace/.marketplaces.example /workspace/.marketplaces
    ```
 
-3. **Edit the file** to select desired plugins:
+3. **Edit the file** to select desired marketplaces:
 
    ```bash
-   vim /workspace/.plugins
+   vim /workspace/.marketplaces
    ```
 
 4. **Install** (happens automatically during extension install):
@@ -134,11 +134,11 @@ claude /plugin marketplace update marketplace-name
 claude /plugin marketplace remove marketplace-name
 ```
 
-## Curated Plugins
+## Curated Marketplaces
 
-The `.plugins.example` file includes these pre-selected plugins:
+The `.marketplaces.example` file includes these pre-selected marketplaces:
 
-| Plugin                     | Description                                         | Repository                                |
+| Marketplace                     | Description                                         | Repository                                |
 | -------------------------- | --------------------------------------------------- | ----------------------------------------- |
 | **beads**                  | Natural language programming with Claude            | steveyegge/beads                          |
 | **cc-blueprint-toolkit**   | Project scaffolding and architecture templates      | croffasia/cc-blueprint-toolkit            |
@@ -149,12 +149,12 @@ The `.plugins.example` file includes these pre-selected plugins:
 
 ## Configuration
 
-### `.plugins` File Format
+### `.marketplaces` File Format
 
-One plugin per line, GitHub format (`owner/repo`):
+One marketplaces per line, GitHub format (`owner/repo`):
 
 ```bash
-# Claude Code Plugin Marketplace - Curated Plugins
+# Claude Code Plugin Marketplace - Curated Marketplaces
 # Lines starting with # are comments
 
 # Development Tools
@@ -173,22 +173,22 @@ ComposioHQ/awesome-claude-skills
 ### Installation Locations
 
 - **Claude Config**: `~/.claude/settings.json`
-- **Plugins Template**: `/workspace/.plugins.example` (full list, 6 plugins)
-- **CI Plugins Template**: `/workspace/.plugins.ci.example` (CI testing, 3 plugins)
-- **Plugins Config**: `/workspace/.plugins` (user-created)
+- **Marketplaces Template**: `/workspace/.marketplaces.example` (full list, 6 marketplaces)
+- **CI Marketplaces Template**: `/workspace/.marketplaces.ci.example` (CI testing, 3 marketplaces)
+- **Marketplaces Config**: `/workspace/.marketplaces` (user-created)
 - **Installed Plugins**: Managed by Claude CLI
 
 ### CI Mode
 
 When `CI_MODE=true`, the extension automatically:
 
-1. Uses `.plugins.ci.example` (3 plugins) instead of `.plugins.example` (6 plugins)
-2. Creates `/workspace/.plugins` from CI template if it doesn't exist
+1. Uses `.marketplaces.ci.example` (3 marketplaces) instead of `.marketplaces.example` (6 marketplaces)
+2. Creates `/workspace/.marketplaces` from CI template if it doesn't exist
 3. Checks for Claude authentication before attempting plugin installation
 4. **With `ANTHROPIC_API_KEY` set**: Installs plugins automatically
 5. **Without authentication**: Skips plugin installation with informative message
 
-**CI Test Plugins (3 selected for reliability)**:
+**CI Test Marketplaces (3 selected for reliability)**:
 
 - `steveyegge/beads` - Natural language programming
 - `anthropics/life-sciences` - Official Anthropic plugin
@@ -222,24 +222,7 @@ To enable plugin installation in CI:
      env:
        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-The marketplace will still be configured, but plugins
-will need to be installed manually or in an authenticated context.
-```
-
-### Marketplace Configuration
-
-The extension adds this to `~/.claude/settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "claudecodemarketplace": {
-      "source": {
-        "url": "https://claudecodemarketplace.com/marketplace.json"
-      }
-    }
-  }
-}
+Plugins will need to be installed manually or in an authenticated context.
 ```
 
 ## Extension API Compliance
@@ -341,20 +324,20 @@ claude /plugin marketplace add owner/repo
 claude /plugin
 ```
 
-### `.plugins` File Not Found
+### `.marketplaces` File Not Found
 
-**Symptom**: `No .plugins file found`
+**Symptom**: `No .marketplaces file found`
 
 **Solution**:
 
 ```bash
 # Copy template
-cp /workspace/.plugins.example /workspace/.plugins
+cp /workspace/.marketplaces.example /workspace/.marketplaces
 
 # Edit to customize
-vim /workspace/.plugins
+vim /workspace/.marketplaces
 
-# Reinstall to process plugins
+# Reinstall to process marketplaces
 extension-manager install claude-marketplace
 ```
 
@@ -410,7 +393,7 @@ extension-manager uninstall claude-marketplace
 # You'll be prompted to optionally remove:
 # - Marketplace configuration from settings.json
 # - Installed plugins
-# - .plugins and .plugins.example files
+# - .marketplaces and .marketplaces.example files
 ```
 
 ## Examples
@@ -418,13 +401,13 @@ extension-manager uninstall claude-marketplace
 ### Basic Workflow
 
 ```bash
-# 1. Create plugins configuration
-cp /workspace/.plugins.example /workspace/.plugins
+# 1. Create marketplaces configuration
+cp /workspace/.marketplaces.example /workspace/.marketplaces
 
-# 2. Customize plugins (optional)
-vim /workspace/.plugins
+# 2. Customize marketplaces (optional)
+vim /workspace/.marketplaces
 
-# 3. Install extension (auto-installs plugins)
+# 3. Install extension (auto-installs marketplaces and their plugins)
 extension-manager install claude-marketplace
 
 # 4. Verify installation
@@ -434,12 +417,12 @@ claude /plugin list
 claude /plugin
 ```
 
-### Custom Plugin List
+### Custom Marketplace List
 
-Create `/workspace/.plugins` with your selection:
+Create `/workspace/.marketplaces` with your selection:
 
 ```bash
-# My Project Plugins
+# My Project Marketplaces
 steveyegge/beads
 croffasia/cc-blueprint-toolkit
 ```
@@ -450,21 +433,21 @@ Then install:
 extension-manager install claude-marketplace
 ```
 
-### Project-Specific Plugins
+### Project-Specific Marketplaces
 
-Different projects can have different plugin requirements:
+Different projects can have different marketplace requirements:
 
 ```bash
 # In project A
 cd /workspace/projects/active/project-a
-cp /workspace/.plugins.example ./.plugins
-# Edit ./.plugins for project A needs
+cp /workspace/.marketplaces.example ./.marketplaces
+# Edit ./.marketplaces for project A needs
 extension-manager install claude-marketplace
 
 # In project B
 cd /workspace/projects/active/project-b
-cp /workspace/.plugins.example ./.plugins
-# Edit ./.plugins for project B needs
+cp /workspace/.marketplaces.example ./.marketplaces
+# Edit ./.marketplaces for project B needs
 extension-manager install claude-marketplace
 ```
 
@@ -509,14 +492,14 @@ To develop and test your own plugins:
 2. Add locally: `claude /plugin marketplace add ./my-marketplace`
 3. Test plugin installation: `claude /plugin install my-plugin@my-marketplace`
 4. Publish to GitHub when ready
-5. Share with team via `.plugins` file
+5. Share with team via `.marketplaces` file
 
 ## Resources
 
-- **Claude Code Marketplace**: https://claudecodemarketplace.com/
 - **Plugin Marketplace Docs**: https://docs.claude.com/en/docs/claude-code/plugin-marketplaces
 - **Claude Code Documentation**: https://docs.claude.com/en/docs/claude-code
-- **GitHub Plugin Repositories**: Listed in `.plugins.example`
+- **GitHub Marketplace Repositories**: Listed in `.marketplaces.example`
+- **Example Marketplaces**: See `.marketplaces.example` for curated list
 
 ## Related Extensions
 
