@@ -54,18 +54,19 @@ case "$key_tool" in
         print_info "Testing Claude marketplace integration..."
 
         # Test 1: Verify YAML configuration file exists
-        if [ -n "$CI_MODE" ]; then
+        # Check which config was actually installed (don't assume based on mode)
+        yaml_file=""
+        if [ -f "/workspace/marketplaces.ci.yml" ]; then
             yaml_file="/workspace/marketplaces.ci.yml"
-        else
+        elif [ -f "/workspace/marketplaces.yml" ]; then
             yaml_file="/workspace/marketplaces.yml"
+        else
+            print_error "No YAML configuration file found"
+            print_error "Expected either /workspace/marketplaces.ci.yml or /workspace/marketplaces.yml"
+            exit 1
         fi
 
-        if [ ! -f "$yaml_file" ]; then
-            print_error "YAML configuration file missing: $yaml_file"
-            exit 1
-        else
-            print_success "YAML configuration file exists: $yaml_file"
-        fi
+        print_success "YAML configuration file exists: $yaml_file"
 
         # Test 2: Verify yq is installed
         if ! command -v yq >/dev/null 2>&1; then

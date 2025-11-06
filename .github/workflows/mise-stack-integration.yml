@@ -69,6 +69,7 @@ jobs:
           deploy-timeout: "300"
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ci-mode: "true"
 
       # Using composite action for waiting
       - name: Wait for deployment

@@ -44,6 +44,10 @@ inputs:
     description: "Anthropic API key for Claude authentication (optional, enables plugin installation)"
     required: false
     default: ""
+  ci-mode:
+    description: "Enable CI mode (uses CI manifest, skips heavy installations). Default: false for production safety."
+    required: false
+    default: "false"
 
 outputs:
   deployment-status:
@@ -83,8 +87,16 @@ runs:
         ssh_key_content=$(cat ${{ inputs.ssh-pubkey-path }})
         flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
           --app ${{ inputs.app-name }}
-        flyctl secrets set CI_MODE="true" \
-          --app ${{ inputs.app-name }}
+
+        # Set CI_MODE if explicitly enabled (default: false for production safety)
+        if [ "${{ inputs.ci-mode }}" = "true" ]; then
+          echo "Setting CI_MODE=true for test environment..."
+          flyctl secrets set CI_MODE="true" \
+            --app ${{ inputs.app-name }}
+          echo "✓ CI mode enabled"
+        else
+          echo "Note: CI mode disabled (production mode) - full installations will be used"
+        fi
 
         # Set ANTHROPIC_API_KEY if provided (required for claude-marketplace plugin installation)
         if [ -n "${{ inputs.anthropic-api-key }}" ]; then
