@@ -11,6 +11,10 @@ groupadd -f -g 999 systemd-journal 2>/dev/null || true
 groupadd -f -g 998 systemd-network 2>/dev/null || true
 useradd -r -g systemd-network -u 998 -s /usr/sbin/nologin systemd-network 2>/dev/null || true
 
+# Add yq PPA repository
+echo "Adding yq PPA repository..."
+add-apt-repository -y ppa:rmescandon/yq
+
 # Update package lists with retry
 apt_update_retry 3
 
@@ -27,6 +31,7 @@ apt_install_retry 3 \
     screen \
     tree \
     jq \
+    yq \
     unzip \
     build-essential \
     pkg-config \

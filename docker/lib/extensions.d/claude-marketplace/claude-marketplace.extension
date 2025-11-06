@@ -79,33 +79,11 @@ prerequisites() {
 
   print_success "jq is available"
 
-  # Check for yq (required for YAML parsing) - install if missing
+  # Check for yq (required for YAML parsing)
   if ! command_exists yq; then
-    print_warning "yq not found - installing via mise..."
-
-    # Verify mise is available
-    if ! command_exists mise; then
-      print_error "mise is required but not installed"
-      print_status "The mise-config extension should be installed first"
-      return 1
-    fi
-
-    print_status "Installing yq via mise..."
-    if mise install yq@latest 2>&1; then
-      # Activate yq in current shell
-      eval "$(mise activate bash)"
-      print_success "yq installed via mise"
-    else
-      print_error "Failed to install yq via mise"
-      return 1
-    fi
-
-    # Verify installation
-    if ! command_exists yq; then
-      print_error "yq installation failed - command not found after mise install"
-      print_status "Try running: mise install yq@latest && eval \"\$(mise activate bash)\""
-      return 1
-    fi
+    print_error "yq is required but not installed"
+    print_status "yq should be installed as part of the base image"
+    return 1
   fi
 
   print_success "yq is available"

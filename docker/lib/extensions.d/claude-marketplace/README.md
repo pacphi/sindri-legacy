@@ -16,14 +16,12 @@ It provides:
 - **Curated Collection**: Pre-selected high-quality marketplaces for various use cases
 - **Idempotent**: Safe to re-run installation without duplicating configuration
 - **Team Consistency**: Share YAML configuration across teams for consistent tooling
-- **mise-managed yq**: Uses mise for YAML processor installation and version management
 
 ## Prerequisites
 
 - **Claude CLI** (installed via `claude` extension) - **Required**
-- **mise** (tool version manager from `mise-config` extension) - **Required**
-- **yq** (YAML processor via mise) - **Auto-installed if missing**
-- **jq** (JSON processor) - **Required** (usually pre-installed)
+- **yq** (YAML processor) - **Required** (pre-installed in base image)
+- **jq** (JSON processor) - **Required** (pre-installed in base image)
 
 ## Installation
 
@@ -237,7 +235,7 @@ This extension implements **Extension API v2.0**:
 
 ### Functions
 
-- ✅ `prerequisites()` - Check Claude CLI, mise, yq, jq (auto-installs yq via mise if missing)
+- ✅ `prerequisites()` - Check Claude CLI, yq, jq availability
 - ✅ `install()` - Convert YAML → JSON, merge into settings.json
 - ✅ `configure()` - Display configuration summary and next steps
 - ✅ `validate()` - Verify settings.json structure, YAML syntax, plugin references
@@ -248,9 +246,8 @@ This extension implements **Extension API v2.0**:
 ### Dependencies
 
 - `claude` extension (provides Claude CLI)
-- `mise-config` extension (provides mise tool manager)
-- `yq` (auto-installed via mise during prerequisites)
-- `jq` (required for JSON processing)
+- `yq` (pre-installed in base image)
+- `jq` (pre-installed in base image)
 
 ## Troubleshooting
 
@@ -316,35 +313,14 @@ yq eval '.enabledPlugins' /workspace/marketplaces.yml
 
 **Solution**:
 
-The extension automatically installs yq via mise during `prerequisites()`. If this fails:
+yq is pre-installed in the base Docker image. If it's missing, the base image may need to be rebuilt:
 
 ```bash
-# Install yq via mise (recommended)
-mise install yq@latest
-
-# Activate mise in current shell
-eval "$(mise activate bash)"
-
-# Verify installation
+# Verify yq is installed
 yq --version
 
-# Alternative: Install specific version
-mise install yq@4.40.5
-
-# List available yq versions
-mise ls-remote yq
-```
-
-**Note**: The `mise-config` extension must be installed first (it's a protected core extension).
-
-If mise is not available:
-
-```bash
-# Install mise-config extension
-extension-manager install mise-config
-
-# Then retry claude-marketplace installation
-extension-manager install claude-marketplace
+# If missing, this indicates a problem with the base image
+# Contact your system administrator or rebuild the Docker image
 ```
 
 ### Marketplace Configuration Not Appearing
