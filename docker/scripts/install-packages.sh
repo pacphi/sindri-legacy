@@ -11,11 +11,17 @@ groupadd -f -g 999 systemd-journal 2>/dev/null || true
 groupadd -f -g 998 systemd-network 2>/dev/null || true
 useradd -r -g systemd-network -u 998 -s /usr/sbin/nologin systemd-network 2>/dev/null || true
 
+# Update package lists with retry
+apt_update_retry 3
+
+# Install software-properties-common first (required for add-apt-repository)
+apt_install_retry 3 software-properties-common
+
 # Add yq PPA repository
 echo "Adding yq PPA repository..."
 add-apt-repository -y ppa:rmescandon/yq
 
-# Update package lists with retry
+# Update package lists again after adding PPA
 apt_update_retry 3
 
 # Install system dependencies with retry
@@ -51,7 +57,6 @@ apt_install_retry 3 \
     zip \
     gnupg \
     ca-certificates \
-    software-properties-common \
     gettext-base
 
 # Install GitHub CLI
