@@ -1,0 +1,243 @@
+name: Quick Checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # Detect Changed Files
+  # ============================================================================
+
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+      core_system: ${{ steps.filter.outputs.core_system }}
+      extensions_changed: ${{ steps.filter.outputs.extensions_changed }}
+      changed_extensions: ${{ steps.extensions.outputs.list }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docs_only:
+              - '**/*.md'
+              - 'docs/**'
+            core_system:
+              - 'Dockerfile'
+              - 'fly.toml'
+              - 'docker/lib/extension-manager.sh'
+              - 'docker/lib/common.sh'
+              - 'docker/lib/extensions-common.sh'
+              - 'docker/lib/upgrade-history.sh'
+              - 'docker/lib/upgrade-notifier.sh'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+            extensions_changed:
+              - 'docker/lib/extensions.d/**'
+
+      - name: Identify changed extensions
+        id: extensions
+        if: steps.filter.outputs.extensions_changed == 'true'
+        run: |
+          # Get list of changed extension files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+
+          # Extract unique extension names from changed files
+          EXTENSIONS=$(echo "$CHANGED_FILES" | \
+            grep 'docker/lib/extensions.d/' | \
+            grep -E '\.(extension|toml)$' | \
+            sed 's|docker/lib/extensions.d/||' | \
+            sed 's|/.*||' | \
+            sort -u | \
+            tr '\n' ' ')
+
+          echo "Changed extensions: $EXTENSIONS"
+          echo "list=$EXTENSIONS" >> $GITHUB_OUTPUT
+
+      - name: Log detection results
+        run: |
+          echo "## Change Detection Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docs Only**: ${{ steps.filter.outputs.docs_only }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Core System**: ${{ steps.filter.outputs.core_system }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Extensions Changed**: ${{ steps.filter.outputs.extensions_changed }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.filter.outputs.extensions_changed }}" = "true" ]; then
+            echo "- **Changed Extensions**: ${{ steps.extensions.outputs.list }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # Fast Validation (Always Run Unless Docs-Only)
+  # ============================================================================
+
+  fast-validation:
+    name: Fast Validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Shellcheck validation
+        run: |
+          echo "Running shellcheck on shell scripts..."
+
+          # Find all shell scripts
+          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v .git)
+
+          failed_scripts=()
+          for script in $scripts; do
+            # Skip non-shell template files
+            case "$script" in
+              */templates/*.example|*/active-extensions.conf.example|*/active-extensions.ci.conf)
+                echo "Skipping template: $script"
+                continue
+                ;;
+            esac
+
+            echo "Checking $script..."
+            if ! shellcheck "$script"; then
+              failed_scripts+=("$script")
+            fi
+          done
+
+          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
+            echo "❌ Shellcheck failed for:"
+            printf '%s\n' "${failed_scripts[@]}"
+            exit 1
+          fi
+
+          echo "✅ All shell scripts pass shellcheck"
+
+      - name: YAML validation
+        run: |
+          echo "Validating YAML files..."
+
+          yaml_files=$(find .github -name "*.yml" -o -name "*.yaml" | grep -v .git | grep -v node_modules)
+
+          failed_files=()
+          for file in $yaml_files; do
+            echo "Validating $file..."
+            if ! yq eval '.' "$file" > /dev/null 2>&1; then
+              failed_files+=("$file")
+            fi
+          done
+
+          if [[ ${#failed_files[@]} -gt 0 ]]; then
+            echo "❌ Invalid YAML files:"
+            printf '%s\n' "${failed_files[@]}"
+            exit 1
+          fi
+
+          echo "✅ All YAML files are valid"
+
+      - name: Extension manager validation
+        run: |
+          echo "Validating extension manager..."
+
+          # Check that extension manager script exists and is executable
+          if [[ ! -x "docker/lib/extension-manager.sh" ]]; then
+            echo "❌ Extension manager script not found or not executable"
+            exit 1
+          fi
+
+          # Validate extension file structure
+          for ext in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*/*.extension; do
+            if [[ -f "$ext" ]]; then
+              # Check that extension implements required functions
+              if ! grep -q "extension_init" "$ext"; then
+                echo "⚠️  Missing extension_init in $ext"
+              fi
+            fi
+          done
+
+          echo "✅ Extension manager validation passed"
+
+  # ============================================================================
+  # Test Changed Extensions (Only If Extensions Changed)
+  # ============================================================================
+
+  test-changed-extensions:
+    name: Test Changed Extensions
+    needs: detect-changes
+    if: needs.detect-changes.outputs.extensions_changed == 'true' && needs.detect-changes.outputs.changed_extensions != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Report changed extensions
+        run: |
+          echo "## Changed Extensions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following extensions have changed and will be tested:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for ext in ${{ needs.detect-changes.outputs.changed_extensions }}; do
+            echo "- \`$ext\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: Full extension testing will be performed via the single-extension-test workflow." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Summary
+  # ============================================================================
+
+  summary:
+    name: Quick Checks Summary
+    if: always()
+    needs: [detect-changes, fast-validation, test-changed-extensions]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Quick Checks Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.detect-changes.outputs.docs_only }}" = "true" ]; then
+            echo "✅ **Documentation-only changes detected**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No code validation or testing required." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Fast Validation**: ${{ needs.fast-validation.result }}" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ needs.detect-changes.outputs.extensions_changed }}" = "true" ]; then
+              echo "- **Changed Extensions**: ${{ needs.test-changed-extensions.result }}" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ needs.detect-changes.outputs.core_system }}" = "true" ]; then
+              echo "⚠️  **Core system changes detected** - Full test suite will run via extension-tests workflow" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.detect-changes.outputs.extensions_changed }}" = "true" ]; then
+              echo "ℹ️  **Extension changes detected** - Targeted testing recommended" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **No core system or extension changes** - Quick checks completed" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

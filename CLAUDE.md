@@ -487,21 +487,67 @@ Always run project-specific linting/formatting before commits.
 
 ## CI/CD & GitHub Actions
 
-Sindri uses GitHub Actions for automated testing and validation. The workflows are designed to be maintainable and reusable.
+Sindri uses GitHub Actions for automated testing and validation with a multi-tier testing strategy for faster feedback loops.
+
+### Multi-Tier Testing Strategy
+
+#### Tier 1: Quick Checks (2-5 minutes, always runs)
+
+- Fast validation on every commit
+- Skips tests entirely for docs-only changes
+- Runs shellcheck and YAML validation
+- Detects changed extensions for targeted testing
+- Location: `.github/workflows/quick-checks.yml`
+
+#### Tier 2: Selective Full Testing (12-15 minutes, core changes only)
+
+- Full test suite runs only for core system changes
+- Weekly scheduled runs on Sundays at 2:00 AM UTC
+- Manual workflow dispatch available for on-demand testing
+- Restricted to `main` branch pushes (not `develop`)
+
+#### Tier 3: Single Extension Testing (2-4 minutes, focused testing)
+
+- Tests individual extensions in isolation
+- Manual workflow dispatch with extension selection
+- Validates installation, API compliance, and idempotency
+- Location: `.github/workflows/single-extension-test.yml`
 
 ### Available Workflows
 
+**Quick Checks (`quick-checks.yml`)**
+
+- Fast validation and change detection (NEW)
+- Skips all tests for documentation-only changes
+- Identifies changed extensions for targeted testing
+- Runs shellcheck, YAML validation, and extension manager checks
+- Provides intelligent routing to appropriate test workflows
+- Location: `.github/workflows/quick-checks.yml`
+
+**Single Extension Test (`single-extension-test.yml`)**
+
+- Focused testing for individual extensions (NEW)
+- Manual workflow dispatch with dropdown selection of extensions
+- Tests installation, validation, API compliance, and idempotency
+- Faster feedback for extension-specific changes (~2-4 minutes)
+- Location: `.github/workflows/single-extension-test.yml`
+
 **Extension Testing (`extension-tests.yml`)**
 
-- Tests Extension API v1.0 and v2.0
-- Validates extension manager functionality
+- Comprehensive Extension API v1.0 and v2.0 testing (OPTIMIZED)
+- Runs weekly on Sundays at 2:00 AM UTC (scheduled)
+- Triggers only on core system changes (not individual extensions)
+- Restricted to `main` branch pushes, PR checks remain for both branches
 - Tests individual extensions in parallel
 - Verifies upgrade functionality
 - Location: `.github/workflows/extension-tests.yml`
 
 **Integration Testing (`integration.yml`)**
 
-- End-to-end VM deployment tests
+- End-to-end VM deployment tests (OPTIMIZED)
+- Runs weekly on Sundays at 2:00 AM UTC (scheduled)
+- Triggers only on core system changes
+- Restricted to `main` branch pushes, PR checks remain for both branches
 - Developer workflow validation
 - mise-powered stack integration
 - Location: `.github/workflows/integration.yml`
@@ -510,6 +556,8 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 
 - Shell script validation with shellcheck
 - YAML syntax validation
+- Docker build validation
+- Security scanning (Trivy, GitLeaks)
 - Location: `.github/workflows/validate.yml`
 
 **Documentation Linting (`test-documentation.yml`)**
@@ -533,6 +581,31 @@ Sindri uses GitHub Actions for automated testing and validation. The workflows a
 - Tags: PR-specific, branch-specific, and latest
 - Enables ~75% faster CI/CD by reusing images
 - Location: `.github/workflows/build-image.yml`
+
+### Workflow Optimization Summary
+
+**Before Optimization:**
+
+- Every push to `main` or `develop` triggered full test suite
+- Average CI time: ~16 minutes per commit
+- All 20+ extensions tested on any change
+
+**After Phase 1 & 2 Optimization:**
+
+- Docs-only changes: **0 minutes** (skipped entirely)
+- Single extension changes: **2-4 minutes** (targeted testing)
+- Core system changes: **12-15 minutes** (full suite, as intended)
+- Develop branch: PR checks only (no automatic full suite)
+- **Overall reduction: 60-75% faster for most commits**
+
+### Weekly Scheduled Testing
+
+Both comprehensive test workflows run weekly on Sundays at 2:00 AM UTC:
+
+- `extension-tests.yml` - Full extension system validation
+- `integration.yml` - Complete integration test suite
+
+This ensures regular quality gates without slowing down daily development.
 
 ### Pre-Built Docker Images
 

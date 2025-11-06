@@ -2,7 +2,7 @@ name: Extension System Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       # Deployment configuration
       - "fly.toml"
@@ -10,8 +10,7 @@ on:
       # CI scripts
       - "scripts/prepare-fly-config.sh"
       - "scripts/lib/fly-common.sh"
-      # Extension system
-      - "docker/lib/extensions.d/**"
+      # Extension system (core files only)
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
@@ -34,8 +33,7 @@ on:
       # CI scripts
       - "scripts/prepare-fly-config.sh"
       - "scripts/lib/fly-common.sh"
-      # Extension system
-      - "docker/lib/extensions.d/**"
+      # Extension system (core files only)
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
@@ -47,6 +45,9 @@ on:
       - ".github/actions/**"
       # Test scripts
       - ".github/scripts/extension-tests/**"
+
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2:00 AM UTC
 
   workflow_dispatch:
     inputs:
