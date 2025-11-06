@@ -546,6 +546,7 @@ Browse the official Claude Code Plugin Marketplace directory:
 **[https://claudecodemarketplace.com/](https://claudecodemarketplace.com/)**
 
 The directory provides:
+
 - Curated list of available plugin marketplaces
 - Marketplace descriptions and categories
 - Installation instructions (YAML format)

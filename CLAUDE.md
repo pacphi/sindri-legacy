@@ -129,7 +129,8 @@ extension-manager upgrade-history        # View upgrade history
 **Claude AI:**
 
 - `claude` - Claude Code CLI with developer configuration
-- `claude-marketplace` - YAML-based marketplace configuration for Claude Code (requires claude, mise-config, auto-installs yq via mise)
+- `claude-marketplace` - YAML-based marketplace configuration for Claude Code
+  (requires claude, mise-config, auto-installs yq via mise)
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
