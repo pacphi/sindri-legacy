@@ -555,6 +555,26 @@ status() {
     return 1
   fi
 
+  # Check if marketplace configuration exists in settings.json
+  # Either extraKnownMarketplaces or enabledPlugins must be present
+  local has_marketplaces=false
+  local has_plugins=false
+
+  if jq -e '.extraKnownMarketplaces' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+    has_marketplaces=true
+  fi
+
+  if jq -e '.enabledPlugins' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+    has_plugins=true
+  fi
+
+  if [[ "$has_marketplaces" == "false" ]] && [[ "$has_plugins" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED (marketplace configuration not found)"
+    echo ""
+    echo "Run: extension-manager install claude-marketplace"
+    return 1
+  fi
+
   echo "Status: ✓ INSTALLED"
   echo ""
 
