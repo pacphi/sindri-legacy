@@ -189,12 +189,15 @@ While not protected, these are highly recommended as many tools depend on them.
 
 The `nodejs-devtools` extension provides essential development tools via npm:
 
-- **TypeScript** ([typescript](https://www.npmjs.com/package/typescript), [ts-node](https://www.npmjs.com/package/ts-node)) - Type-safe JavaScript development
-- **ESLint** ([eslint](https://www.npmjs.com/package/eslint), [@typescript-eslint/parser](https://www.npmjs.com/package/@typescript-eslint/parser), [@typescript-eslint/eslint-plugin](https://www.npmjs.com/package/@typescript-eslint/eslint-plugin)) - Code linting and style enforcement with TypeScript support
-- **Prettier** ([prettier](https://www.npmjs.com/package/prettier)) - Opinionated code formatter
-- **nodemon** ([nodemon](https://www.npmjs.com/package/nodemon)) - Auto-reload development server
-- **goalie** ([goalie](https://www.npmjs.com/package/goalie)) - AI-powered research assistant with GOAP planning
-- **research-swarm** ([research-swarm](https://www.npmjs.com/package/research-swarm)) - AI research orchestration framework
+- **[Typescript](https://www.npmjs.com/package/typescript)**
+  - [ts-node](https://www.npmjs.com/package/ts-node) - Type-safe JavaScript development
+- **[ESLint](https://www.npmjs.com/package/eslint)** - Code linting and style enforcement with TypeScript support
+  - [parser](https://www.npmjs.com/package/@typescript-eslint/parser)
+  - [eslint-plugin](https://www.npmjs.com/package/@typescript-eslint/eslint-plugin)
+- **[Prettier](https://www.npmjs.com/package/prettier)** - Opinionated code formatter
+- **[nodemon](https://www.npmjs.com/package/nodemon)** - Auto-reload development server
+- **[goalie](https://www.npmjs.com/package/goalie)** - AI-powered research assistant with GOAP planning
+- **[research-swarm](https://www.npmjs.com/package/research-swarm)** - AI research orchestration framework
 
 All tools are managed via mise with the npm backend, ensuring version consistency and easy upgrades.
 

@@ -3,6 +3,9 @@ name: Extension Manager Validation
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   extension-manager-validation:
     name: Validate Extension Manager

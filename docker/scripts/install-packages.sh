@@ -17,6 +17,7 @@ apt_update_retry 3
 # Install system dependencies with retry
 # Note: libssl-dev, zlib1g-dev, libyaml-dev, libreadline-dev are required for compiling language runtimes and their native extensions
 apt_install_retry 3 \
+    software-properties-common \
     openssh-server \
     sudo \
     curl \
@@ -46,8 +47,12 @@ apt_install_retry 3 \
     zip \
     gnupg \
     ca-certificates \
-    software-properties-common \
     gettext-base
+
+# Install yq from GitHub releases (mikefarah/yq)
+echo "Installing yq from GitHub releases..."
+wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+chmod +x /usr/local/bin/yq
 
 # Install GitHub CLI
 echo "Installing GitHub CLI..."

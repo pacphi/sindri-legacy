@@ -40,29 +40,107 @@ Sindri uses GitHub Actions for continuous integration and deployment with a focu
 
 ## Quick Reference
 
-| Workflow                                           | Purpose                                          | Trigger                    | Duration |
-| -------------------------------------------------- | ------------------------------------------------ | -------------------------- | -------- |
-| [Extension Tests](#extension-system-tests)         | Test extension system and individual extensions  | Push, PR to main/develop   | ~12 min  |
-| [Integration Tests](#integration-tests)            | End-to-end VM deployment and workflow validation | Push, PR, manual           | ~4 min   |
-| [Project Validation](#project-validation)          | Validate project structure and configuration     | Push, PR                   | ~2 min   |
-| [Build Docker Image](#build-and-push-docker-image) | Build and cache Docker images                    | Dockerfile changes, manual | ~5 min   |
-| [Release Automation](#release-automation)          | Automated releases and changelogs                | Version tags               | ~3 min   |
-| [Lint Documentation](#lint-documentation)          | Markdown linting                                 | Markdown changes           | ~1 min   |
-| [Self-Service Deploy](#self-service-deploy)        | Manual VM deployment from GitHub                 | Manual only                | ~10 min  |
+| Workflow                                           | Purpose                                          | Trigger                              | Duration |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------ | -------- |
+| [Quick Checks](#quick-checks)                      | Fast validation and change detection (NEW)       | Push, PR to main/develop             | ~2-5 min |
+| [Single Extension Test](#single-extension-test)    | Test individual extension in isolation (NEW)     | Manual only                          | ~2-4 min |
+| [Extension Tests](#extension-system-tests)         | Test extension system (OPTIMIZED)                | Main push, PR, weekly Sunday 2am UTC | ~12 min  |
+| [Integration Tests](#integration-tests)            | End-to-end VM deployment (OPTIMIZED)             | Main push, PR, weekly Sunday 2am UTC | ~4 min   |
+| [Project Validation](#project-validation)          | Validate project structure and configuration     | Push, PR                             | ~2 min   |
+| [Build Docker Image](#build-and-push-docker-image) | Build and cache Docker images                    | Dockerfile changes, manual           | ~5 min   |
+| [Release Automation](#release-automation)          | Automated releases and changelogs                | Version tags                         | ~3 min   |
+| [Lint Documentation](#lint-documentation)          | Markdown linting                                 | Markdown changes                     | ~1 min   |
+| [Self-Service Deploy](#self-service-deploy)        | Manual VM deployment from GitHub                 | Manual only                          | ~10 min  |
 
 ## Core Testing Workflows
 
-### Extension System Tests
+### Quick Checks
 
-**File**: `.github/workflows/extension-tests.yml`
+**File**: `.github/workflows/quick-checks.yml`
 
-Tests the complete extension system including Extension API v1.0 and v2.0.
+Fast validation and intelligent change detection for faster feedback loops.
 
 **Triggers**:
 
 - Push to `main` or `develop` branches
 - Pull requests to `main` or `develop`
-- Changes to extension system files, workflows, or test scripts
+- Runs on all commits
+
+**What It Tests**:
+
+- **Change Detection**: Uses `dorny/paths-filter@v3` to detect file changes
+- **Docs-Only Skip**: Skips all tests if only documentation files changed
+- **Fast Validation**: Shellcheck, YAML syntax validation, extension manager checks
+- **Changed Extensions**: Identifies specific extensions that changed for targeted testing
+- **Smart Routing**: Provides recommendations for which workflows should run
+
+**Jobs**:
+
+1. **detect-changes**: Analyzes git diff to categorize changes
+2. **fast-validation**: Runs quick syntax checks (shellcheck, YAML)
+3. **test-changed-extensions**: Reports which extensions need testing
+
+**Performance**: ~2-5 minutes (or 0 minutes for docs-only changes)
+
+**View Results**: [Quick Checks Badge](https://github.com/pacphi/sindri/actions/workflows/quick-checks.yml)
+
+### Single Extension Test
+
+**File**: `.github/workflows/single-extension-test.yml`
+
+Focused testing for individual extensions with dropdown selection.
+
+**Triggers**:
+
+- Manual workflow dispatch only
+- Workflow call (reusable)
+
+**What It Tests**:
+
+- **Installation**: Tests extension installation process
+- **Validation**: Runs extension validation checks
+- **API Compliance**: Verifies all required Extension API functions exist
+- **Idempotency**: Tests that extensions can be safely reinstalled
+- **Dependencies**: Automatically installs required dependencies
+
+**Configuration Options**:
+
+- **extension_name**: Dropdown selection of 23 available extensions (excludes protected)
+- **region**: Fly.io region selection (18 regions available)
+- **test_app_prefix**: Custom test app prefix (default: single-ext-test)
+- **skip_cleanup**: Keep VM running for debugging
+
+**Available Extensions**:
+
+- Claude AI: claude, claude-marketplace, openskills
+- Languages: nodejs, nodejs-devtools, python, rust, golang, ruby, php, jvm, dotnet
+- Infrastructure: docker, infra-tools, cloud-tools
+- Tools: github-cli, ai-tools, playwright, monitoring, tmux-workspace, agent-manager, context-loader
+
+**Performance**: ~2-4 minutes per extension
+
+**Usage**:
+
+```bash
+# Via GitHub UI: Actions → Single Extension Test → Run workflow
+# Via CLI:
+gh workflow run single-extension-test.yml -f extension_name=nodejs -f region=sjc
+```
+
+**View Results**: [Single Extension Test Badge](https://github.com/pacphi/sindri/actions/workflows/single-extension-test.yml)
+
+### Extension System Tests
+
+**File**: `.github/workflows/extension-tests.yml`
+
+Comprehensive testing of the complete extension system including Extension API v1.0 and v2.0.
+
+**Triggers**:
+
+- Push to `main` branch (optimized - no longer triggers on `develop`)
+- Pull requests to `main` or `develop`
+- Weekly schedule: Sundays at 2:00 AM UTC
+- Changes to core extension system files only (not individual extensions)
 
 **What It Tests**:
 
@@ -101,10 +179,11 @@ End-to-end testing of VM deployment, developer workflows, and mise-powered stack
 
 **Triggers**:
 
-- Push to `main` or `develop` branches
+- Push to `main` branch (optimized - no longer triggers on `develop`)
 - Pull requests to `main` or `develop`
+- Weekly schedule: Sundays at 2:00 AM UTC
 - Manual workflow dispatch
-- Changes to deployment configuration, extension system, or integration scripts
+- Changes to core deployment configuration and system files only
 
 **What It Tests**:
 
@@ -289,7 +368,8 @@ Allows manual VM deployment directly from GitHub Actions interface.
 
 **Requirements**:
 
-- `FLYIO_AUTH_TOKEN` secret configured in repository settings
+- `FLYIO_AUTH_TOKEN` secret configured in repository settings (required)
+- `ANTHROPIC_API_KEY` secret configured for Claude authentication (optional, enables plugin installation)
 - Fly.io account with available resources
 
 **Performance**: ~10 minutes (full deployment)
@@ -340,6 +420,81 @@ Located in `.github/scripts/extension-tests/`, these provide reusable test utili
 **Documentation**: [Test Scripts README](.github/scripts/extension-tests/README.md)
 
 ## CI/CD Best Practices
+
+### Multi-Tier Testing Strategy
+
+Sindri implements a three-tier testing strategy for faster feedback loops and reduced CI time.
+
+**Before Optimization (Issues)**:
+
+- Every push to `main` or `develop` triggered full test suite
+- Average CI time: ~16 minutes per commit
+- All 20+ extensions tested on any file change
+- Docs-only changes ran full test suite
+
+**After Phase 1 & 2 Optimization (Implemented)**:
+
+**Tier 1: Quick Checks** (2-5 minutes, always runs)
+
+- Docs-only changes: **0 minutes** (skipped entirely)
+- Fast shellcheck and YAML validation
+- Change detection for intelligent routing
+
+**Tier 2: Selective Full Testing** (12-15 minutes, core changes only)
+
+- Triggers only on core system file changes
+- Weekly scheduled runs on Sundays at 2:00 AM UTC
+- Restricted to `main` branch pushes
+- Manual workflow dispatch available
+
+**Tier 3: Single Extension Testing** (2-4 minutes, focused testing)
+
+- Manual workflow dispatch with extension selection
+- Tests individual extensions in isolation
+- Validates installation, API compliance, idempotency
+
+**Performance Improvement**:
+
+- Docs-only commits: **100% reduction** (skipped)
+- Single extension changes: **60-75% reduction** (2-4 min vs 16 min)
+- Core system changes: Unchanged (12-15 min, as intended)
+- **Overall: 60-75% faster CI/CD for most commits**
+
+**Weekly Quality Gates**:
+
+Both comprehensive test suites run weekly on Sundays at 2:00 AM UTC to catch integration issues without blocking daily development:
+
+- `extension-tests.yml` - Full extension system validation
+- `integration.yml` - Complete integration testing
+
+### Required GitHub Secrets
+
+Configure these secrets in repository settings for full workflow functionality:
+
+**Required**:
+
+- `FLYIO_AUTH_TOKEN` - Fly.io API token for VM deployment and management
+  - Get from: `flyctl auth token`
+  - Required for: All deployment workflows
+
+**Optional**:
+
+- `ANTHROPIC_API_KEY` - Claude API key for authentication
+  - Get from: https://console.anthropic.com/
+  - Format: `sk-ant-...`
+  - Enables: Claude Code authentication, plugin installation via `claude-marketplace` extension
+  - Without it: Workflows run successfully but Claude extensions have limited functionality
+
+**Setting Secrets**:
+
+```bash
+# Via GitHub UI:
+# Settings → Secrets and variables → Actions → New repository secret
+
+# Or via GitHub CLI:
+gh secret set FLYIO_AUTH_TOKEN < flyctl auth token
+gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
+```
 
 ### Pre-Built Images
 

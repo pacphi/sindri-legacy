@@ -13,14 +13,29 @@ on:
         default: "sjc"
         type: choice
         options:
-          - sjc # San Jose, CA
-          - iad # Ashburn, VA
-          - lhr # London, UK
-          - ams # Amsterdam, NL
-          - fra # Frankfurt, DE
-          - syd # Sydney, AU
-          - nrt # Tokyo, JP
-          - gru # São Paulo, BR
+          # North America
+          - sjc  # San Jose, California (US)
+          - lax  # Los Angeles, California (US)
+          - dfw  # Dallas, Texas (US)
+          - ord  # Chicago, Illinois (US)
+          - iad  # Ashburn, Virginia (US)
+          - ewr  # Secaucus, New Jersey (US)
+          - yyz  # Toronto, Canada
+          # Europe
+          - lhr  # London, United Kingdom
+          - ams  # Amsterdam, Netherlands
+          - cdg  # Paris, France
+          - fra  # Frankfurt, Germany
+          - arn  # Stockholm, Sweden
+          # Asia Pacific
+          - nrt  # Tokyo, Japan
+          - sin  # Singapore
+          - syd  # Sydney, Australia
+          - bom  # Mumbai, India
+          # South America
+          - gru  # São Paulo, Brazil
+          # Africa
+          - jnb  # Johannesburg, South Africa
       vm_preset:
         description: "VM resource preset"
         required: false
@@ -65,6 +80,9 @@ on:
         required: false
         default: true
         type: boolean
+
+permissions:
+  contents: read
 
 jobs:
   # ============================================================================
@@ -219,6 +237,7 @@ jobs:
           deploy-timeout: "600"
           retry-attempts: "3"
           pre-built-image: ${{ needs.setup-config.outputs.pre_built_image }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Wait for deployment
         uses: ./.github/actions/wait-fly-deployment

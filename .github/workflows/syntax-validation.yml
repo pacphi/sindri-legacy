@@ -3,6 +3,9 @@ name: Extension Syntax Validation
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   extension-syntax-validation:
     name: Validate Extension Scripts

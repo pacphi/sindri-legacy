@@ -2,7 +2,7 @@ name: Extension System Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       # Deployment configuration
       - "fly.toml"
@@ -10,8 +10,7 @@ on:
       # CI scripts
       - "scripts/prepare-fly-config.sh"
       - "scripts/lib/fly-common.sh"
-      # Extension system
-      - "docker/lib/extensions.d/**"
+      # Extension system (core files only)
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
@@ -34,8 +33,7 @@ on:
       # CI scripts
       - "scripts/prepare-fly-config.sh"
       - "scripts/lib/fly-common.sh"
-      # Extension system
-      - "docker/lib/extensions.d/**"
+      # Extension system (core files only)
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
@@ -47,6 +45,9 @@ on:
       - ".github/actions/**"
       # Test scripts
       - ".github/scripts/extension-tests/**"
+
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2:00 AM UTC
 
   workflow_dispatch:
     inputs:
@@ -73,7 +74,34 @@ on:
         description: "Fly.io region"
         required: false
         default: "sjc"
-        type: string
+        type: choice
+        options:
+          # North America
+          - sjc  # San Jose, California (US)
+          - lax  # Los Angeles, California (US)
+          - dfw  # Dallas, Texas (US)
+          - ord  # Chicago, Illinois (US)
+          - iad  # Ashburn, Virginia (US)
+          - ewr  # Secaucus, New Jersey (US)
+          - yyz  # Toronto, Canada
+          # Europe
+          - lhr  # London, United Kingdom
+          - ams  # Amsterdam, Netherlands
+          - cdg  # Paris, France
+          - fra  # Frankfurt, Germany
+          - arn  # Stockholm, Sweden
+          # Asia Pacific
+          - nrt  # Tokyo, Japan
+          - sin  # Singapore
+          - syd  # Sydney, Australia
+          - bom  # Mumbai, India
+          # South America
+          - gru  # São Paulo, Brazil
+          # Africa
+          - jnb  # Johannesburg, South Africa
+
+permissions:
+  contents: read
 
 jobs:
   # ============================================================================
@@ -203,7 +231,7 @@ jobs:
 
   per-extension-tests:
     name: Per-Extension Tests
-    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
+    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation, extension-api-tests]
     uses: ./.github/workflows/per-extension.yml
     with:
       extension_name: ${{ needs.setup-config.outputs.extension_name }}
@@ -214,6 +242,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Extension API Tests
@@ -230,6 +259,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Protected Extensions Tests
@@ -246,6 +276,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Manifest Operations Tests
@@ -262,6 +293,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Dependency Chain Tests
@@ -278,6 +310,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Extension Combinations Tests
@@ -294,6 +327,7 @@ jobs:
       pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
   # Upgrade Tests

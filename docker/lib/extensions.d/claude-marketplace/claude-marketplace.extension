@@ -2,8 +2,9 @@
 # claude-marketplace.extension - Claude Code plugin marketplace integration
 # Extension API v2.0
 #
-# This extension configures Claude Code to use plugins from claudecodemarketplace.com
-# and installs curated plugins specified in a .plugins file.
+# This extension configures Claude Code marketplaces and plugins via YAML configuration.
+# Converts marketplaces.yml to JSON and merges into ~/.claude/settings.json.
+# Claude Code automatically installs marketplaces and plugins when next invoked.
 # Requires the claude extension to be installed first.
 
 # Source shared extension library
@@ -17,7 +18,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 EXT_NAME="claude-marketplace"
 EXT_VERSION="2.0.0"
 EXT_API_VERSION="2.0"
-EXT_DESCRIPTION="Claude Code plugin marketplace integration for claudecodemarketplace.com"
+EXT_DESCRIPTION="Claude Code plugin marketplace integration via YAML configuration and settings.json"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="native"
 EXT_UPGRADE_STRATEGY="manual"
@@ -29,18 +30,20 @@ extension_init
 # CONFIGURATION
 # ============================================================================
 
-MARKETPLACE_NAME="claudecodemarketplace"
-MARKETPLACE_URL="https://claudecodemarketplace.com/"
 CLAUDE_CONFIG_DIR="$HOME/.claude"
 CLAUDE_SETTINGS="$CLAUDE_CONFIG_DIR/settings.json"
-PLUGINS_FILE="/workspace/.plugins"
 
-# Select appropriate example file based on CI mode
+# Select appropriate YAML file based on CI mode
 if is_ci_mode; then
-  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.ci.example"
+  MARKETPLACES_YAML="marketplaces.ci.yml"
+  MARKETPLACES_EXAMPLE="$SCRIPT_DIR/marketplaces.ci.yml.example"
 else
-  PLUGINS_EXAMPLE="$SCRIPT_DIR/.plugins.example"
+  MARKETPLACES_YAML="marketplaces.yml"
+  MARKETPLACES_EXAMPLE="$SCRIPT_DIR/marketplaces.yml.example"
 fi
+
+# Working file location
+MARKETPLACES_FILE="/workspace/$MARKETPLACES_YAML"
 
 # ============================================================================
 # PREREQUISITES
@@ -67,12 +70,23 @@ prerequisites() {
 
   print_success "Claude config directory exists"
 
-  # Check for git (required for cloning plugin repositories)
-  if ! command_exists git; then
-    print_error "git is required but not installed"
-    print_status "git is needed to clone plugin repositories"
+  # Check for jq (required for JSON merging)
+  if ! command_exists jq; then
+    print_error "jq is required but not installed"
+    print_status "jq is needed to merge JSON into settings.json"
     return 1
   fi
+
+  print_success "jq is available"
+
+  # Check for yq (required for YAML parsing)
+  if ! command_exists yq; then
+    print_error "yq is required but not installed"
+    print_status "yq should be installed as part of the base image"
+    return 1
+  fi
+
+  print_success "yq is available"
 
   print_success "All prerequisites met"
   return 0
@@ -85,42 +99,68 @@ prerequisites() {
 install() {
   print_status "Installing ${EXT_NAME}..."
 
-  # Check if marketplace is already configured
-  if [[ -f "$CLAUDE_SETTINGS" ]] && grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-    print_warning "Marketplace already configured in settings.json"
-  else
-    print_status "Configuring marketplace in Claude settings..."
-    configure_marketplace
-  fi
-
-  # Copy .plugins.example to workspace if it doesn't exist
-  if [[ ! -f "/workspace/.plugins.example" ]]; then
-    print_status "Creating .plugins.example template..."
-    if cp "$PLUGINS_EXAMPLE" /workspace/.plugins.example; then
-      print_success "Created /workspace/.plugins.example"
+  # Copy YAML example template to workspace
+  local workspace_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+  if [[ ! -f "$workspace_example" ]]; then
+    print_status "Creating YAML example template..."
+    if cp "$MARKETPLACES_EXAMPLE" "$workspace_example"; then
+      print_success "Created $workspace_example"
     else
-      print_warning "Could not create .plugins.example template"
+      print_warning "Could not create YAML example template"
     fi
   fi
 
-  # In CI mode, automatically create .plugins file from CI template
-  if is_ci_mode && [[ ! -f "$PLUGINS_FILE" ]]; then
-    print_status "CI mode: Creating .plugins from CI template..."
-    if cp "$SCRIPT_DIR/.plugins.ci.example" "$PLUGINS_FILE"; then
-      print_success "Created $PLUGINS_FILE from CI template (3 test plugins)"
+  # In CI mode or if YAML file doesn't exist, copy from example
+  if [[ ! -f "$MARKETPLACES_FILE" ]]; then
+    if is_ci_mode; then
+      print_status "CI mode: Creating $MARKETPLACES_YAML from CI template..."
     else
-      print_warning "Could not create CI plugins file"
+      print_status "Creating $MARKETPLACES_YAML from template..."
+    fi
+
+    if cp "$MARKETPLACES_EXAMPLE" "$MARKETPLACES_FILE"; then
+      print_success "Created $MARKETPLACES_FILE"
+    else
+      print_error "Could not create $MARKETPLACES_FILE"
+      return 1
     fi
   fi
 
-  # Install plugins from .plugins file if it exists
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    print_status "Found .plugins file, installing specified plugins..."
-    install_plugins_from_file
+  # Process YAML configuration if it exists
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    print_status "Processing marketplace configuration from $MARKETPLACES_YAML..."
+
+    # Change to extension directory (for relative paths to default-settings.json)
+    cd "$SCRIPT_DIR" || return 1
+
+    # Convert YAML to JSON
+    local marketplace_json="/tmp/marketplaces-$$.json"
+    if ! convert_yaml_to_json "$MARKETPLACES_FILE" "$marketplace_json"; then
+      rm -f "$marketplace_json"
+      return 1
+    fi
+
+    # Merge into settings.json
+    if ! merge_settings_json "$marketplace_json"; then
+      rm -f "$marketplace_json"
+      return 1
+    fi
+
+    # Cleanup temporary file
+    rm -f "$marketplace_json"
+
+    print_success "Marketplace configuration installed to settings.json"
+    echo ""
+    print_status "Next steps:"
+    echo "  1. Invoke 'claude' to trigger automatic marketplace and plugin installation"
+    echo "  2. Claude Code will register marketplaces from extraKnownMarketplaces"
+    echo "  3. Claude Code will install plugins from enabledPlugins (enabled=true)"
+    echo ""
+    echo "To verify configuration: cat $CLAUDE_SETTINGS"
   else
-    print_status "No .plugins file found (optional)"
-    print_status "Create $PLUGINS_FILE to auto-install plugins"
-    print_status "See /workspace/.plugins.example for template"
+    print_status "No $MARKETPLACES_YAML file found (optional)"
+    print_status "Create $MARKETPLACES_FILE to configure marketplaces"
+    print_status "See $workspace_example for template"
   fi
 
   print_success "${EXT_NAME} installation complete"
@@ -131,103 +171,141 @@ install() {
 # HELPER FUNCTIONS
 # ============================================================================
 
-# Check if Claude is authenticated
-# Returns: 0 if authenticated, 1 if not
-is_claude_authenticated() {
-  # Method 1: Check if ANTHROPIC_API_KEY is set
-  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+# Convert YAML configuration to JSON
+# Args: $1 - path to YAML file
+# Args: $2 - path to output JSON file
+# Returns: 0 on success, 1 on failure
+convert_yaml_to_json() {
+  local yaml_file="$1"
+  local json_file="$2"
+
+  if [[ ! -f "$yaml_file" ]]; then
+    print_error "YAML file not found: $yaml_file"
+    return 1
+  fi
+
+  print_status "Converting YAML to JSON..."
+
+  if ! yq eval -o=json "$yaml_file" > "$json_file" 2>/dev/null; then
+    print_error "Failed to convert YAML to JSON"
+    print_error "Check YAML syntax in: $yaml_file"
+    return 1
+  fi
+
+  # Validate JSON output
+  if ! jq empty "$json_file" 2>/dev/null; then
+    print_error "Generated invalid JSON from YAML"
+    return 1
+  fi
+
+  print_success "YAML converted to JSON: $json_file"
+  return 0
+}
+
+# Backup settings.json with timestamp
+# Returns: 0 on success, 1 on failure
+backup_settings_json() {
+  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+    # No existing settings to backup
     return 0
   fi
 
-  # Method 2: Try to list marketplaces (requires auth)
-  if command_exists claude; then
-    if timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
-      return 0
-    fi
+  local backup_dir="${CLAUDE_CONFIG_DIR}/backups"
+  mkdir -p "$backup_dir"
+
+  local timestamp
+  timestamp=$(date +%Y%m%d-%H%M%S)
+  local backup_file="${backup_dir}/settings-${timestamp}.json"
+
+  print_status "Backing up settings.json..."
+
+  if ! cp "$CLAUDE_SETTINGS" "$backup_file"; then
+    print_warning "Could not create backup"
+    return 1
   fi
 
-  return 1
-}
+  print_success "Backup created: $backup_file"
 
-configure_marketplace() {
-  # Ensure settings.json exists with valid JSON
-  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
-    echo "{}" > "$CLAUDE_SETTINGS"
+  # Keep only last 5 backups
+  local backup_count
+  backup_count=$(find "$backup_dir" -name "settings-*.json" -type f | wc -l)
+  if [[ $backup_count -gt 5 ]]; then
+    print_status "Cleaning old backups (keeping last 5)..."
+    find "$backup_dir" -name "settings-*.json" -type f -printf '%T+ %p\n' | \
+      sort | \
+      head -n -5 | \
+      cut -d' ' -f2- | \
+      xargs rm -f
   fi
 
-  # Add marketplace to settings.json
-  # Note: This is a simplified approach. In production, we'd use jq for proper JSON manipulation
-  print_status "Adding marketplace to Claude settings..."
-
-  # Create temporary settings with marketplace
-  cat > "${CLAUDE_SETTINGS}.tmp" << EOF
-{
-  "extraKnownMarketplaces": {
-    "${MARKETPLACE_NAME}": {
-      "source": {
-        "url": "${MARKETPLACE_URL}marketplace.json"
-      }
-    }
-  }
+  return 0
 }
-EOF
 
-  # Merge with existing settings if they exist and are valid JSON
-  if command_exists jq && jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
-    jq -s '.[0] * .[1]' "$CLAUDE_SETTINGS" "${CLAUDE_SETTINGS}.tmp" > "${CLAUDE_SETTINGS}.new"
-    mv "${CLAUDE_SETTINGS}.new" "$CLAUDE_SETTINGS"
-    rm "${CLAUDE_SETTINGS}.tmp"
+# Merge marketplace JSON into settings.json
+# Args: $1 - path to marketplace JSON file
+# Returns: 0 on success, 1 on failure
+merge_settings_json() {
+  local marketplace_json="$1"
+
+  if [[ ! -f "$marketplace_json" ]]; then
+    print_error "Marketplace JSON not found: $marketplace_json"
+    return 1
+  fi
+
+  print_status "Merging marketplace configuration into settings.json..."
+
+  # Create Claude config directory if it doesn't exist
+  mkdir -p "$CLAUDE_CONFIG_DIR"
+
+  # Determine base settings file
+  local base_settings
+  if [[ -f "$CLAUDE_SETTINGS" ]]; then
+    base_settings="$CLAUDE_SETTINGS"
+    print_status "Using existing settings.json as base"
   else
-    # Fallback: just use the new settings if jq not available or invalid JSON
-    mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
+    base_settings="$SCRIPT_DIR/default-settings.json"
+    print_status "Using default-settings.json as base (no existing settings.json)"
   fi
 
-  print_success "Marketplace configured"
-}
-
-install_plugins_from_file() {
-  local plugin_count=0
-  local installed_count=0
-  local failed_count=0
-
-  while IFS= read -r line; do
-    # Skip comments and empty lines
-    [[ "$line" =~ ^#.*$ ]] && continue
-    [[ -z "$line" ]] && continue
-
-    plugin_count=$((plugin_count + 1))
-    print_status "Installing plugin: $line"
-
-    # Check if already installed
-    if claude /plugin list 2>/dev/null | grep -q "$line"; then
-      print_success "Plugin already installed: $line"
-      installed_count=$((installed_count + 1))
-      continue
-    fi
-
-    # Install plugin (using marketplace add for GitHub repos)
-    if claude /plugin marketplace add "$line" 2>&1; then
-      print_success "Installed: $line"
-      installed_count=$((installed_count + 1))
-    else
-      print_warning "Failed to install: $line"
-      failed_count=$((failed_count + 1))
-    fi
-  done < "$PLUGINS_FILE"
-
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  print_status "Plugin installation summary:"
-  echo "  Total plugins: $plugin_count"
-  echo "  Installed: $installed_count"
-  echo "  Failed: $failed_count"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-  if [ "$failed_count" -gt 0 ]; then
-    print_warning "Some plugins failed to install"
-  else
-    print_success "All plugins installed successfully"
+  # Verify base settings exists
+  if [[ ! -f "$base_settings" ]]; then
+    print_error "Base settings file not found: $base_settings"
+    return 1
   fi
+
+  # Create temporary merged file
+  local merged_file="/tmp/claude-settings-merged-$$.json"
+
+  # Merge: base_settings * marketplace_json (marketplace_json overwrites on conflict)
+  if ! jq -s '.[0] * .[1]' "$base_settings" "$marketplace_json" > "$merged_file" 2>/dev/null; then
+    print_error "Failed to merge JSON files"
+    rm -f "$merged_file"
+    return 1
+  fi
+
+  # Validate merged JSON
+  if ! jq empty "$merged_file" 2>/dev/null; then
+    print_error "Generated invalid JSON during merge"
+    rm -f "$merged_file"
+    return 1
+  fi
+
+  # Backup existing settings (if exists)
+  backup_settings_json
+
+  # Install merged settings
+  if ! cp -f "$merged_file" "$CLAUDE_SETTINGS"; then
+    print_error "Failed to write settings.json"
+    rm -f "$merged_file"
+    return 1
+  fi
+
+  # Set proper permissions
+  chmod 644 "$CLAUDE_SETTINGS"
+
+  rm -f "$merged_file"
+  print_success "Settings merged into: $CLAUDE_SETTINGS"
+  return 0
 }
 
 # ============================================================================
@@ -237,53 +315,46 @@ install_plugins_from_file() {
 configure() {
   print_status "Configuring ${EXT_NAME}..."
 
-  # In CI mode, ensure .plugins file exists and install plugins
-  # This handles the case where extension was pre-installed
-  if is_ci_mode; then
-    if [[ ! -f "$PLUGINS_FILE" ]]; then
-      print_status "CI mode: Creating .plugins from CI template..."
-      if cp "$SCRIPT_DIR/.plugins.ci.example" "$PLUGINS_FILE"; then
-        print_success "Created $PLUGINS_FILE from CI template (3 test plugins)"
-      else
-        print_warning "Could not create CI plugins file"
-      fi
-    fi
+  # Verify settings.json was created successfully
+  if [[ -f "$CLAUDE_SETTINGS" ]]; then
+    print_success "Claude settings.json exists: $CLAUDE_SETTINGS"
 
-    # Check if Claude is authenticated before attempting plugin installation
-    if [[ -f "$PLUGINS_FILE" ]]; then
-      if is_claude_authenticated; then
-        print_status "CI mode: Claude authenticated, installing plugins from .plugins file..."
-        install_plugins_from_file
-      else
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        print_warning "Claude is not authenticated - skipping plugin installation"
-        echo ""
-        echo "Plugin installation requires Claude Code authentication."
-        echo "To enable plugin installation in CI:"
-        echo "  1. Set ANTHROPIC_API_KEY as a repository secret"
-        echo "  2. Pass it to the workflow:"
-        echo "     env:"
-        echo "       ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}"
-        echo ""
-        echo "The marketplace will still be configured, but plugins"
-        echo "will need to be installed manually or in an authenticated context."
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-      fi
+    # Display configured marketplaces
+    if command_exists jq; then
+      local marketplace_count
+      marketplace_count=$(jq -r '.extraKnownMarketplaces // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+      local plugin_count
+      plugin_count=$(jq -r '.enabledPlugins // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+
+      echo ""
+      print_status "Marketplace configuration summary:"
+      echo "  Configured marketplaces: $marketplace_count"
+      echo "  Enabled plugins: $plugin_count"
+      echo ""
     fi
+  else
+    print_warning "Claude settings.json not found (expected at: $CLAUDE_SETTINGS)"
+    print_status "Run 'extension-manager install claude-marketplace' to create it"
   fi
 
-  # Verify marketplace is accessible
-  print_status "Verifying marketplace configuration..."
-  if command_exists claude; then
-    # List marketplaces to verify configuration
-    if claude /plugin marketplace list >/dev/null 2>&1; then
-      print_success "Claude plugin system is operational"
-    else
-      print_warning "Could not verify plugin system (may be normal)"
-    fi
-  fi
+  # Provide next steps guidance
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_status "Marketplace installation workflow:"
+  echo ""
+  echo "  1. Configuration written to: $CLAUDE_SETTINGS"
+  echo "  2. Marketplaces and plugins will be installed automatically"
+  echo "     when you next invoke Claude Code"
+  echo ""
+  echo "  To customize marketplaces/plugins:"
+  echo "    • Edit: $MARKETPLACES_FILE"
+  echo "    • Reinstall: extension-manager install claude-marketplace"
+  echo ""
+  echo "  To verify configuration:"
+  echo "    • View settings: cat $CLAUDE_SETTINGS"
+  echo "    • Check status: extension-manager status claude-marketplace"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
 
   # Create SSH wrapper for claude command if not already created by claude extension
   if command_exists create_tool_wrapper 2>/dev/null; then
@@ -296,7 +367,6 @@ configure() {
   fi
 
   print_success "${EXT_NAME} configuration complete"
-  print_status "Plugins can be managed with: claude /plugin"
   return 0
 }
 
@@ -317,87 +387,114 @@ validate() {
     print_success "claude command available"
   fi
 
-  # Check settings file exists
-  if [[ -f "$CLAUDE_SETTINGS" ]]; then
-    print_success "Claude settings file exists"
-
-    # Check for marketplace configuration
-    if grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-      print_success "Marketplace configured in settings"
-    else
-      print_warning "Marketplace not found in settings"
-      all_valid=false
-    fi
-  else
-    print_error "Claude settings file not found"
+  # Check yq command exists
+  if ! command_exists yq; then
+    print_error "yq command not found (required for YAML parsing)"
     all_valid=false
-  fi
-
-  # Check .plugins.example exists
-  if [[ -f "/workspace/.plugins.example" ]]; then
-    print_success "Plugin template exists: /workspace/.plugins.example"
   else
-    print_warning "Plugin template not found"
+    print_success "yq command available"
   fi
 
-  # Test plugin system access
-  if command_exists claude; then
-    if timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
-      print_success "Plugin marketplace accessible"
-    else
-      print_warning "Could not access plugin marketplace (may need authentication)"
-    fi
-  fi
-
-  # Check for git (runtime dependency)
-  if ! command_exists git; then
-    print_error "git not found (required for plugin installation)"
+  # Check jq command exists
+  if ! command_exists jq; then
+    print_error "jq command not found (required for JSON merging)"
     all_valid=false
+  else
+    print_success "jq command available"
   fi
 
-  # Verify plugins were installed in CI mode
-  if is_ci_mode; then
-    print_status "CI mode: Verifying plugin installation..."
+  # Check settings.json exists
+  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+    print_error "Claude settings.json not found: $CLAUDE_SETTINGS"
+    all_valid=false
+  else
+    print_success "Claude settings.json exists: $CLAUDE_SETTINGS"
 
-    # Check .plugins file exists
-    if [[ ! -f "$PLUGINS_FILE" ]]; then
-      print_error ".plugins file not found (expected in CI mode)"
+    # Validate JSON syntax
+    if ! jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
+      print_error "settings.json has invalid JSON syntax"
       all_valid=false
     else
-      print_success ".plugins file exists"
+      print_success "settings.json has valid JSON syntax"
+    fi
 
-      # Count expected plugins
-      expected_count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
-      print_status "Expected plugins: $expected_count"
+    # Validate extraKnownMarketplaces structure
+    if jq -e '.extraKnownMarketplaces' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+      local marketplace_type
+      marketplace_type=$(jq -r '.extraKnownMarketplaces | type' "$CLAUDE_SETTINGS" 2>/dev/null)
 
-      # Check if Claude is authenticated
-      if ! is_claude_authenticated; then
-        print_warning "Claude not authenticated - plugin installation was skipped"
-        print_status "Set ANTHROPIC_API_KEY to enable plugin installation testing"
-        # Don't fail validation if not authenticated - this is expected behavior
+      if [[ "$marketplace_type" == "object" ]]; then
+        local marketplace_count
+        marketplace_count=$(jq -r '.extraKnownMarketplaces | length' "$CLAUDE_SETTINGS" 2>/dev/null)
+        print_success "extraKnownMarketplaces is valid object ($marketplace_count marketplaces)"
       else
-        # List installed plugins only if authenticated
-        if command_exists claude; then
-          print_status "Installed plugins:"
-          if timeout 10s claude /plugin list 2>&1 | tee /tmp/plugins.txt; then
-            # Count installed plugins (look for owner/repo pattern)
-            installed_count=$(grep -c '/' /tmp/plugins.txt || echo "0")
-            echo "  Installed count: $installed_count"
-
-            if [ "$installed_count" -ge "$expected_count" ]; then
-              print_success "All expected plugins installed ($installed_count/$expected_count)"
-            else
-              print_error "Expected $expected_count plugins, found $installed_count"
-              cat /tmp/plugins.txt || true
-              all_valid=false
-            fi
-          else
-            print_error "Could not list plugins"
-            all_valid=false
-          fi
-        fi
+        print_error "extraKnownMarketplaces is not an object (found: $marketplace_type)"
+        all_valid=false
       fi
+    else
+      print_warning "extraKnownMarketplaces not found in settings.json"
     fi
+
+    # Validate enabledPlugins structure
+    if jq -e '.enabledPlugins' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+      local plugins_type
+      plugins_type=$(jq -r '.enabledPlugins | type' "$CLAUDE_SETTINGS" 2>/dev/null)
+
+      if [[ "$plugins_type" == "object" ]]; then
+        local plugin_count
+        plugin_count=$(jq -r '.enabledPlugins | length' "$CLAUDE_SETTINGS" 2>/dev/null)
+        print_success "enabledPlugins is valid object ($plugin_count plugins)"
+
+        # Validate plugin references match known marketplaces
+        local marketplace_names
+        marketplace_names=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "$CLAUDE_SETTINGS" 2>/dev/null || echo "")
+
+        local invalid_plugins=0
+        while IFS= read -r plugin; do
+          if [[ "$plugin" =~ @ ]]; then
+            local marketplace="${plugin##*@}"
+            if ! echo "$marketplace_names" | grep -q "^${marketplace}$"; then
+              print_warning "Plugin '$plugin' references unknown marketplace: $marketplace"
+              invalid_plugins=$((invalid_plugins + 1))
+            fi
+          fi
+        done < <(jq -r '.enabledPlugins | to_entries[] | select(.value == true) | .key' "$CLAUDE_SETTINGS" 2>/dev/null)
+
+        if [[ $invalid_plugins -gt 0 ]]; then
+          print_warning "$invalid_plugins plugin(s) reference unknown marketplaces"
+        else
+          print_success "All plugin references are valid"
+        fi
+      else
+        print_error "enabledPlugins is not an object (found: $plugins_type)"
+        all_valid=false
+      fi
+    else
+      print_warning "enabledPlugins not found in settings.json"
+    fi
+  fi
+
+  # Check YAML template exists
+  local yaml_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+  if [[ -f "$yaml_example" ]]; then
+    print_success "YAML template exists: $yaml_example"
+  else
+    print_warning "YAML template not found: $yaml_example"
+  fi
+
+  # Check YAML configuration file exists
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    print_success "YAML configuration exists: $MARKETPLACES_FILE"
+
+    # Validate YAML syntax
+    if yq eval '.' "$MARKETPLACES_FILE" >/dev/null 2>&1; then
+      print_success "YAML configuration has valid syntax"
+    else
+      print_error "YAML configuration has invalid syntax"
+      all_valid=false
+    fi
+  else
+    print_warning "YAML configuration not found: $MARKETPLACES_FILE"
   fi
 
   if [[ "$all_valid" == "true" ]]; then
@@ -416,64 +513,134 @@ validate() {
 status() {
   print_extension_header
 
-  # Check installation status
+  # Check dependency
   if ! command_exists claude; then
     echo "Status: ✗ NOT INSTALLED (claude dependency missing)"
     return 1
   fi
 
-  # Verify marketplace is configured in settings.json
-  if [[ ! -f "$CLAUDE_SETTINGS" ]] || ! grep -q "$MARKETPLACE_NAME" "$CLAUDE_SETTINGS" 2>/dev/null; then
-    echo "Status: ✗ NOT CONFIGURED (marketplace not in settings)"
+  # Check if settings.json exists
+  if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+    echo "Status: ✗ NOT INSTALLED (settings.json not found)"
+    echo ""
+    echo "Run: extension-manager install claude-marketplace"
+    return 1
+  fi
+
+  # Validate settings.json is valid JSON
+  if ! jq empty "$CLAUDE_SETTINGS" 2>/dev/null; then
+    echo "Status: ✗ ERROR (settings.json has invalid JSON)"
+    return 1
+  fi
+
+  # Check if marketplace configuration exists in settings.json
+  # Either extraKnownMarketplaces or enabledPlugins must be present
+  local has_marketplaces=false
+  local has_plugins=false
+
+  if jq -e '.extraKnownMarketplaces' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+    has_marketplaces=true
+  fi
+
+  if jq -e '.enabledPlugins' "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+    has_plugins=true
+  fi
+
+  if [[ "$has_marketplaces" == "false" ]] && [[ "$has_plugins" == "false" ]]; then
+    echo "Status: ✗ NOT INSTALLED (marketplace configuration not found)"
+    echo ""
+    echo "Run: extension-manager install claude-marketplace"
     return 1
   fi
 
   echo "Status: ✓ INSTALLED"
   echo ""
 
-  # Show marketplace configuration
-  print_status "Marketplace configuration:"
-  echo "  Name: $MARKETPLACE_NAME"
-  echo "  URL: $MARKETPLACE_URL"
+  # Show settings file location
+  print_status "Settings File:"
+  echo "  $CLAUDE_SETTINGS"
+  if [[ -f "$CLAUDE_SETTINGS" ]]; then
+    echo "  (exists ✓)"
+  fi
   echo ""
 
-  # Show registered marketplaces
-  if command_exists claude; then
-    print_status "Registered marketplaces:"
-    if timeout 5s claude /plugin marketplace list 2>/dev/null; then
-      echo ""
+  # Show configured marketplaces
+  print_status "Configured Marketplaces:"
+  if command_exists jq; then
+    local marketplace_count
+    marketplace_count=$(jq -r '.extraKnownMarketplaces // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+
+    if [[ "$marketplace_count" -eq 0 ]]; then
+      echo "  (none configured)"
     else
-      echo "  (unable to retrieve - may need authentication)"
+      echo "  Total: $marketplace_count"
       echo ""
+
+      # List each marketplace with its source
+      jq -r '.extraKnownMarketplaces // {} | to_entries[] | "  • \(.key)\n    Source: \(.value.source.source)\n    Repo: \(.value.source.repo // .value.source.url // .value.source.path)"' "$CLAUDE_SETTINGS" 2>/dev/null
     fi
-  fi
-
-  # Show .plugins file status
-  print_status "Plugin configuration:"
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    echo "  .plugins file: ✓ exists"
-    local count
-    count=$(grep -v '^#' "$PLUGINS_FILE" | grep -v '^$' | wc -l | tr -d ' ')
-    echo "  Plugins specified: $count"
   else
-    echo "  .plugins file: ✗ not found"
-    echo "  Template: /workspace/.plugins.example"
+    echo "  (jq not available - cannot parse)"
   fi
   echo ""
 
-  # Show available commands
-  print_status "Available commands:"
-  echo "  • claude /plugin                      - Browse and install plugins"
-  echo "  • claude /plugin marketplace list     - List marketplaces"
-  echo "  • claude /plugin marketplace add      - Add marketplace"
-  echo "  • claude /plugin list                 - List installed plugins"
-  echo "  • claude /plugin install <name>       - Install plugin"
+  # Show enabled plugins
+  print_status "Enabled Plugins:"
+  if command_exists jq; then
+    local plugin_count
+    plugin_count=$(jq -r '.enabledPlugins // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+
+    if [[ "$plugin_count" -eq 0 ]]; then
+      echo "  (none enabled)"
+    else
+      echo "  Total: $plugin_count"
+      echo ""
+
+      # Group plugins by marketplace
+      local marketplaces
+      marketplaces=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "$CLAUDE_SETTINGS" 2>/dev/null)
+
+      for marketplace in $marketplaces; do
+        local marketplace_plugins
+        marketplace_plugins=$(jq -r --arg mp "$marketplace" '.enabledPlugins // {} | to_entries[] | select(.value == true and (.key | endswith("@" + $mp))) | .key' "$CLAUDE_SETTINGS" 2>/dev/null)
+
+        if [[ -n "$marketplace_plugins" ]]; then
+          echo "  From $marketplace:"
+          echo "$marketplace_plugins" | while IFS= read -r plugin; do
+            local plugin_name="${plugin%%@*}"
+            echo "    - $plugin_name"
+          done
+        fi
+      done
+    fi
+  else
+    echo "  (jq not available - cannot parse)"
+  fi
   echo ""
 
-  # Show config file location
-  print_status "Configuration:"
-  echo "  Settings: $CLAUDE_SETTINGS"
-  echo "  Plugins file: $PLUGINS_FILE"
+  # Show YAML configuration file status
+  print_status "YAML Configuration:"
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    echo "  File: $MARKETPLACES_FILE"
+    echo "  Status: ✓ exists"
+  else
+    echo "  File: $MARKETPLACES_FILE"
+    echo "  Status: ✗ not found"
+    echo ""
+    echo "  To create: cp $(basename "$MARKETPLACES_EXAMPLE") $MARKETPLACES_FILE"
+  fi
+  echo ""
+
+  # Show management commands
+  print_status "Management:"
+  echo "  • Edit YAML: vim $MARKETPLACES_FILE"
+  echo "  • Reinstall: extension-manager install claude-marketplace"
+  echo "  • View settings: cat $CLAUDE_SETTINGS"
+  echo "  • Backup settings: cp $CLAUDE_SETTINGS $CLAUDE_SETTINGS.backup"
+  echo ""
+
+  print_status "Note:"
+  echo "  Marketplaces and plugins are installed automatically when Claude Code is invoked."
 
   return 0
 }
@@ -485,24 +652,32 @@ status() {
 upgrade() {
   print_status "Upgrading ${EXT_NAME}..."
 
-  # Update marketplace configuration
-  print_status "Updating marketplace configuration..."
-  configure_marketplace
+  # Re-process YAML configuration and update settings.json
+  if [[ -f "$MARKETPLACES_FILE" ]]; then
+    print_status "Re-processing $MARKETPLACES_YAML configuration..."
 
-  # Re-sync plugins from .plugins file
-  if [[ -f "$PLUGINS_FILE" ]]; then
-    print_status "Re-syncing plugins from .plugins file..."
-    install_plugins_from_file
-  fi
+    # Change to extension directory (for relative paths to default-settings.json)
+    cd "$SCRIPT_DIR" || return 1
 
-  # Update marketplace metadata
-  if command_exists claude; then
-    print_status "Updating marketplace metadata..."
-    if timeout 10s claude /plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
-      print_success "Marketplace metadata updated"
-    else
-      print_warning "Could not update marketplace metadata (may be normal)"
+    # Convert YAML to JSON
+    local marketplace_json="/tmp/marketplaces-upgrade-$$.json"
+    if ! convert_yaml_to_json "$MARKETPLACES_FILE" "$marketplace_json"; then
+      rm -f "$marketplace_json"
+      return 1
     fi
+
+    # Merge into settings.json
+    if ! merge_settings_json "$marketplace_json"; then
+      rm -f "$marketplace_json"
+      return 1
+    fi
+
+    # Cleanup temporary file
+    rm -f "$marketplace_json"
+
+    print_success "Marketplace configuration upgraded in settings.json"
+  else
+    print_status "No $MARKETPLACES_YAML file found - nothing to upgrade"
   fi
 
   print_success "${EXT_NAME} upgraded successfully"
@@ -516,39 +691,71 @@ upgrade() {
 remove() {
   print_warning "Uninstalling ${EXT_NAME}..."
 
-  # Remove marketplace from settings.json
-  if [[ -f "$CLAUDE_SETTINGS" ]] && command_exists jq; then
-    print_status "Removing marketplace from Claude settings..."
-    if jq "del(.extraKnownMarketplaces.\"$MARKETPLACE_NAME\")" "$CLAUDE_SETTINGS" > "${CLAUDE_SETTINGS}.tmp"; then
-      mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
-      print_success "Marketplace removed from settings"
+  # Remove marketplace configuration from settings.json
+  if [[ -f "$CLAUDE_SETTINGS" ]]; then
+    echo ""
+    if prompt_confirmation "Remove marketplace configuration from settings.json?"; then
+      print_status "Removing marketplace configuration..."
+
+      # Backup settings.json before modification
+      backup_settings_json
+
+      # Create temporary file with marketplace config removed
+      local cleaned_settings="/tmp/claude-settings-cleaned-$$.json"
+
+      # Remove extraKnownMarketplaces and marketplace-related enabledPlugins
+      if jq 'del(.extraKnownMarketplaces) | .enabledPlugins = (.enabledPlugins // {} | with_entries(select(.key | contains("@") | not)))' "$CLAUDE_SETTINGS" > "$cleaned_settings" 2>/dev/null; then
+        if jq empty "$cleaned_settings" 2>/dev/null; then
+          cp -f "$cleaned_settings" "$CLAUDE_SETTINGS"
+          chmod 644 "$CLAUDE_SETTINGS"
+          print_success "Marketplace configuration removed from settings.json"
+        else
+          print_error "Generated invalid JSON during cleanup"
+          rm -f "$cleaned_settings"
+          print_status "Settings.json backup preserved at: ${CLAUDE_CONFIG_DIR}/backups/"
+        fi
+      else
+        print_error "Failed to remove marketplace configuration"
+        rm -f "$cleaned_settings"
+      fi
+
+      rm -f "$cleaned_settings"
     else
-      print_warning "Could not remove marketplace from settings"
-      rm -f "${CLAUDE_SETTINGS}.tmp"
+      print_status "Skipping settings.json cleanup"
     fi
-  fi
-
-  # Optionally remove plugins
-  echo ""
-  if prompt_confirmation "Remove installed plugins from this marketplace?"; then
-    if command_exists claude; then
-      # This would require listing and removing each plugin individually
-      # For now, inform the user
-      print_status "To remove individual plugins, use:"
-      print_status "  claude /plugin uninstall <plugin-name>"
-    fi
-  fi
-
-  # Optionally remove .plugins files
-  echo ""
-  if prompt_confirmation "Remove .plugins and .plugins.example files?"; then
-    rm -f "$PLUGINS_FILE" /workspace/.plugins.example
-    print_success "Plugin configuration files removed"
   else
-    print_status "Plugin configuration files preserved"
+    print_status "No settings.json found - nothing to clean"
+  fi
+
+  # Optionally remove YAML configuration files
+  echo ""
+  if prompt_confirmation "Remove YAML configuration files?"; then
+    local files_removed=0
+
+    if [[ -f "$MARKETPLACES_FILE" ]]; then
+      rm -f "$MARKETPLACES_FILE"
+      print_success "Removed: $MARKETPLACES_FILE"
+      files_removed=$((files_removed + 1))
+    fi
+
+    local yaml_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+    if [[ -f "$yaml_example" ]]; then
+      rm -f "$yaml_example"
+      print_success "Removed: $yaml_example"
+      files_removed=$((files_removed + 1))
+    fi
+
+    if [[ $files_removed -gt 0 ]]; then
+      print_success "YAML configuration files removed"
+    else
+      print_status "No YAML configuration files found"
+    fi
+  else
+    print_status "YAML configuration files preserved"
   fi
 
   print_success "${EXT_NAME} uninstalled"
+  print_status "Settings.json backups preserved at: ${CLAUDE_CONFIG_DIR}/backups/"
   return 0
 }
 

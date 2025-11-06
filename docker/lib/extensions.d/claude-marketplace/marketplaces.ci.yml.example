@@ -1,0 +1,50 @@
+# Claude Code Plugin Marketplace - Curated Marketplaces
+#
+# This file specifies marketplaces to add and plugins to install from each
+# Lines starting with # are comments and will be ignored.
+#
+# To use this file:
+# 1. Copy to /workspace/marketplaces.ci.yml: cp /workspace/marketplaces.ci.yml.example /workspace/marketplaces.ci.yml
+# 2. Run: extension-manager install claude-marketplace
+#
+# See:
+# - https://docs.claude.com/en/docs/claude-code/plugin-marketplaces#configure-team-marketplaces
+# - https://docs.claude.com/en/docs/claude-code/settings#extraknownmarketplaces
+# - https://docs.claude.com/en/docs/claude-code/settings#enabledplugins
+
+
+extraKnownMarketplaces:
+  # ============================================================================
+  # TEST MARKETPLACES
+  # ============================================================================
+
+  # Beads - Natural language programming with Claude
+  # https://github.com/steveyegge/beads
+  beads-marketplace:
+    source:
+      source: github
+      repo: steveyegge/beads
+
+  # Blueprint Toolkit - Project scaffolding and architecture templates
+  # https://github.com/croffasia/cc-blueprint-toolkit
+  cc-blueprint-toolkit:
+    source:
+      source: github
+      repo: croffasia/cc-blueprint-toolkit
+
+  # Equity Research - Financial analysis and equity research tools
+  # https://github.com/quant-sentiment-ai/claude-equity-research
+  claude-equity-research-marketplace:
+    source:
+      source: github
+      repo: quant-sentiment-ai/claude-equity-research
+
+enabledPlugins:
+  # ============================================================================
+  # ENABLED PLUGINS
+  # of the form {plugin-name}/{marketplace-name}: true/false
+  # ============================================================================
+
+  beads@beads-marketplace: true
+  bp@cc-blueprint-toolkit: true
+  trading-ideas@claude-equity-research-marketplace: true
