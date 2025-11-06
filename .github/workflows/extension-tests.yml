@@ -73,7 +73,31 @@ on:
         description: "Fly.io region"
         required: false
         default: "sjc"
-        type: string
+        type: choice
+        options:
+          # North America
+          - sjc  # San Jose, California (US)
+          - lax  # Los Angeles, California (US)
+          - dfw  # Dallas, Texas (US)
+          - ord  # Chicago, Illinois (US)
+          - iad  # Ashburn, Virginia (US)
+          - ewr  # Secaucus, New Jersey (US)
+          - yyz  # Toronto, Canada
+          # Europe
+          - lhr  # London, United Kingdom
+          - ams  # Amsterdam, Netherlands
+          - cdg  # Paris, France
+          - fra  # Frankfurt, Germany
+          - arn  # Stockholm, Sweden
+          # Asia Pacific
+          - nrt  # Tokyo, Japan
+          - sin  # Singapore
+          - syd  # Sydney, Australia
+          - bom  # Mumbai, India
+          # South America
+          - gru  # São Paulo, Brazil
+          # Africa
+          - jnb  # Johannesburg, South Africa
 
 permissions:
   contents: read
