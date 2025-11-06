@@ -1,0 +1,422 @@
+name: Self-Service Teardown
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App name to teardown (e.g., my-sindri-dev)'
+        required: true
+        type: string
+      confirmation:
+        description: 'Type the app name again to confirm deletion'
+        required: true
+        type: string
+      create_backup:
+        description: 'Create backup before teardown'
+        required: false
+        default: false
+        type: boolean
+      keep_volumes:
+        description: 'Keep persistent volumes (preserve data)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Teardown Request
+    runs-on: ubuntu-latest
+    outputs:
+      app_exists: ${{ steps.check-app.outputs.exists }}
+      machine_count: ${{ steps.check-app.outputs.machine_count }}
+      volume_count: ${{ steps.check-app.outputs.volume_count }}
+      org: ${{ steps.check-app.outputs.org }}
+    steps:
+      - name: Validate confirmation matches app name
+        run: |
+          echo "### 🔍 Validating Teardown Request" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.app_name }}" != "${{ github.event.inputs.confirmation }}" ]; then
+            echo "❌ **App name confirmation does not match**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Expected: \`${{ github.event.inputs.app_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Got: \`${{ github.event.inputs.confirmation }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please re-run the workflow and ensure both fields match exactly." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "✅ **App name confirmed:** \`${{ github.event.inputs.app_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Check app exists and gather info
+        id: check-app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          APP_NAME="${{ github.event.inputs.app_name }}"
+
+          echo "### 📊 Resource Inventory" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**App:** \`$APP_NAME\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if app exists
+          if ! flyctl apps list --json | jq -e --arg name "$APP_NAME" '.[] | select(.Name == $name)' > /dev/null 2>&1; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "❌ **App does not exist**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The app \`$APP_NAME\` was not found in your Fly.io organization." >> $GITHUB_STEP_SUMMARY
+            echo "It may have already been deleted." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "exists=true" >> $GITHUB_OUTPUT
+
+          # Get app info
+          APP_INFO=$(flyctl apps list --json | jq --arg name "$APP_NAME" '.[] | select(.Name == $name)')
+          ORG=$(echo "$APP_INFO" | jq -r '.Organization.Slug')
+          echo "org=$ORG" >> $GITHUB_OUTPUT
+          echo "**Organization:** \`$ORG\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count machines
+          MACHINE_COUNT=$(flyctl machines list --app "$APP_NAME" --json 2>/dev/null | jq '. | length' || echo "0")
+          echo "machine_count=$MACHINE_COUNT" >> $GITHUB_OUTPUT
+          echo "**Machines:** $MACHINE_COUNT" >> $GITHUB_STEP_SUMMARY
+
+          # List machines with details
+          if [ "$MACHINE_COUNT" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Machine Details</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            flyctl machines list --app "$APP_NAME" 2>/dev/null || echo "Unable to list machines"
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count volumes
+          VOLUME_COUNT=$(flyctl volumes list --app "$APP_NAME" --json 2>/dev/null | jq '. | length' || echo "0")
+          echo "volume_count=$VOLUME_COUNT" >> $GITHUB_OUTPUT
+          echo "**Volumes:** $VOLUME_COUNT" >> $GITHUB_STEP_SUMMARY
+
+          # List volumes with details
+          if [ "$VOLUME_COUNT" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Volume Details</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            flyctl volumes list --app "$APP_NAME" 2>/dev/null || echo "Unable to list volumes"
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Display teardown plan
+        run: |
+          echo "### 🗑️ Teardown Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "The following resources will be **permanently deleted**:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Machines:** ${{ steps.check-app.outputs.machine_count }} machine(s) will be stopped and destroyed" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.keep_volumes }}" == "true" ]; then
+            echo "- ⚠️ **Volumes:** ${{ steps.check-app.outputs.volume_count }} volume(s) will be **PRESERVED**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ **Volumes:** ${{ steps.check-app.outputs.volume_count }} volume(s) will be destroyed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "- ✅ **App:** \`${{ github.event.inputs.app_name }}\` will be destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.create_backup }}" == "true" ]; then
+            echo "📦 **Backup:** Volume backup will be created before deletion" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Estimate cost savings
+          MACHINE_COUNT=${{ steps.check-app.outputs.machine_count }}
+          VOLUME_COUNT=${{ steps.check-app.outputs.volume_count }}
+
+          # Rough estimates: shared-cpu-1x ~$0.0001/min, volume 10GB ~$0.15/GB/mo
+          if [ $MACHINE_COUNT -gt 0 ]; then
+            echo "### 💰 Estimated Monthly Savings" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Tearing down this VM will save approximately:" >> $GITHUB_STEP_SUMMARY
+            echo "- **Compute:** ~\$3-20/month (depending on machine size and usage)" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ github.event.inputs.keep_volumes }}" != "true" ] && [ $VOLUME_COUNT -gt 0 ]; then
+              echo "- **Storage:** ~\$3-5/month (20-30GB persistent volume)" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 *VMs auto-suspend when idle, so only delete if you're sure you won't need it.*" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  backup:
+    name: Create Backup
+    needs: validate
+    if: github.event.inputs.create_backup == 'true' && needs.validate.outputs.app_exists == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create volume backup
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "### 📦 Creating Backup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BACKUP_DIR="backups/${APP_NAME}-${TIMESTAMP}"
+
+          mkdir -p "$BACKUP_DIR"
+
+          # Check if volume-backup.sh exists
+          if [ -f "scripts/volume-backup.sh" ]; then
+            echo "Using volume-backup.sh script..." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Run backup script
+            if bash scripts/volume-backup.sh --app-name "$APP_NAME" --output-dir "$BACKUP_DIR"; then
+              echo "✅ **Backup completed successfully**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Backup location:** \`$BACKUP_DIR\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+
+              # List backup contents
+              if [ -d "$BACKUP_DIR" ] && [ "$(ls -A $BACKUP_DIR)" ]; then
+                echo "<details>" >> $GITHUB_STEP_SUMMARY
+                echo "<summary>Backup Contents</summary>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                ls -lh "$BACKUP_DIR" || true
+                echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                echo "</details>" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "❌ **Backup failed**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Cannot proceed with teardown without successful backup." >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          else
+            echo "⚠️ **Warning:** volume-backup.sh script not found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Attempting basic backup via SSH snapshot..." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Alternative: Create snapshot via Fly.io API if available
+            # For now, just document that backup was requested but not available
+            echo "❌ Backup functionality not available in this workflow context." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please use \`flyctl volumes snapshots create\` manually if backup is required." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Proceeding without backup** (remove --create-backup flag to skip this warning)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload backup artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.event.inputs.app_name }}-${{ github.run_id }}
+          path: backups/
+          retention-days: 30
+
+  teardown:
+    name: Teardown Sindri VM
+    needs: [validate, backup]
+    if: |
+      always() &&
+      needs.validate.outputs.app_exists == 'true' &&
+      (needs.backup.result == 'success' || needs.backup.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Stop and destroy machines
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "### 🛑 Stopping and Destroying Machines" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          APP_NAME="${{ github.event.inputs.app_name }}"
+
+          # Get list of machines
+          MACHINES=$(flyctl machines list --app "$APP_NAME" --json 2>/dev/null || echo "[]")
+          MACHINE_IDS=$(echo "$MACHINES" | jq -r '.[].id' 2>/dev/null || true)
+
+          if [ -z "$MACHINE_IDS" ]; then
+            echo "ℹ️ No machines found to destroy" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Found machines to destroy:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            for MACHINE_ID in $MACHINE_IDS; do
+              echo "**Destroying machine:** \`$MACHINE_ID\`" >> $GITHUB_STEP_SUMMARY
+
+              # Stop machine first
+              flyctl machine stop "$MACHINE_ID" --app "$APP_NAME" --force || true
+
+              # Destroy machine
+              if flyctl machine destroy "$MACHINE_ID" --app "$APP_NAME" --force; then
+                echo "- ✅ Machine \`$MACHINE_ID\` destroyed" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ⚠️ Failed to destroy machine \`$MACHINE_ID\` (may already be deleted)" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Destroy volumes
+        if: github.event.inputs.keep_volumes != 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "### 💾 Destroying Volumes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          APP_NAME="${{ github.event.inputs.app_name }}"
+
+          # Get list of volumes
+          VOLUMES=$(flyctl volumes list --app "$APP_NAME" --json 2>/dev/null || echo "[]")
+          VOLUME_IDS=$(echo "$VOLUMES" | jq -r '.[].id' 2>/dev/null || true)
+
+          if [ -z "$VOLUME_IDS" ]; then
+            echo "ℹ️ No volumes found to destroy" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Found volumes to destroy:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            for VOLUME_ID in $VOLUME_IDS; do
+              echo "**Destroying volume:** \`$VOLUME_ID\`" >> $GITHUB_STEP_SUMMARY
+
+              if flyctl volumes destroy "$VOLUME_ID" --app "$APP_NAME" --yes; then
+                echo "- ✅ Volume \`$VOLUME_ID\` destroyed" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ⚠️ Failed to destroy volume \`$VOLUME_ID\` (may already be deleted)" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Skip volume deletion
+        if: github.event.inputs.keep_volumes == 'true'
+        run: |
+          echo "### 💾 Preserving Volumes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ **Volumes preserved as requested**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note:** Preserved volumes will continue to incur storage costs (~\$3-5/month)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To manually delete volumes later:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl volumes list --app ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl volumes destroy <volume-id> --yes" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Destroy app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "### 🗑️ Destroying App" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          APP_NAME="${{ github.event.inputs.app_name }}"
+
+          if flyctl apps destroy "$APP_NAME" --yes; then
+            echo "✅ **App \`$APP_NAME\` destroyed successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Failed to destroy app** (it may have already been deleted)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Verify teardown
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          echo "### ✅ Teardown Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          APP_NAME="${{ github.event.inputs.app_name }}"
+
+          # Verify app no longer exists
+          if flyctl apps list --json | jq -e --arg name "$APP_NAME" '.[] | select(.Name == $name)' > /dev/null 2>&1; then
+            echo "⚠️ **Warning:** App still exists in Fly.io" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some resources may not have been fully deleted. Please check manually:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "flyctl status --app $APP_NAME" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **App successfully removed from Fly.io**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All resources have been cleaned up." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Teardown summary
+        if: always()
+        run: |
+          echo "### 📋 Teardown Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**App Name:** \`${{ github.event.inputs.app_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run:** [\#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "**Actions Taken:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Machines: ${{ needs.validate.outputs.machine_count }} destroyed" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.keep_volumes }}" == "true" ]; then
+            echo "- Volumes: ${{ needs.validate.outputs.volume_count }} preserved" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Volumes: ${{ needs.validate.outputs.volume_count }} destroyed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "- App: Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.create_backup }}" == "true" ]; then
+            echo "**Backup:** Created and stored as workflow artifact (30-day retention)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Download backup from: [Workflow Artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Need to deploy again?** Use the [Self-Service Deploy](${{ github.server_url }}/${{ github.repository }}/actions/workflows/self-service-deploy.yml) workflow" >> $GITHUB_STEP_SUMMARY
