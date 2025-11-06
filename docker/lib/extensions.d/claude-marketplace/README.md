@@ -119,7 +119,7 @@ extraKnownMarketplaces:
       repo: owner/repository
 
 enabledPlugins:
-  - plugin-name@marketplace-name
+  plugin-name@marketplace-name: true
 ```
 
 ### Example Configuration
@@ -140,8 +140,8 @@ extraKnownMarketplaces:
       repo: croffasia/cc-blueprint-toolkit
 
 enabledPlugins:
-  - beads@beads-marketplace
-  - bp@cc-blueprint-toolkit
+  beads@beads-marketplace: true
+  bp@cc-blueprint-toolkit: true
 ```
 
 ### Curated Marketplaces
@@ -189,9 +189,9 @@ extraKnownMarketplaces:
       repo: ComposioHQ/awesome-claude-skills
 
 enabledPlugins:
-  - beads@beads-marketplace
-  - trading-ideas@claude-equity-research-marketplace
-  - brand-guidelines@awesome-claude-skills
+  beads@beads-marketplace: true
+  trading-ideas@claude-equity-research-marketplace: true
+  brand-guidelines@awesome-claude-skills: true
 ```
 
 ## How It Works
@@ -307,7 +307,7 @@ yq eval '.enabledPlugins' /workspace/marketplaces.yml
 
 # Fix references:
 # enabledPlugins:
-#   - plugin-name@marketplace-name  # marketplace-name must exist in extraKnownMarketplaces
+#   plugin-name@marketplace-name: true  # marketplace-name must exist in extraKnownMarketplaces
 ```
 
 ### yq Not Found
@@ -439,8 +439,8 @@ extraKnownMarketplaces:
       repo: croffasia/cc-blueprint-toolkit
 
 enabledPlugins:
-  - beads@beads-marketplace
-  - bp@cc-blueprint-toolkit
+  beads@beads-marketplace: true
+  bp@cc-blueprint-toolkit: true
 ```
 
 Then install:
@@ -463,7 +463,7 @@ To add a new marketplace:
          repo: myorg/my-marketplace
 
    enabledPlugins:
-     - my-plugin@my-custom-marketplace
+     my-plugin@my-custom-marketplace: true
    ```
 
 2. **Reinstall to apply changes**:

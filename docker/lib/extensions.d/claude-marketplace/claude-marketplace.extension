@@ -176,7 +176,7 @@ install() {
     print_status "Next steps:"
     echo "  1. Invoke 'claude' to trigger automatic marketplace and plugin installation"
     echo "  2. Claude Code will register marketplaces from extraKnownMarketplaces"
-    echo "  3. Claude Code will install plugins from enabledPlugins array"
+    echo "  3. Claude Code will install plugins from enabledPlugins (enabled=true)"
     echo ""
     echo "To verify configuration: cat $CLAUDE_SETTINGS"
   else
@@ -346,7 +346,7 @@ configure() {
       local marketplace_count
       marketplace_count=$(jq -r '.extraKnownMarketplaces // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
       local plugin_count
-      plugin_count=$(jq -r '.enabledPlugins // [] | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+      plugin_count=$(jq -r '.enabledPlugins // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
 
       echo ""
       print_status "Marketplace configuration summary:"
@@ -462,10 +462,10 @@ validate() {
       local plugins_type
       plugins_type=$(jq -r '.enabledPlugins | type' "$CLAUDE_SETTINGS" 2>/dev/null)
 
-      if [[ "$plugins_type" == "array" ]]; then
+      if [[ "$plugins_type" == "object" ]]; then
         local plugin_count
         plugin_count=$(jq -r '.enabledPlugins | length' "$CLAUDE_SETTINGS" 2>/dev/null)
-        print_success "enabledPlugins is valid array ($plugin_count plugins)"
+        print_success "enabledPlugins is valid object ($plugin_count plugins)"
 
         # Validate plugin references match known marketplaces
         local marketplace_names
@@ -480,7 +480,7 @@ validate() {
               invalid_plugins=$((invalid_plugins + 1))
             fi
           fi
-        done < <(jq -r '.enabledPlugins[]?' "$CLAUDE_SETTINGS" 2>/dev/null)
+        done < <(jq -r '.enabledPlugins | to_entries[] | select(.value == true) | .key' "$CLAUDE_SETTINGS" 2>/dev/null)
 
         if [[ $invalid_plugins -gt 0 ]]; then
           print_warning "$invalid_plugins plugin(s) reference unknown marketplaces"
@@ -488,7 +488,7 @@ validate() {
           print_success "All plugin references are valid"
         fi
       else
-        print_error "enabledPlugins is not an array (found: $plugins_type)"
+        print_error "enabledPlugins is not an object (found: $plugins_type)"
         all_valid=false
       fi
     else
@@ -590,7 +590,7 @@ status() {
   print_status "Enabled Plugins:"
   if command_exists jq; then
     local plugin_count
-    plugin_count=$(jq -r '.enabledPlugins // [] | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
+    plugin_count=$(jq -r '.enabledPlugins // {} | length' "$CLAUDE_SETTINGS" 2>/dev/null || echo "0")
 
     if [[ "$plugin_count" -eq 0 ]]; then
       echo "  (none enabled)"
@@ -604,7 +604,7 @@ status() {
 
       for marketplace in $marketplaces; do
         local marketplace_plugins
-        marketplace_plugins=$(jq -r --arg mp "$marketplace" '.enabledPlugins // [] | .[] | select(endswith("@" + $mp))' "$CLAUDE_SETTINGS" 2>/dev/null)
+        marketplace_plugins=$(jq -r --arg mp "$marketplace" '.enabledPlugins // {} | to_entries[] | select(.value == true and (.key | endswith("@" + $mp))) | .key' "$CLAUDE_SETTINGS" 2>/dev/null)
 
         if [[ -n "$marketplace_plugins" ]]; then
           echo "  From $marketplace:"
@@ -706,7 +706,7 @@ remove() {
       local cleaned_settings="/tmp/claude-settings-cleaned-$$.json"
 
       # Remove extraKnownMarketplaces and marketplace-related enabledPlugins
-      if jq 'del(.extraKnownMarketplaces) | .enabledPlugins = (.enabledPlugins // [] | map(select(contains("@") | not)))' "$CLAUDE_SETTINGS" > "$cleaned_settings" 2>/dev/null; then
+      if jq 'del(.extraKnownMarketplaces) | .enabledPlugins = (.enabledPlugins // {} | with_entries(select(.key | contains("@") | not)))' "$CLAUDE_SETTINGS" > "$cleaned_settings" 2>/dev/null; then
         if jq empty "$cleaned_settings" 2>/dev/null; then
           cp -f "$cleaned_settings" "$CLAUDE_SETTINGS"
           chmod 644 "$CLAUDE_SETTINGS"

@@ -25,7 +25,7 @@ if command -v jq >/dev/null 2>&1 && [ -f "$HOME/.claude/settings.json" ]; then
     cp "$HOME/.claude/settings.json" "$settings_before"
 
     marketplace_count_before=$(jq -r '.extraKnownMarketplaces // {} | length' "$settings_before" 2>/dev/null || echo "0")
-    plugin_count_before=$(jq -r '.enabledPlugins // [] | length' "$settings_before" 2>/dev/null || echo "0")
+    plugin_count_before=$(jq -r '.enabledPlugins // {} | length' "$settings_before" 2>/dev/null || echo "0")
 
     print_info "Before second install: $marketplace_count_before marketplaces, $plugin_count_before plugins"
 fi
@@ -51,7 +51,7 @@ if bash extension-manager.sh install-all 2>&1 | tee /tmp/configure2.log; then
         print_info "Verifying settings.json idempotency..."
 
         marketplace_count_after=$(jq -r '.extraKnownMarketplaces // {} | length' "$HOME/.claude/settings.json" 2>/dev/null || echo "0")
-        plugin_count_after=$(jq -r '.enabledPlugins // [] | length' "$HOME/.claude/settings.json" 2>/dev/null || echo "0")
+        plugin_count_after=$(jq -r '.enabledPlugins // {} | length' "$HOME/.claude/settings.json" 2>/dev/null || echo "0")
 
         print_info "After second install: $marketplace_count_after marketplaces, $plugin_count_after plugins"
 

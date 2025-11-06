@@ -42,9 +42,9 @@ extraKnownMarketplaces:
 enabledPlugins:
   # ============================================================================
   # ENABLED PLUGINS
-  # of the form {plugin-name}/{marketplace-name}
+  # of the form {plugin-name}/{marketplace-name}: true/false
   # ============================================================================
 
-  - beads@beads-marketplace
-  - bp@cc-blueprint-toolskit
-  - trading-ideas@claude-equity-research-marketplace
+  beads@beads-marketplace: true
+  bp@cc-blueprint-toolskit: true
+  trading-ideas@claude-equity-research-marketplace: true

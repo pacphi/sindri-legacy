@@ -109,7 +109,7 @@ case "$key_tool" in
 
         # Test 7: Verify marketplace configuration in settings.json
         actual_marketplace_count=$(jq -r '.extraKnownMarketplaces // {} | length' "$settings_json" 2>/dev/null || echo "0")
-        actual_plugin_count=$(jq -r '.enabledPlugins // [] | length' "$settings_json" 2>/dev/null || echo "0")
+        actual_plugin_count=$(jq -r '.enabledPlugins // {} | length' "$settings_json" 2>/dev/null || echo "0")
 
         print_info "settings.json: $actual_marketplace_count marketplaces, $actual_plugin_count plugins"
 
@@ -143,7 +143,7 @@ case "$key_tool" in
                     invalid_refs=$((invalid_refs + 1))
                 fi
             fi
-        done < <(jq -r '.enabledPlugins[]?' "$settings_json" 2>/dev/null)
+        done < <(jq -r '.enabledPlugins | to_entries[] | select(.value == true) | .key' "$settings_json" 2>/dev/null)
 
         if [ $invalid_refs -eq 0 ]; then
             print_success "All plugin references are valid"

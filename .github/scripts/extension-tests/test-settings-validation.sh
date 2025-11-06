@@ -109,10 +109,10 @@ print_info "Test 5: Validating enabledPlugins structure..."
 if jq -e '.enabledPlugins' "$settings_json" >/dev/null 2>&1; then
     plugins_type=$(jq -r '.enabledPlugins | type' "$settings_json")
 
-    if [ "$plugins_type" = "array" ]; then
-        print_success "enabledPlugins is valid array type"
+    if [ "$plugins_type" = "object" ]; then
+        print_success "enabledPlugins is valid object type"
     else
-        print_error "enabledPlugins is not array type (found: $plugins_type)"
+        print_error "enabledPlugins is not object type (found: $plugins_type)"
         exit 1
     fi
 
@@ -147,7 +147,7 @@ if jq -e '.enabledPlugins' "$settings_json" >/dev/null 2>&1; then
             print_warning "Plugin '$plugin' does not follow plugin@marketplace format"
             invalid_count=$((invalid_count + 1))
         fi
-    done < <(jq -r '.enabledPlugins[]?' "$settings_json" 2>/dev/null)
+    done < <(jq -r '.enabledPlugins | to_entries[] | select(.value == true) | .key' "$settings_json" 2>/dev/null)
 
     if [ $invalid_count -eq 0 ]; then
         print_success "All plugin references are valid"

@@ -294,7 +294,7 @@ extraKnownMarketplaces:
       repo: owner/repository
 
 enabledPlugins:
-  - plugin-name@marketplace-name
+  plugin-name@marketplace-name: true
 ```
 
 **openskills** (Optional):

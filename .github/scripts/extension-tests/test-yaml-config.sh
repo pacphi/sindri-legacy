@@ -109,12 +109,12 @@ else
     exit 1
 fi
 
-# Check enabledPlugins is array
+# Check enabledPlugins is object
 plugins_type=$(jq -r '.enabledPlugins | type' "$temp_json" 2>/dev/null || echo "null")
-if [ "$plugins_type" = "array" ]; then
-    print_success "enabledPlugins is array type"
+if [ "$plugins_type" = "object" ]; then
+    print_success "enabledPlugins is object type"
 else
-    print_error "enabledPlugins is not array type (found: $plugins_type)"
+    print_error "enabledPlugins is not object type (found: $plugins_type)"
     rm -f "$temp_json"
     exit 1
 fi

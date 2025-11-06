@@ -70,46 +70,46 @@ extraKnownMarketplaces:
 enabledPlugins:
   # ============================================================================
   # ENABLED PLUGINS
-  # of the form {plugin-name}/{marketplace-name}
+  # of the form {plugin-name}/{marketplace-name}: true/false
   # ============================================================================
 
-  - beads@beads-marketplace
-  - bp@cc-blueprint-toolskit
-  - trading-ideas@claude-equity-research-marketplace
-  - n8n-mcp-skills@n8n-mcp-skills
-  - benchling-mcp@life-sciences
-  - 10x-genomics@life-sciences
-  - pubmed@life-sciences
-  - biorender@life-sciences
-  - synapse@life-sciences
-  - wiley-scholar-gateway@life-sciences
-  - single-cell-rna-qc@life-sciences
-  - brand-guidelines@awesome-claude-skills
-  - competitive-ads-extractor@awesome-claude-skills
-  - domain-name-brainstormer@awesome-claude-skills
-  - internal-comms@awesome-claude-skills
-  - lead-research-assistant@awesome-claude-skills
-  - content-research-writer@awesome-claude-skills
-  - meeting-insights-analyzer@awesome-claude-skills
-  - canvas-design@awesome-claude-skills
-  - slack-gif-creator@awesome-claude-skills
-  - theme-factory@awesome-claude-skills
-  - video-downloader@awesome-claude-skills
-  - algorithmic-art@awesome-claude-skills
-  - artifacts-builder@awesome-claude-skills
-  - mcp-builder@awesome-claude-skills
-  - skill-creator@awesome-claude-skills
-  - webapp-testing@awesome-claude-skills
-  - template-skill@awesome-claude-skills
-  - file-organizer@awesome-claude-skills
-  - invoice-organizer@awesome-claude-skills
-  - raffle-winner-picker@awesome-claude-skills
-  - document-skills-docx@awesome-claude-skills
-  - document-skills-pdf@awesome-claude-skills
-  - document-skills-pptx@awesome-claude-skills
-  - document-skills-xlsx@awesome-claude-skills
+  beads@beads-marketplace: true
+  bp@cc-blueprint-toolskit: true
+  trading-ideas@claude-equity-research-marketplace: true
+  n8n-mcp-skills@n8n-mcp-skills: true
+  benchling-mcp@life-sciences: true
+  10x-genomics@life-sciences: true
+  pubmed@life-sciences: true
+  biorender@life-sciences: true
+  synapse@life-sciences: true
+  wiley-scholar-gateway@life-sciences: true
+  single-cell-rna-qc@life-sciences: true
+  brand-guidelines@awesome-claude-skills: true
+  competitive-ads-extractor@awesome-claude-skills: true
+  domain-name-brainstormer@awesome-claude-skills: true
+  internal-comms@awesome-claude-skills: true
+  lead-research-assistant@awesome-claude-skills: true
+  content-research-writer@awesome-claude-skills: true
+  meeting-insights-analyzer@awesome-claude-skills: true
+  canvas-design@awesome-claude-skills: true
+  slack-gif-creator@awesome-claude-skills: true
+  theme-factory@awesome-claude-skills: true
+  video-downloader@awesome-claude-skills: true
+  algorithmic-art@awesome-claude-skills: true
+  artifacts-builder@awesome-claude-skills: true
+  mcp-builder@awesome-claude-skills: true
+  skill-creator@awesome-claude-skills: true
+  webapp-testing@awesome-claude-skills: true
+  template-skill@awesome-claude-skills: true
+  file-organizer@awesome-claude-skills: true
+  invoice-organizer@awesome-claude-skills: true
+  raffle-winner-picker@awesome-claude-skills: true
+  document-skills-docx@awesome-claude-skills: true
+  document-skills-pdf@awesome-claude-skills: true
+  document-skills-pptx@awesome-claude-skills: true
+  document-skills-xlsx@awesome-claude-skills: true
 
   # ============================================================================
   # OTHER PLUGINS
   # ============================================================================
-  # Add your own plugins to enable below:
+  # Additional plugins to enable:

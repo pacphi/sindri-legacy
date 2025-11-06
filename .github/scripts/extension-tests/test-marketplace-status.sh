@@ -113,7 +113,7 @@ else
 fi
 
 # Count displayed plugins
-plugin_count=$(jq -r '.enabledPlugins // [] | length' "$settings_json" 2>/dev/null || echo "0")
+plugin_count=$(jq -r '.enabledPlugins // {} | length' "$settings_json" 2>/dev/null || echo "0")
 print_info "Expected plugin count: $plugin_count"
 
 if [ "$plugin_count" -gt 0 ]; then
