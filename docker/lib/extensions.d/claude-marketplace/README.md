@@ -1,41 +1,29 @@
 # Claude Marketplace Extension
 
-This extension automatically installs curated plugins from Claude Code plugin marketplaces
-hosted in GitHub repositories.
+This extension automatically configures Claude Code plugin marketplaces via YAML configuration and `settings.json` integration.
 
 ## Overview
 
-This extension provides automated installation of plugins from marketplaces specified in a
-`.marketplaces` configuration file. Each marketplace is a GitHub repository containing a
-`.claude-plugin/marketplace.json` file that defines available plugins.
+This extension provides automated configuration of plugin marketplaces through a YAML-based workflow that integrates
+directly withClaude Code's `settings.json`. Marketplaces and plugins are configured once and automatically installed
+when Claude Code is invoked.
 
 It provides:
 
-- **Automated Installation**: Install plugins from marketplaces listed in a `.marketplaces` file
+- **YAML Configuration**: Human-readable marketplace and plugin configuration
+- **Direct settings.json Integration**: Merges configuration into Claude Code's settings
+- **Automatic Installation**: Claude Code handles marketplace and plugin installation
 - **Curated Collection**: Pre-selected high-quality marketplaces for various use cases
-- **GitHub Support**: Install plugins directly from GitHub repository marketplaces
-- **Idempotent**: Safe to re-run installation without duplicating marketplaces
-- **Team Consistency**: Share `.marketplaces` file across team for consistent tooling
+- **Idempotent**: Safe to re-run installation without duplicating configuration
+- **Team Consistency**: Share YAML configuration across teams for consistent tooling
+- **mise-managed yq**: Uses mise for YAML processor installation and version management
 
 ## Prerequisites
 
 - **Claude CLI** (installed via `claude` extension) - **Required**
-- **git** (for cloning plugin repositories) - **Required**
-- **Claude Authentication** - **Optional** (but required for plugin installation)
-
-### Authentication Requirements
-
-The extension works in two modes:
-
-1. **With Authentication** (Recommended):
-   - Plugin installation fully functional
-   - Set `ANTHROPIC_API_KEY` environment variable, OR
-   - Run `claude` command to authenticate interactively
-
-2. **Without Authentication** (Limited):
-   - Marketplace configuration still works
-   - Plugin installation is skipped with clear guidance
-   - Suitable for environments where API keys aren't available
+- **mise** (tool version manager from `mise-config` extension) - **Required**
+- **yq** (YAML processor via mise) - **Auto-installed if missing**
+- **jq** (JSON processor) - **Required** (usually pre-installed)
 
 ## Installation
 
@@ -47,11 +35,6 @@ extension-manager install claude-marketplace
 
 # Or use interactive mode
 extension-manager --interactive
-
-# Or manually activate then install
-# Edit: docker/lib/extensions.d/active-extensions.conf
-# Add line: claude-marketplace
-extension-manager install-all
 ```
 
 ### Verification
@@ -63,50 +46,47 @@ extension-manager status claude-marketplace
 # Validate installation
 extension-manager validate claude-marketplace
 
-# List registered marketplaces
-claude /plugin marketplace list
+# View configured marketplaces and plugins
+cat ~/.claude/settings.json | jq '.extraKnownMarketplaces, .enabledPlugins'
 ```
 
 ## Usage
 
-### Automated Plugin Installation
+### Automated Configuration Workflow
 
-The extension automatically installs plugins listed in `/workspace/.marketplaces`:
+The extension automatically configures marketplaces and plugins:
 
-1. **Ensure Claude is authenticated** (for plugin installation):
-
-   ```bash
-   # Check if authenticated
-   claude /plugin marketplace list
-
-   # If not authenticated, run:
-   export ANTHROPIC_API_KEY="your-api-key"
-   # OR authenticate interactively:
-   claude
-   ```
-
-2. **Create your marketplaces file** (or use the template):
+1. **Create YAML configuration** (or use the template):
 
    ```bash
-   cp /workspace/.marketplaces.example /workspace/.marketplaces
+   # Copy template
+   cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
+
+   # Edit to customize
+   vim /workspace/marketplaces.yml
    ```
 
-3. **Edit the file** to select desired marketplaces:
-
-   ```bash
-   vim /workspace/.marketplaces
-   ```
-
-4. **Install** (happens automatically during extension install):
+2. **Install extension** (processes YAML → JSON → settings.json):
 
    ```bash
    extension-manager install claude-marketplace
    ```
 
-**Note**: If not authenticated, the marketplace will be configured but plugin
-installation will be skipped. You can install plugins later with `claude /plugin`.
+3. **Invoke Claude Code** (automatic marketplace and plugin installation):
+
+   ```bash
+   claude
+   ```
+
+Claude Code automatically:
+
+- Registers all marketplaces from `extraKnownMarketplaces`
+- Installs all plugins from `enabledPlugins` array
+- Handles authentication and dependencies
 
 ### Manual Plugin Management
+
+After configuration, you can still manage plugins manually:
 
 ```bash
 # Browse and install plugins interactively
@@ -115,119 +95,136 @@ claude /plugin
 # List all registered marketplaces
 claude /plugin marketplace list
 
-# Add a new marketplace
-claude /plugin marketplace add owner/repo
-
 # List installed plugins
 claude /plugin list
 
-# Install specific plugin
+# Install additional plugin
 claude /plugin install plugin-name@marketplace-name
 
 # Uninstall plugin
 claude /plugin uninstall plugin-name
-
-# Update marketplace metadata
-claude /plugin marketplace update marketplace-name
-
-# Remove marketplace
-claude /plugin marketplace remove marketplace-name
 ```
-
-## Curated Marketplaces
-
-The `.marketplaces.example` file includes these pre-selected marketplaces:
-
-| Marketplace                     | Description                                         | Repository                                |
-| -------------------------- | --------------------------------------------------- | ----------------------------------------- |
-| **beads**                  | Natural language programming with Claude            | steveyegge/beads                          |
-| **cc-blueprint-toolkit**   | Project scaffolding and architecture templates      | croffasia/cc-blueprint-toolkit            |
-| **claude-equity-research** | Financial analysis and equity research tools        | quant-sentiment-ai/claude-equity-research |
-| **n8n-skills**             | Workflow automation integration                     | czlonkowski/n8n-skills                    |
-| **life-sciences**          | Anthropic's official life sciences research plugins | anthropics/life-sciences                  |
-| **awesome-claude-skills**  | Community-curated collection of useful skills       | ComposioHQ/awesome-claude-skills          |
 
 ## Configuration
 
-### `.marketplaces` File Format
+### YAML Configuration Format
 
-One marketplaces per line, GitHub format (`owner/repo`):
+The `marketplaces.yml` file uses Claude Code's official configuration format:
 
-```bash
-# Claude Code Plugin Marketplace - Curated Marketplaces
-# Lines starting with # are comments
+```yaml
+extraKnownMarketplaces:
+  marketplace-name:
+    source:
+      source: github
+      repo: owner/repository
 
-# Development Tools
-steveyegge/beads
-croffasia/cc-blueprint-toolkit
-
-# Domain-Specific
-quant-sentiment-ai/claude-equity-research
-anthropics/life-sciences
-
-# Automation & Integration
-czlonkowski/n8n-skills
-ComposioHQ/awesome-claude-skills
+enabledPlugins:
+  - plugin-name@marketplace-name
 ```
 
-### Installation Locations
+### Example Configuration
 
-- **Claude Config**: `~/.claude/settings.json`
-- **Marketplaces Template**: `/workspace/.marketplaces.example` (full list, 6 marketplaces)
-- **CI Marketplaces Template**: `/workspace/.marketplaces.ci.example` (CI testing, 3 marketplaces)
-- **Marketplaces Config**: `/workspace/.marketplaces` (user-created)
-- **Installed Plugins**: Managed by Claude CLI
+```yaml
+# Claude Code Plugin Marketplaces Configuration
+# See: https://docs.claude.com/en/docs/claude-code/settings
+
+extraKnownMarketplaces:
+  beads-marketplace:
+    source:
+      source: github
+      repo: steveyegge/beads
+
+  cc-blueprint-toolkit:
+    source:
+      source: github
+      repo: croffasia/cc-blueprint-toolkit
+
+enabledPlugins:
+  - beads@beads-marketplace
+  - bp@cc-blueprint-toolkit
+```
+
+### Curated Marketplaces
+
+The `marketplaces.yml.example` includes these pre-selected marketplaces:
+
+| Marketplace                        | Description                                         | Repository                                |
+| ---------------------------------- | --------------------------------------------------- | ----------------------------------------- |
+| **beads-marketplace**              | Natural language programming with Claude            | steveyegge/beads                          |
+| **cc-blueprint-toolkit**           | Project scaffolding and architecture templates      | croffasia/cc-blueprint-toolkit            |
+| **claude-equity-research-marketplace** | Financial analysis and equity research tools | quant-sentiment-ai/claude-equity-research |
+| **n8n-mcp-skills**                 | Workflow automation integration                     | czlonkowski/n8n-skills                    |
+| **life-sciences**                  | Anthropic's official life sciences research plugins | anthropics/life-sciences                  |
+| **awesome-claude-skills**          | Community-curated collection of useful skills       | ComposioHQ/awesome-claude-skills          |
+
+### File Locations
+
+- **Claude Settings**: `~/.claude/settings.json` (merged configuration)
+- **YAML Template**: `/workspace/marketplaces.yml.example` (full list, 6 marketplaces)
+- **CI YAML Template**: `/workspace/marketplaces.ci.yml.example` (CI testing, 3 marketplaces)
+- **YAML Config**: `/workspace/marketplaces.yml` (user-created working file)
+- **Default Settings**: Extension includes `default-settings.json` as merge base
 
 ### CI Mode
 
-When `CI_MODE=true`, the extension automatically:
-
-1. Uses `.marketplaces.ci.example` (3 marketplaces) instead of `.marketplaces.example` (6 marketplaces)
-2. Creates `/workspace/.marketplaces` from CI template if it doesn't exist
-3. Checks for Claude authentication before attempting plugin installation
-4. **With `ANTHROPIC_API_KEY` set**: Installs plugins automatically
-5. **Without authentication**: Skips plugin installation with informative message
+When `CI_MODE=true`, the extension automatically uses `marketplaces.ci.yml.example`:
 
 **CI Test Marketplaces (3 selected for reliability)**:
 
-- `steveyegge/beads` - Natural language programming
-- `anthropics/life-sciences` - Official Anthropic plugin
-- `ComposioHQ/awesome-claude-skills` - Community-curated collection
-
-#### Enabling Plugin Installation in CI
-
-To enable automatic plugin installation in CI/CD:
-
 ```yaml
-# In your GitHub Actions workflow:
-jobs:
-  test:
-    steps:
-      - name: Run tests
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          extension-manager install claude-marketplace
+extraKnownMarketplaces:
+  beads-marketplace:
+    source:
+      source: github
+      repo: steveyegge/beads
+
+  claude-equity-research-marketplace:
+    source:
+      source: github
+      repo: quant-sentiment-ai/claude-equity-research
+
+  awesome-claude-skills:
+    source:
+      source: github
+      repo: ComposioHQ/awesome-claude-skills
+
+enabledPlugins:
+  - beads@beads-marketplace
+  - trading-ideas@claude-equity-research-marketplace
+  - brand-guidelines@awesome-claude-skills
 ```
 
-**Without authentication**, you'll see:
+## How It Works
 
-```text
-⚠️  Claude is not authenticated - skipping plugin installation
+### Workflow Overview
 
-Plugin installation requires Claude Code authentication.
-To enable plugin installation in CI:
-  1. Set ANTHROPIC_API_KEY as a repository secret
-  2. Pass it to the workflow:
-     env:
-       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+1. **YAML → JSON Conversion**:
+   - Extension uses `yq` to convert `marketplaces.yml` to JSON
+   - Validates YAML syntax before conversion
 
-Plugins will need to be installed manually or in an authenticated context.
-```
+2. **settings.json Merging**:
+   - Reads existing `~/.claude/settings.json` (or uses `default-settings.json`)
+   - Merges marketplace configuration using `jq`
+   - Preserves other Claude Code settings (model, thinking mode, etc.)
+   - Creates timestamped backup before modification
+
+3. **Automatic Installation**:
+   - Claude Code reads `extraKnownMarketplaces` and `enabledPlugins`
+   - Automatically clones marketplace repositories
+   - Installs specified plugins on next invocation
+   - No manual CLI commands required
+
+### Backup System
+
+The extension automatically backs up `settings.json` before any modification:
+
+- **Location**: `~/.claude/backups/settings-YYYYMMDD-HHMMSS.json`
+- **Retention**: Keeps last 5 backups
+- **Restore**: Manually copy from backup directory if needed
 
 ## Extension API Compliance
 
-This extension implements **Extension API v2.0** with the following features:
+This extension implements **Extension API v2.0**:
 
 ### Metadata
 
@@ -240,123 +237,134 @@ This extension implements **Extension API v2.0** with the following features:
 
 ### Functions
 
-- ✅ `prerequisites()` - Check Claude CLI and git (authentication optional)
-- ✅ `install()` - Configure marketplace, install plugins if authenticated
-- ✅ `configure()` - Check authentication, install plugins if available, configure marketplace
-- ✅ `validate()` - Verify marketplace configuration, check plugins if authenticated
-- ✅ `status()` - Display marketplace status, configuration, and plugin information
-- ✅ `upgrade()` - Update marketplace metadata, re-sync plugins
-- ✅ `remove()` - Remove marketplace configuration, optionally uninstall plugins
+- ✅ `prerequisites()` - Check Claude CLI, mise, yq, jq (auto-installs yq via mise if missing)
+- ✅ `install()` - Convert YAML → JSON, merge into settings.json
+- ✅ `configure()` - Display configuration summary and next steps
+- ✅ `validate()` - Verify settings.json structure, YAML syntax, plugin references
+- ✅ `status()` - Display marketplaces, plugins, YAML config, and management commands
+- ✅ `upgrade()` - Reprocess YAML and update settings.json
+- ✅ `remove()` - Clean marketplace config from settings.json with backup
 
 ### Dependencies
 
-The extension has explicit dependencies checked in `prerequisites()`:
-
 - `claude` extension (provides Claude CLI)
-- `git` command (for cloning repositories)
+- `mise-config` extension (provides mise tool manager)
+- `yq` (auto-installed via mise during prerequisites)
+- `jq` (required for JSON processing)
 
 ## Troubleshooting
 
-### Authentication Issues
+### YAML Syntax Errors
 
-**Symptom**: `Claude is not authenticated - skipping plugin installation`
-
-**Solution**:
-
-```bash
-# Option 1: Set API key environment variable
-export ANTHROPIC_API_KEY="your-api-key-here"
-
-# Option 2: Authenticate interactively
-claude
-
-# Option 3: For CI/CD, set as secret
-# In GitHub: Settings → Secrets → New repository secret
-# Name: ANTHROPIC_API_KEY
-# Value: your-api-key
-
-# Then in workflow:
-# env:
-#   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-**Note**: The extension will still configure the marketplace even without
-authentication. Plugins can be installed later once authenticated.
-
-### Marketplace Not Accessible
-
-**Symptom**: `Could not access plugin marketplace`
+**Symptom**: `Failed to convert YAML to JSON`
 
 **Solution**:
 
 ```bash
-# Check Claude authentication
-claude --version
+# Validate YAML syntax
+yq eval '.' /workspace/marketplaces.yml
 
-# Re-authenticate if needed
-claude
+# Check for common issues:
+# - Indentation (use spaces, not tabs)
+# - Missing colons
+# - Unquoted special characters
 
-# Verify settings file
-cat ~/.claude/settings.json
-
-# Reinstall extension
-extension-manager uninstall claude-marketplace
+# Fix syntax errors, then reinstall
 extension-manager install claude-marketplace
 ```
 
-### Plugin Installation Fails
+### settings.json Validation Fails
 
-**Symptom**: `Failed to install: owner/repo`
-
-**Solution**:
-
-```bash
-# Verify git access to repository
-git ls-remote https://github.com/owner/repo
-
-# Check Claude plugin system
-claude /plugin marketplace list
-
-# Try installing manually
-claude /plugin marketplace add owner/repo
-
-# Check for authentication issues
-claude /plugin
-```
-
-### `.marketplaces` File Not Found
-
-**Symptom**: `No .marketplaces file found`
+**Symptom**: `settings.json has invalid JSON syntax`
 
 **Solution**:
 
 ```bash
-# Copy template
-cp /workspace/.marketplaces.example /workspace/.marketplaces
+# Validate JSON syntax
+jq empty ~/.claude/settings.json
 
-# Edit to customize
-vim /workspace/.marketplaces
+# If corrupt, restore from backup
+ls -lt ~/.claude/backups/settings-*.json | head -5
+cp ~/.claude/backups/settings-YYYYMMDD-HHMMSS.json ~/.claude/settings.json
 
-# Reinstall to process marketplaces
-extension-manager install claude-marketplace
-```
-
-### Settings File Corruption
-
-**Symptom**: Invalid JSON in `settings.json`
-
-**Solution**:
-
-```bash
-# Validate JSON
-cat ~/.claude/settings.json | jq .
-
-# If invalid, backup and recreate
-mv ~/.claude/settings.json ~/.claude/settings.json.bak
+# Or start fresh
 echo '{}' > ~/.claude/settings.json
-
-# Reinstall extension
 extension-manager install claude-marketplace
+```
+
+### Plugin References Invalid
+
+**Symptom**: `Plugin 'foo@unknown-marketplace' references unknown marketplace`
+
+**Solution**:
+
+```bash
+# Check marketplace names in YAML
+yq eval '.extraKnownMarketplaces | keys' /workspace/marketplaces.yml
+
+# Ensure enabledPlugins reference those marketplace names
+yq eval '.enabledPlugins' /workspace/marketplaces.yml
+
+# Fix references:
+# enabledPlugins:
+#   - plugin-name@marketplace-name  # marketplace-name must exist in extraKnownMarketplaces
+```
+
+### yq Not Found
+
+**Symptom**: `yq command not found`
+
+**Solution**:
+
+The extension automatically installs yq via mise during `prerequisites()`. If this fails:
+
+```bash
+# Install yq via mise (recommended)
+mise install yq@latest
+
+# Activate mise in current shell
+eval "$(mise activate bash)"
+
+# Verify installation
+yq --version
+
+# Alternative: Install specific version
+mise install yq@4.40.5
+
+# List available yq versions
+mise ls-remote yq
+```
+
+**Note**: The `mise-config` extension must be installed first (it's a protected core extension).
+
+If mise is not available:
+
+```bash
+# Install mise-config extension
+extension-manager install mise-config
+
+# Then retry claude-marketplace installation
+extension-manager install claude-marketplace
+```
+
+### Marketplace Configuration Not Appearing
+
+**Symptom**: settings.json exists but has no marketplace configuration
+
+**Solution**:
+
+```bash
+# Check if YAML file exists
+ls -l /workspace/marketplaces.yml
+
+# If missing, copy from template
+cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
+
+# Reinstall to process YAML
+extension-manager install claude-marketplace
+
+# Verify merge
+jq '.extraKnownMarketplaces, .enabledPlugins' ~/.claude/settings.json
 ```
 
 ## Upgrading
@@ -364,14 +372,11 @@ extension-manager install claude-marketplace
 ### Manual Upgrade
 
 ```bash
-# Check current configuration
-extension-manager status claude-marketplace
-
-# Upgrade via extension-manager
+# Reprocess YAML configuration
 extension-manager upgrade claude-marketplace
 
-# Verify marketplace updated
-claude /plugin marketplace list
+# Verify updated configuration
+extension-manager status claude-marketplace
 ```
 
 ### Automatic Upgrade
@@ -392,8 +397,8 @@ extension-manager uninstall claude-marketplace
 
 # You'll be prompted to optionally remove:
 # - Marketplace configuration from settings.json
-# - Installed plugins
-# - .marketplaces and .marketplaces.example files
+# - YAML configuration files
+# - Settings.json backups are preserved
 ```
 
 ## Examples
@@ -401,30 +406,41 @@ extension-manager uninstall claude-marketplace
 ### Basic Workflow
 
 ```bash
-# 1. Create marketplaces configuration
-cp /workspace/.marketplaces.example /workspace/.marketplaces
+# 1. Create YAML configuration
+cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
 
 # 2. Customize marketplaces (optional)
-vim /workspace/.marketplaces
+vim /workspace/marketplaces.yml
 
-# 3. Install extension (auto-installs marketplaces and their plugins)
+# 3. Install extension (processes YAML → settings.json)
 extension-manager install claude-marketplace
 
-# 4. Verify installation
-claude /plugin list
+# 4. Invoke Claude (automatic marketplace/plugin installation)
+claude
 
-# 5. Browse available plugins
-claude /plugin
+# 5. Verify installation
+claude /plugin list
 ```
 
-### Custom Marketplace List
+### Custom Marketplace Configuration
 
-Create `/workspace/.marketplaces` with your selection:
+Create `/workspace/marketplaces.yml` with your selection:
 
-```bash
-# My Project Marketplaces
-steveyegge/beads
-croffasia/cc-blueprint-toolkit
+```yaml
+extraKnownMarketplaces:
+  beads-marketplace:
+    source:
+      source: github
+      repo: steveyegge/beads
+
+  cc-blueprint-toolkit:
+    source:
+      source: github
+      repo: croffasia/cc-blueprint-toolkit
+
+enabledPlugins:
+  - beads@beads-marketplace
+  - bp@cc-blueprint-toolkit
 ```
 
 Then install:
@@ -433,93 +449,121 @@ Then install:
 extension-manager install claude-marketplace
 ```
 
-### Project-Specific Marketplaces
+### Adding New Marketplaces
 
-Different projects can have different marketplace requirements:
+To add a new marketplace:
+
+1. **Edit YAML configuration**:
+
+   ```yaml
+   extraKnownMarketplaces:
+     my-custom-marketplace:
+       source:
+         source: github
+         repo: myorg/my-marketplace
+
+   enabledPlugins:
+     - my-plugin@my-custom-marketplace
+   ```
+
+2. **Reinstall to apply changes**:
+
+   ```bash
+   extension-manager install claude-marketplace
+   ```
+
+3. **Invoke Claude to install**:
+
+   ```bash
+   claude
+   ```
+
+### Viewing Current Configuration
 
 ```bash
-# In project A
-cd /workspace/projects/active/project-a
-cp /workspace/.marketplaces.example ./.marketplaces
-# Edit ./.marketplaces for project A needs
-extension-manager install claude-marketplace
+# View settings.json
+cat ~/.claude/settings.json | jq .
 
-# In project B
-cd /workspace/projects/active/project-b
-cp /workspace/.marketplaces.example ./.marketplaces
-# Edit ./.marketplaces for project B needs
-extension-manager install claude-marketplace
+# View just marketplaces
+jq '.extraKnownMarketplaces' ~/.claude/settings.json
+
+# View just enabled plugins
+jq '.enabledPlugins' ~/.claude/settings.json
+
+# Use extension status command
+extension-manager status claude-marketplace
 ```
 
 ## Advanced Usage
 
-### Discovering New Marketplaces
+### Multiple Source Types
 
-Browse the official Claude Code Plugin Marketplace directory to discover new marketplaces:
+The YAML configuration supports different source types:
+
+```yaml
+extraKnownMarketplaces:
+  # GitHub repository
+  github-marketplace:
+    source:
+      source: github
+      repo: owner/repository
+
+  # Git URL
+  git-marketplace:
+    source:
+      source: git
+      url: https://gitlab.com/company/plugins.git
+
+  # Local directory (for development)
+  local-marketplace:
+    source:
+      source: directory
+      path: /path/to/marketplace
+```
+
+### Project-Specific Configuration
+
+Different projects can have different marketplace configurations:
+
+```bash
+# In project A
+cd /workspace/projects/active/project-a
+cp /workspace/marketplaces.yml.example ./marketplaces.yml
+# Edit marketplaces.yml for project A
+extension-manager install claude-marketplace
+
+# In project B
+cd /workspace/projects/active/project-b
+cp /workspace/marketplaces.yml.example ./marketplaces.yml
+# Edit marketplaces.yml for project B
+extension-manager install claude-marketplace
+```
+
+### Marketplace Discovery
+
+Browse the official Claude Code Plugin Marketplace directory:
 
 **[https://claudecodemarketplace.com/](https://claudecodemarketplace.com/)**
 
 The directory provides:
-
 - Curated list of available plugin marketplaces
 - Marketplace descriptions and categories
-- Installation instructions
+- Installation instructions (YAML format)
 - Community ratings and reviews
-
-### Adding Custom Marketplaces
-
-You can add additional marketplaces beyond the default:
-
-```bash
-# Add from GitHub repository
-claude /plugin marketplace add owner/my-custom-marketplace
-
-# Add from Git URL
-claude /plugin marketplace add https://gitlab.com/company/plugins.git
-
-# Add from local directory (for development)
-claude /plugin marketplace add ./my-marketplace
-
-# Add from remote URL
-claude /plugin marketplace add https://url.of/marketplace.json
-```
-
-### Managing Multiple Marketplaces
-
-```bash
-# List all registered marketplaces
-claude /plugin marketplace list
-
-# Update specific marketplace
-claude /plugin marketplace update marketplace-name
-
-# Remove marketplace
-claude /plugin marketplace remove marketplace-name
-```
-
-### Plugin Development
-
-To develop and test your own plugins:
-
-1. Create a marketplace repository with `.claude-plugin/marketplace.json`
-2. Add locally: `claude /plugin marketplace add ./my-marketplace`
-3. Test plugin installation: `claude /plugin install my-plugin@my-marketplace`
-4. Publish to GitHub when ready
-5. Share with team via `.marketplaces` file
 
 ## Resources
 
-- **Claude Code Plugin Marketplace**: https://claudecodemarketplace.com/ - Discover new marketplaces
+- **Claude Code Plugin Marketplace**: https://claudecodemarketplace.com/
 - **Plugin Marketplace Docs**: https://docs.claude.com/en/docs/claude-code/plugin-marketplaces
+- **Settings Configuration**: https://docs.claude.com/en/docs/claude-code/settings
 - **Claude Code Documentation**: https://docs.claude.com/en/docs/claude-code
-- **GitHub Marketplace Repositories**: Listed in `.marketplaces.example`
-- **Example Marketplaces**: See `.marketplaces.example` for curated list
+- **yq Documentation**: https://mikefarah.gitbook.io/yq/
 
 ## Related Extensions
 
 - **claude** - Claude Code CLI (required dependency)
 - **openskills** - OpenSkills CLI for Agent Skills management
-- **nodejs-devtools** - Additional development tools
+- **nodejs** - Node.js runtime (recommended for many plugins)
 
 ## Support
 
@@ -531,7 +575,6 @@ For issues specific to:
 
 ## License
 
-This extension is part of the Sindri project. See the [Sindri repository](https://github.com/pacphi/sindri)
-for license information.
+This extension is part of the Sindri project. See the [Sindri repository](https://github.com/pacphi/sindri) for license information.
 
 Individual plugins have their own licenses - check each plugin's repository for details.

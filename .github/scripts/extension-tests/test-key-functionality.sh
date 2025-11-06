@@ -53,72 +53,103 @@ case "$key_tool" in
     claude-marketplace)
         print_info "Testing Claude marketplace integration..."
 
-        # Test 1: Verify .marketplaces file exists (CI mode)
-        expected_marketplace_count=0
+        # Test 1: Verify YAML configuration file exists
         if [ -n "$CI_MODE" ]; then
-            if [ ! -f "/workspace/.marketplaces" ]; then
-                print_error ".marketplaces file missing in CI mode"
-                exit 1
-            else
-                print_success ".marketplaces file exists"
-                expected_marketplace_count=$(grep -v '^#' /workspace/.marketplaces | grep -v '^$' | wc -l | tr -d ' ')
-                print_info "Expected marketplaces: $expected_marketplace_count"
-            fi
-        fi
-
-        # Test 2: Check authentication and list plugins
-        print_info "Checking Claude authentication..."
-        authenticated=false
-
-        if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-            print_success "ANTHROPIC_API_KEY is set"
-            authenticated=true
-        elif timeout 5s claude /plugin marketplace list >/dev/null 2>&1; then
-            print_success "Claude is authenticated via session"
-            authenticated=true
+            yaml_file="/workspace/marketplaces.ci.yml"
         else
-            print_warning "Claude is not authenticated"
-            print_info "Plugin installation requires authentication"
-            print_info "Set ANTHROPIC_API_KEY to enable plugin testing"
+            yaml_file="/workspace/marketplaces.yml"
         fi
 
-        # Only test plugin installation if authenticated
-        if [ "$authenticated" = true ]; then
-            print_info "Listing installed plugins..."
-            if timeout 15s claude /plugin list 2>&1 | tee /tmp/plugin-list.txt; then
-                # Count non-empty lines that don't look like headers
-                # More flexible matching since output format may vary
-                plugin_count=$(grep -v '^$' /tmp/plugin-list.txt | \
-                               grep -v -i "installed plugins" | \
-                               grep -v -i "no plugins" | \
-                               wc -l | tr -d ' \n')
-                # Ensure plugin_count is a valid integer, default to 0 if empty
-                plugin_count=${plugin_count:-0}
-                echo ""
-                print_info "Found $plugin_count installed plugins"
-                echo "Plugin list output:"
-                cat /tmp/plugin-list.txt
-                echo ""
+        if [ ! -f "$yaml_file" ]; then
+            print_error "YAML configuration file missing: $yaml_file"
+            exit 1
+        else
+            print_success "YAML configuration file exists: $yaml_file"
+        fi
 
-                # In CI mode, verify we have at least the expected number of marketplaces worth of plugins
-                # Note: Each marketplace may contain multiple plugins, so actual count may be higher
-                if [ -n "$CI_MODE" ]; then
-                    if [ "$plugin_count" -lt "$expected_marketplace_count" ]; then
-                        print_error "Expected at least $expected_marketplace_count plugins (one per marketplace minimum), found $plugin_count"
-                        print_info "This test expects plugins to be installed from each marketplace in .marketplaces file"
-                        exit 1
-                    else
-                        print_success "Plugin count verified: $plugin_count (expected at least $expected_marketplace_count)"
-                    fi
-                else
-                    print_success "Plugin count: $plugin_count"
+        # Test 2: Verify yq is installed
+        if ! command -v yq >/dev/null 2>&1; then
+            print_error "yq not installed (required for YAML parsing)"
+            exit 1
+        else
+            print_success "yq is available"
+        fi
+
+        # Test 3: Validate YAML syntax
+        print_info "Validating YAML syntax..."
+        if yq eval '.' "$yaml_file" >/dev/null 2>&1; then
+            print_success "YAML syntax is valid"
+        else
+            print_error "YAML syntax is invalid"
+            exit 1
+        fi
+
+        # Test 4: Count expected marketplaces and plugins from YAML
+        expected_marketplace_count=$(yq eval '.extraKnownMarketplaces | length' "$yaml_file" 2>/dev/null || echo "0")
+        expected_plugin_count=$(yq eval '.enabledPlugins | length' "$yaml_file" 2>/dev/null || echo "0")
+        print_info "YAML config: $expected_marketplace_count marketplaces, $expected_plugin_count plugins"
+
+        # Test 5: Verify settings.json was created
+        settings_json="$HOME/.claude/settings.json"
+        if [ ! -f "$settings_json" ]; then
+            print_error "settings.json not created: $settings_json"
+            exit 1
+        else
+            print_success "settings.json exists: $settings_json"
+        fi
+
+        # Test 6: Validate settings.json structure
+        print_info "Validating settings.json..."
+        if ! jq empty "$settings_json" 2>/dev/null; then
+            print_error "settings.json has invalid JSON syntax"
+            exit 1
+        else
+            print_success "settings.json has valid JSON syntax"
+        fi
+
+        # Test 7: Verify marketplace configuration in settings.json
+        actual_marketplace_count=$(jq -r '.extraKnownMarketplaces // {} | length' "$settings_json" 2>/dev/null || echo "0")
+        actual_plugin_count=$(jq -r '.enabledPlugins // [] | length' "$settings_json" 2>/dev/null || echo "0")
+
+        print_info "settings.json: $actual_marketplace_count marketplaces, $actual_plugin_count plugins"
+
+        if [ "$actual_marketplace_count" -ge "$expected_marketplace_count" ]; then
+            print_success "Marketplace count in settings.json verified"
+        else
+            print_error "Expected at least $expected_marketplace_count marketplaces, found $actual_marketplace_count"
+            exit 1
+        fi
+
+        if [ "$actual_plugin_count" -ge "$expected_plugin_count" ]; then
+            print_success "Plugin count in settings.json verified"
+        else
+            print_error "Expected at least $expected_plugin_count plugins, found $actual_plugin_count"
+            exit 1
+        fi
+
+        # Test 8: Validate plugin references
+        print_info "Validating plugin references..."
+        marketplace_names=$(jq -r '.extraKnownMarketplaces // {} | keys[]' "$settings_json" 2>/dev/null || echo "")
+        invalid_refs=0
+
+        while IFS= read -r plugin; do
+            if [ -z "$plugin" ]; then
+                continue
+            fi
+            if [[ "$plugin" =~ @ ]]; then
+                marketplace="${plugin##*@}"
+                if ! echo "$marketplace_names" | grep -q "^${marketplace}$"; then
+                    print_warning "Plugin '$plugin' references unknown marketplace"
+                    invalid_refs=$((invalid_refs + 1))
                 fi
-            else
-                print_error "Could not list plugins"
-                exit 1
             fi
+        done < <(jq -r '.enabledPlugins[]?' "$settings_json" 2>/dev/null)
+
+        if [ $invalid_refs -eq 0 ]; then
+            print_success "All plugin references are valid"
         else
-            print_info "Skipping plugin installation tests (not authenticated)"
+            print_error "$invalid_refs invalid plugin references found"
+            exit 1
         fi
 
         print_success "Claude marketplace functionality verified"

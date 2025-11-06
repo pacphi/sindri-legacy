@@ -129,7 +129,7 @@ extension-manager upgrade-history        # View upgrade history
 **Claude AI:**
 
 - `claude` - Claude Code CLI with developer configuration
-- `claude-marketplace` - Plugin installer for https://claudecodemarketplace.com/ (requires claude, git)
+- `claude-marketplace` - YAML-based marketplace configuration for Claude Code (requires claude, mise-config, auto-installs yq via mise)
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
 
@@ -249,40 +249,53 @@ extension-manager install claude-marketplace
 
 Provides:
 
-- Plugin marketplace integration for https://claudecodemarketplace.com/
-- Automated plugin installation from `.plugins` configuration file
-- Curated collection of high-quality Claude Code plugins
-- Support for GitHub-hosted plugin repositories
+- YAML-based marketplace configuration integrated with settings.json
+- Automated plugin installation via Claude Code's official mechanism
+- Curated collection of high-quality Claude Code marketplaces
+- Support for GitHub, Git, and local marketplace sources
+- Automatic yq installation via mise for YAML processing
 
 Common workflow:
 
 ```bash
 # Copy template and customize
-cp /workspace/.plugins.example /workspace/.plugins
-vim /workspace/.plugins
+cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
+vim /workspace/marketplaces.yml
 
-# Install extension (auto-installs plugins from .plugins file)
+# Install extension (processes YAML → settings.json)
 extension-manager install claude-marketplace
 
-# Browse and install plugins interactively
-claude /plugin
+# Invoke Claude (automatic marketplace and plugin installation)
+claude
 
 # List installed plugins
 claude /plugin list
 
-# Manage marketplaces
-claude /plugin marketplace list
-claude /plugin marketplace add owner/repo
+# Check status
+extension-manager status claude-marketplace
 ```
 
-Curated plugins in `.plugins.example`:
+Curated marketplaces in `marketplaces.yml.example`:
 
-- `steveyegge/beads` - Natural language programming
-- `croffasia/cc-blueprint-toolkit` - Project scaffolding templates
-- `quant-sentiment-ai/claude-equity-research` - Financial analysis tools
-- `czlonkowski/n8n-skills` - Workflow automation integration
-- `anthropics/life-sciences` - Life sciences research plugins
-- `ComposioHQ/awesome-claude-skills` - Community-curated skills collection
+- `beads-marketplace` (steveyegge/beads) - Natural language programming
+- `cc-blueprint-toolkit` (croffasia/cc-blueprint-toolkit) - Project scaffolding templates
+- `claude-equity-research-marketplace` (quant-sentiment-ai/claude-equity-research) - Financial analysis
+- `n8n-mcp-skills` (czlonkowski/n8n-skills) - Workflow automation integration
+- `life-sciences` (anthropics/life-sciences) - Life sciences research plugins
+- `awesome-claude-skills` (ComposioHQ/awesome-claude-skills) - Community-curated skills collection
+
+Configuration format:
+
+```yaml
+extraKnownMarketplaces:
+  marketplace-name:
+    source:
+      source: github
+      repo: owner/repository
+
+enabledPlugins:
+  - plugin-name@marketplace-name
+```
 
 **openskills** (Optional):
 
