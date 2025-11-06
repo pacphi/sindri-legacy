@@ -46,5 +46,5 @@ enabledPlugins:
   # ============================================================================
 
   beads@beads-marketplace: true
-  bp@cc-blueprint-toolskit: true
+  bp@cc-blueprint-toolkit: true
   trading-ideas@claude-equity-research-marketplace: true

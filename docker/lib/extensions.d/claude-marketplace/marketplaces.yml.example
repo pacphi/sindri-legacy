@@ -74,7 +74,7 @@ enabledPlugins:
   # ============================================================================
 
   beads@beads-marketplace: true
-  bp@cc-blueprint-toolskit: true
+  bp@cc-blueprint-toolkit: true
   trading-ideas@claude-equity-research-marketplace: true
   n8n-mcp-skills@n8n-mcp-skills: true
   benchling-mcp@life-sciences: true
