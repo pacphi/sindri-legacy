@@ -1,9 +1,39 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0-rc.3] - 2025-11-07
+
+### 🐛 Bug Fixes
+
+* fix(ci): pass region parameter to setup-fly-test-env action (9dbef48)
+* fix(ci): resolve shellcheck SC2002 warning exposed by corrected grep pattern (a3ff843)
+* fix(ci): correct grep pattern to exclude .git directory without filtering .github (ab7be15)
+* fix(ci): resolve region mismatch between volume and fly.toml configuration (ddd262e)
+* fix: claude-marketplace extension (#11) (8be0ff4)
+
+### 📚 Documentation
+
+* docs: update CHANGELOG.md for v1.0.0-rc.2 (556910c)
+
+### 🔧 Other Changes
+
+* refactor(ci): remove paths-ignore filters from integration workflow (2b4e7ef)
+* refactor(ci): optimize workflow triggers and scheduling for efficiency (b56181a)
+
+### 📦 Installation
+
+To use this version:
+
+```bash
+git clone https://github.com/pacphi/sindri.git
+cd sindri
+git checkout v1.0.0-rc.3
+./scripts/vm-setup.sh --app-name my-sindri-dev
+```
+
+**Full Changelog**: https://github.com/pacphi/sindri/compare/v1.0.0-rc.2...v1.0.0-rc.3
 
 ## [1.0.0-rc.2] - 2025-11-04
 
