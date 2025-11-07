@@ -14,9 +14,9 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="workspace-structure"
-EXT_VERSION="2.0.0"
+EXT_VERSION="3.0.0"
 EXT_API_VERSION="2.0"
-EXT_DESCRIPTION="Creates workspace directory structure"
+EXT_DESCRIPTION="Creates workspace directory structure (multi-project design)"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="native"
 EXT_UPGRADE_STRATEGY="manual"
@@ -61,21 +61,33 @@ install() {
 
   cd "$WORKSPACE_DIR" || return 1
 
-  # Create main directories
+  # Create main directories (multi-project design)
   local main_dirs=(
-    "src"
-    "tests"
-    "docs"
+    "projects"
     "scripts"
-    "examples"
     "config"
     "agents"
     "context"
     "bin"
     "backups"
+    "docs"
   )
 
   for dir in "${main_dirs[@]}"; do
+    if mkdir -p "$dir"; then
+      print_debug "Created: $dir"
+    else
+      print_error "Failed to create: $dir"
+      return 1
+    fi
+  done
+
+  # Create projects subdirectory
+  local project_dirs=(
+    "projects/active"
+  )
+
+  for dir in "${project_dirs[@]}"; do
     if mkdir -p "$dir"; then
       print_debug "Created: $dir"
     else
@@ -150,6 +162,20 @@ configure() {
     print_success "Created workspace README"
   fi
 
+  # Create initial workspace documentation
+  local template_dir="$(dirname "${BASH_SOURCE[0]}")/docs-templates"
+  if [[ -d "$template_dir" ]]; then
+    for template in "$template_dir"/*.md; do
+      if [[ -f "$template" ]]; then
+        local filename="$(basename "$template")"
+        if [[ ! -f "$WORKSPACE_DIR/docs/$filename" ]]; then
+          cp "$template" "$WORKSPACE_DIR/docs/$filename"
+          print_debug "Created workspace documentation: $filename"
+        fi
+      fi
+    done
+  fi
+
   print_success "Workspace structure configured"
   return 0
 }
@@ -163,10 +189,10 @@ validate() {
 
   local all_valid=true
 
-  # Check all main directories exist
+  # Check all main directories exist (multi-project design)
   local required_dirs=(
-    "src" "tests" "docs" "scripts" "examples" "config"
-    "agents" "context" "bin" "backups"
+    "projects" "projects/active" "scripts" "config"
+    "agents" "context" "bin" "backups" "docs"
     "context/global" "context/templates"
     "scripts/lib" "scripts/extensions.d"
     "config/templates"
@@ -209,9 +235,9 @@ status() {
     return 1
   fi
 
-  # Count directories to determine installation status
+  # Count directories to determine installation status (multi-project design)
   local dir_count=0
-  local required_dirs=(src tests docs scripts examples config agents context bin backups)
+  local required_dirs=(projects scripts config agents context bin backups docs)
   for dir in "${required_dirs[@]}"; do
     if [[ -d "$WORKSPACE_DIR/$dir" ]]; then
       ((dir_count++))
@@ -260,11 +286,8 @@ remove() {
   print_error "This operation is DANGEROUS and will delete all workspace directories!"
   echo ""
   print_status "Directories that will be affected:"
-  echo "  - $WORKSPACE_DIR/src"
-  echo "  - $WORKSPACE_DIR/tests"
-  echo "  - $WORKSPACE_DIR/docs"
+  echo "  - $WORKSPACE_DIR/projects (contains all user projects!)"
   echo "  - $WORKSPACE_DIR/scripts"
-  echo "  - $WORKSPACE_DIR/examples"
   echo "  - $WORKSPACE_DIR/config"
   echo "  - $WORKSPACE_DIR/agents"
   echo "  - $WORKSPACE_DIR/context"
@@ -280,7 +303,7 @@ remove() {
     return 1
   fi
 
-  # Remove directories (but keep user projects)
+  # Remove safe directories (but keep user projects)
   local dirs_to_remove=(
     "agents"
     "context"
@@ -295,7 +318,7 @@ remove() {
   done
 
   print_warning "Workspace structure partially removed"
-  print_status "Preserved: src, tests, docs, scripts, examples, config (may contain user data)"
+  print_status "Preserved: projects, scripts, config, bin (may contain user data)"
   print_status "To fully reset, manually remove $WORKSPACE_DIR"
 
   return 0

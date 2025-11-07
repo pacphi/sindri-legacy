@@ -217,7 +217,7 @@ jobs:
             case \"$combination_name\" in
               core-stack)
                 echo \"Testing core extensions...\"
-                [ -d /workspace/src ] || exit 1
+                [ -d /workspace/projects ] || exit 1
                 mise --version
                 [ -f /etc/profile.d/00-ssh-environment.sh ] || exit 1
                 ;;

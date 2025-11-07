@@ -128,7 +128,7 @@ jobs:
           for script in $scripts; do
             # Skip non-shell template files
             case "$script" in
-              */templates/*.example|*/active-extensions.conf.example)
+              */active-extensions.conf.example)
                 echo "Skipping non-shell template: $script"
                 continue
                 ;;

@@ -30,11 +30,6 @@ usermod -d /workspace/developer developer
 chown developer:developer /workspace
 chmod 755 /workspace
 
-# Create essential directories in workspace if they don't exist
-sudo -u developer mkdir -p /workspace/projects
-sudo -u developer mkdir -p /workspace/scripts
-sudo -u developer mkdir -p /workspace/backups
-
 # Configure SSH keys from environment variable
 if [ -n "$AUTHORIZED_KEYS" ]; then
     echo "🔑 Configuring SSH keys..."

@@ -179,8 +179,20 @@ mvn archetype:generate        # Java/Maven
 2. **Create Project-Specific CLAUDE.md**:
 
    ```bash
-   cp /workspace/templates/CLAUDE.md.example ./CLAUDE.md
-   # Edit with project-specific context
+   # Create a basic CLAUDE.md for your project
+   cat > CLAUDE.md << 'EOF'
+   # [PROJECT_NAME]
+
+   ## Project Overview
+   [Brief description]
+
+   ## Development Commands
+   [Add common commands]
+
+   ## Architecture Notes
+   [Add architectural decisions]
+   EOF
+   # Edit the file to add project-specific context
    ```
 
 3. **Use Claude Flow for Multi-Agent Development**:

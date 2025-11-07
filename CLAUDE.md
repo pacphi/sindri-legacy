@@ -44,6 +44,7 @@ clone-project <url> [options]                    # Clone and enhance repository
 - `/workspace/developer/` - Developer home directory (persistent)
 - `/workspace/projects/active/` - Active development projects
 - `/workspace/scripts/` - Utility and management scripts
+- `/workspace/docs/` - Workspace-wide documentation
 - All user data (npm cache, configs, SSH keys) persists between VM restarts
 
 ## Development Workflow
@@ -693,8 +694,22 @@ cf-with-context <agent>    # Run agent with project context
 Each project should have its own CLAUDE.md file:
 
 ```bash
-cp /workspace/templates/CLAUDE.md.example ./CLAUDE.md
-# Edit with project-specific commands, architecture, conventions
+# Create project-specific CLAUDE.md
+cat > CLAUDE.md << 'EOF'
+# [PROJECT_NAME]
+
+## Project Overview
+[Brief description of the project]
+
+## Development Commands
+[Add common commands here]
+
+## Architecture Notes
+[Add architectural decisions and patterns]
+
+## Important Files
+[List key files and their purposes]
+EOF
 ```
 
 ### Claude Flow Memory

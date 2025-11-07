@@ -148,8 +148,8 @@ jobs:
 
             echo \"=== Verification ===\"
 
-            # Verify workspace structure
-            if [ -d /workspace/src ] && [ -d /workspace/tests ]; then
+            # Verify workspace structure (multi-project design)
+            if [ -d /workspace/projects ] && [ -d /workspace/scripts ]; then
               echo \"✅ Workspace structure created\"
             else
               echo \"❌ Workspace structure missing\"

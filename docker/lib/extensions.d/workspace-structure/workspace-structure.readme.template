@@ -1,22 +1,37 @@
 # Sindri Workspace
 
-## Directory Structure
+## Directory Structure (Multi-Project Design)
 
-- `src/` - Source code for projects
-- `tests/` - Test files
-- `docs/` - Documentation
-- `scripts/` - Utility and management scripts
-  - `lib/` - Shared script libraries
+- `projects/` - Project storage root
+  - `active/` - Active development projects (each project has its own src/, tests/, docs/)
+- `scripts/` - Workspace-wide utility and management scripts
+  - `lib/` - Shared script libraries and extension manager
   - `extensions.d/` - Extension scripts
-- `examples/` - Example code and templates
-- `config/` - Configuration files
+- `config/` - Workspace-wide configuration files
   - `templates/` - Configuration templates
 - `agents/` - Agent configurations and data
-- `context/` - Context management
+- `context/` - Context management for Claude Code
   - `global/` - Global context files
   - `templates/` - Context templates
-- `bin/` - User binaries and executables
+- `bin/` - Workspace-wide executable binaries and tool symlinks
 - `backups/` - Backup files
+- `docs/` - Workspace-wide documentation
+  - `getting-started.md` - Onboarding guide
+  - `extensions-guide.md` - Extension system reference
+
+## Multi-Project Workflow
+
+Individual projects are created in `/workspace/projects/active/` using:
+
+```bash
+# Create new project
+new-project my-app --type node
+
+# Clone existing project
+clone-project https://github.com/user/repo
+```
+
+Each project has its own structure with `src/`, `tests/`, `docs/`, etc.
 
 ## Usage
 

@@ -213,5 +213,4 @@ $RECYCLE.BIN/
 !fly.toml
 !Dockerfile
 !scripts/vm-configure.sh
-!templates/
 !CLAUDE.md

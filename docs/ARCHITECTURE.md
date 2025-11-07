@@ -73,6 +73,9 @@ File locations after deployment to the VM:
 │   └── vm-configure.sh                # Main configuration script
 ├── config/                            # Configuration files
 ├── backups/                           # Local backup storage
+├── docs/                              # Workspace-wide documentation
+│   ├── getting-started.md             # Onboarding guide
+│   └── extensions-guide.md            # Extension system reference
 └── .config/                           # Application configurations
 ```
 
@@ -123,7 +126,6 @@ File locations after deployment to the VM:
 | `docker/lib/extensions.d/*.sh.example`                   | `/workspace/scripts/extensions.d/*.sh.example`           | Available extensions      |
 | `docker/lib/extensions.d/active-extensions.conf.example` | `/workspace/scripts/extensions.d/active-extensions.conf` | Activation manifest       |
 | `docker/config/*`                                        | Various VM locations                                     | Configuration files       |
-| `templates/*.example`                                    | User reference only                                      | Example configurations    |
 
 ## Development Workflow Architecture
 
