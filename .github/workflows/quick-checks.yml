@@ -108,7 +108,7 @@ jobs:
           echo "Running shellcheck on shell scripts..."
 
           # Find all shell scripts
-          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v .git)
+          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v '/.git/')
 
           failed_scripts=()
           for script in $scripts; do
@@ -138,7 +138,7 @@ jobs:
         run: |
           echo "Validating YAML files..."
 
-          yaml_files=$(find .github -name "*.yml" -o -name "*.yaml" | grep -v .git | grep -v node_modules)
+          yaml_files=$(find .github -name "*.yml" -o -name "*.yaml" | grep -v '/.git/' | grep -v node_modules)
 
           failed_files=()
           for file in $yaml_files; do
