@@ -114,6 +114,7 @@ jobs:
           app-prefix: ${{ inputs.test_app_prefix }}
           extension-name: ${{ matrix.extension.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
 
       # NEW: Using composite action for deployment
       - name: Deploy test environment

@@ -52,6 +52,7 @@ jobs:
           app-prefix: ${{ inputs.test_app_prefix }}
           extension-name: "deps"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
           vm-memory: "4096"
           vm-cpu-kind: "shared"
           vm-cpu-count: "2"
