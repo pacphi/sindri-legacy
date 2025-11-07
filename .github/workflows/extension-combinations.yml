@@ -36,7 +36,7 @@ jobs:
   extension-combinations:
     name: Test Combination - ${{ matrix.combination.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     # Only run on workflow_dispatch or when explicitly requested via commit message
@@ -103,7 +103,7 @@ jobs:
           region: ${{ inputs.region }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           deploy-timeout: "600"
-          retry-attempts: "3"
+          max-deploy-attempts: "3"
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"

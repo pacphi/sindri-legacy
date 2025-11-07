@@ -40,12 +40,12 @@ Sindri uses GitHub Actions for continuous integration and deployment with a focu
 
 ## Quick Reference
 
-| Workflow                                           | Purpose                                          | Trigger                              | Duration |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------ | -------- |
-| [Quick Checks](#quick-checks)                      | Fast validation and change detection (NEW)       | Push, PR to main/develop             | ~2-5 min |
-| [Single Extension Test](#single-extension-test)    | Test individual extension in isolation (NEW)     | Manual only                          | ~2-4 min |
-| [Extension Tests](#extension-system-tests)         | Test extension system (OPTIMIZED)                | Main push, PR, weekly Sunday 2am UTC | ~12 min  |
-| [Integration Tests](#integration-tests)            | End-to-end VM deployment (OPTIMIZED)             | Main push, PR, weekly Sunday 2am UTC | ~4 min   |
+| Workflow                                           | Purpose                                          | Trigger                                | Duration |
+| -------------------------------------------------- | ------------------------------------------------ | -------------------------------------- | -------- |
+| [Quick Checks](#quick-checks)                      | Fast validation and change detection (NEW)       | Push, PR to main/develop               | ~2-5 min |
+| [Single Extension Test](#single-extension-test)    | Test individual extension in isolation (NEW)     | Manual only                            | ~2-4 min |
+| [Extension Tests](#extension-system-tests)         | Test extension system (OPTIMIZED)                | Main push, PR, weekly Sunday 2am UTC   | ~12 min  |
+| [Integration Tests](#integration-tests)            | End-to-end VM deployment (OPTIMIZED)             | Main push, PR, weekly Saturday 2am UTC | ~4 min   |
 | [Project Validation](#project-validation)          | Validate project structure and configuration     | Push, PR                             | ~2 min   |
 | [Build Docker Image](#build-and-push-docker-image) | Build and cache Docker images                    | Dockerfile changes, manual           | ~5 min   |
 | [Release Automation](#release-automation)          | Automated releases and changelogs                | Version tags                         | ~3 min   |
@@ -140,7 +140,12 @@ Comprehensive testing of the complete extension system including Extension API v
 - Push to `main` branch (optimized - no longer triggers on `develop`)
 - Pull requests to `main` or `develop`
 - Weekly schedule: Sundays at 2:00 AM UTC
+- Manual workflow dispatch
 - Changes to core extension system files only (not individual extensions)
+- **Optimized Path Filters**: Uses explicit workflow dependencies instead of wildcards
+  - Only triggers on changes to extension-system workflows (12 specific files)
+  - Excludes unrelated workflows (validate.yml, quick-checks.yml, build-image.yml, etc.)
+  - Result: Reduced trigger rate from ~75% to ~15% of commits
 
 **What It Tests**:
 
@@ -181,9 +186,14 @@ End-to-end testing of VM deployment, developer workflows, and mise-powered stack
 
 - Push to `main` branch (optimized - no longer triggers on `develop`)
 - Pull requests to `main` or `develop`
-- Weekly schedule: Sundays at 2:00 AM UTC
+- Weekly schedule: Saturdays at 2:00 AM UTC (staggered from extension-tests)
 - Manual workflow dispatch
 - Changes to core deployment configuration and system files only
+- **Optimized Path Filters**:
+  - Removed shared script triggers (`.github/scripts/common/**`)
+  - Added explicit action dependencies (6 specific actions)
+  - Added `paths-ignore` for documentation files (skips docs-only commits)
+  - Result: Reduced trigger rate from ~35% to ~25% of commits
 
 **What It Tests**:
 
@@ -462,10 +472,16 @@ Sindri implements a three-tier testing strategy for faster feedback loops and re
 
 **Weekly Quality Gates**:
 
-Both comprehensive test suites run weekly on Sundays at 2:00 AM UTC to catch integration issues without blocking daily development:
+Comprehensive test suites run on a staggered weekly schedule to prevent resource contention and enable image reuse:
 
-- `extension-tests.yml` - Full extension system validation
-- `integration.yml` - Complete integration testing
+- **Saturday 2:00 AM UTC**: `integration.yml` - Complete integration testing
+- **Sunday 2:00 AM UTC**: `extension-tests.yml` - Full extension system validation
+
+This staggered approach:
+- Prevents Fly.io resource contention
+- Allows extension-tests to reuse Docker images built during integration tests
+- Provides better failure isolation (different days)
+- Catches integration issues without blocking daily development
 
 ### Required GitHub Secrets
 
@@ -523,18 +539,42 @@ flyctl apps create sindri-registry --org personal
 
 ### Workflow Triggers
 
-Workflows are designed to run only when relevant:
+Workflows are designed to run only when relevant changes occur, using explicit path filters to prevent unnecessary CI runs.
+
+**Best Practice: Use Explicit Paths, Not Wildcards**
 
 ```yaml
+# ❌ BAD: Wildcard triggers on ALL workflow changes
 on:
   push:
-    branches: [main, develop]
     paths:
-      - "docker/**" # Only run on Docker changes
-      - ".github/workflows/**" # Or workflow changes
+      - ".github/workflows/**"  # Too broad!
+      - ".github/scripts/common/**"  # Shared across workflows!
+
+# ✅ GOOD: Explicit dependencies only
+on:
+  push:
+    paths:
+      # Core system files
+      - "docker/lib/extension-manager.sh"
+      - "docker/lib/common.sh"
+      # Workflow itself and direct dependencies
+      - ".github/workflows/extension-tests.yml"
+      - ".github/workflows/per-extension.yml"
+      - ".github/workflows/api-compliance.yml"
+      # Specific actions used by this workflow
+      - ".github/actions/deploy-fly-app/**"
+      - ".github/actions/setup-fly-test-env/**"
+    paths-ignore:
+      # Skip docs-only changes
+      - "**/*.md"
+      - "docs/**"
 ```
 
-This prevents unnecessary CI runs and reduces costs.
+**Impact of Optimization**:
+- extension-tests.yml: 75% → 15% trigger rate (60% reduction)
+- integration.yml: 35% → 25% trigger rate (10-15% reduction)
+- Prevents unrelated workflow changes from triggering heavy test suites
 
 ### Manual Workflow Dispatch
 

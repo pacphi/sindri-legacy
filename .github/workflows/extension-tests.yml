@@ -16,10 +16,21 @@ on:
       - "docker/lib/extensions-common.sh"
       - "docker/lib/upgrade-history.sh"
       - "docker/lib/upgrade-notifier.sh"
-      # Workflow itself
+      # Workflow itself and its dependencies (explicit list, not wildcard)
       - ".github/workflows/extension-tests.yml"
-      - ".github/workflows/*.yml"
-      # Actions
+      - ".github/workflows/manager-validation.yml"
+      - ".github/workflows/syntax-validation.yml"
+      - ".github/workflows/per-extension.yml"
+      - ".github/workflows/api-compliance.yml"
+      - ".github/workflows/protected-extensions-tests.yml"
+      - ".github/workflows/manifest-operations-tests.yml"
+      - ".github/workflows/dependency-chain-tests.yml"
+      - ".github/workflows/extension-combinations.yml"
+      - ".github/workflows/test-extensions-metadata.yml"
+      - ".github/workflows/test-extensions-upgrade-vm.yml"
+      - ".github/workflows/test-documentation.yml"
+      - ".github/workflows/report-results.yml"
+      # Actions (shared across workflows)
       - ".github/actions/**"
       # Test scripts
       - ".github/scripts/extension-tests/**"
@@ -39,9 +50,21 @@ on:
       - "docker/lib/extensions-common.sh"
       - "docker/lib/upgrade-history.sh"
       - "docker/lib/upgrade-notifier.sh"
-      # Workflow itself
+      # Workflow itself and its dependencies (explicit list, not wildcard)
       - ".github/workflows/extension-tests.yml"
-      # Actions
+      - ".github/workflows/manager-validation.yml"
+      - ".github/workflows/syntax-validation.yml"
+      - ".github/workflows/per-extension.yml"
+      - ".github/workflows/api-compliance.yml"
+      - ".github/workflows/protected-extensions-tests.yml"
+      - ".github/workflows/manifest-operations-tests.yml"
+      - ".github/workflows/dependency-chain-tests.yml"
+      - ".github/workflows/extension-combinations.yml"
+      - ".github/workflows/test-extensions-metadata.yml"
+      - ".github/workflows/test-extensions-upgrade-vm.yml"
+      - ".github/workflows/test-documentation.yml"
+      - ".github/workflows/report-results.yml"
+      # Actions (shared across workflows)
       - ".github/actions/**"
       # Test scripts
       - ".github/scripts/extension-tests/**"

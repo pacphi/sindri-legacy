@@ -14,14 +14,27 @@ on:
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
-      # Workflow itself
+      # Workflow itself and direct dependencies
       - ".github/workflows/integration.yml"
       - ".github/workflows/integration-test.yml"
       - ".github/workflows/developer-workflow.yml"
       - ".github/workflows/mise-stack-integration.yml"
-      # Scripts
+      # Integration-specific scripts
       - ".github/scripts/integration/**"
-      - ".github/scripts/common/**"
+      # Shared actions used by integration workflows
+      - ".github/actions/setup-fly-test-env/**"
+      - ".github/actions/deploy-fly-app/**"
+      - ".github/actions/wait-fly-deployment/**"
+      - ".github/actions/test-ssh-connectivity/**"
+      - ".github/actions/test-vm-configuration/**"
+      - ".github/actions/run-vm-script/**"
+    paths-ignore:
+      # Skip integration tests for documentation-only changes
+      - "**/*.md"
+      - "docs/**"
+      - "CHANGELOG.md"
+      - "README.md"
+      - "LICENSE"
 
   pull_request:
     branches: [main, develop]
@@ -36,17 +49,30 @@ on:
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
-      # Workflow itself
+      # Workflow itself and direct dependencies
       - ".github/workflows/integration.yml"
       - ".github/workflows/integration-test.yml"
       - ".github/workflows/developer-workflow.yml"
       - ".github/workflows/mise-stack-integration.yml"
-      # Scripts
+      # Integration-specific scripts
       - ".github/scripts/integration/**"
-      - ".github/scripts/common/**"
+      # Shared actions used by integration workflows
+      - ".github/actions/setup-fly-test-env/**"
+      - ".github/actions/deploy-fly-app/**"
+      - ".github/actions/wait-fly-deployment/**"
+      - ".github/actions/test-ssh-connectivity/**"
+      - ".github/actions/test-vm-configuration/**"
+      - ".github/actions/run-vm-script/**"
+    paths-ignore:
+      # Skip integration tests for documentation-only changes
+      - "**/*.md"
+      - "docs/**"
+      - "CHANGELOG.md"
+      - "README.md"
+      - "LICENSE"
 
   schedule:
-    - cron: '0 2 * * 0'  # Weekly on Sunday at 2:00 AM UTC
+    - cron: '0 2 * * 6'  # Weekly on Saturday at 2:00 AM UTC
 
   workflow_dispatch:
     inputs:
