@@ -85,4 +85,4 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          ./scripts/vm-teardown.sh "$APP_NAME"
+          ./scripts/vm-teardown.sh --app-name "$APP_NAME"
