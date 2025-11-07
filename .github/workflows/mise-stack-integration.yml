@@ -54,6 +54,7 @@ jobs:
           app-prefix: ${{ inputs.test_app_prefix }}
           extension-name: "mise"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
           vm-memory: "4096"
           vm-cpu-kind: "performance"
           vm-cpu-count: "2"

@@ -51,6 +51,11 @@ on:
         required: false
         default: "30"
         type: string
+      volume_name:
+        description: "Persistent volume name"
+        required: false
+        default: "sindri_data"
+        type: string
       extension_profile:
         description: "Extension profile to install"
         required: false
@@ -96,6 +101,7 @@ jobs:
       app_name: ${{ steps.config.outputs.app_name }}
       region: ${{ steps.config.outputs.region }}
       volume_size: ${{ steps.config.outputs.volume_size }}
+      volume_name: ${{ steps.config.outputs.volume_name }}
       vm_memory: ${{ steps.config.outputs.vm_memory }}
       cpu_kind: ${{ steps.config.outputs.cpu_kind }}
       cpu_count: ${{ steps.config.outputs.cpu_count }}
@@ -111,6 +117,7 @@ jobs:
           echo "app_name=${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
           echo "region=${{ github.event.inputs.region }}" >> $GITHUB_OUTPUT
           echo "volume_size=${{ github.event.inputs.volume_size }}" >> $GITHUB_OUTPUT
+          echo "volume_name=${{ github.event.inputs.volume_name }}" >> $GITHUB_OUTPUT
           echo "skip_cleanup=${{ github.event.inputs.skip_cleanup }}" >> $GITHUB_OUTPUT
 
           # Map VM preset to resources
@@ -195,6 +202,7 @@ jobs:
           echo "- **App Name**: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Region**: ${{ github.event.inputs.region }}" >> $GITHUB_STEP_SUMMARY
           echo "- **VM Preset**: ${{ github.event.inputs.vm_preset }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Volume Name**: ${{ github.event.inputs.volume_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Volume Size**: ${{ github.event.inputs.volume_size }}GB" >> $GITHUB_STEP_SUMMARY
           echo "- **Extension Profile**: ${{ github.event.inputs.extension_profile }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Extensions**: $extensions" >> $GITHUB_STEP_SUMMARY
@@ -223,19 +231,22 @@ jobs:
           app-prefix: ${{ needs.setup-config.outputs.app_name }}
           extension-name: "self-service"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ needs.setup-config.outputs.region }}
+          volume-name: ${{ needs.setup-config.outputs.volume_name }}
+          volume-size: ${{ needs.setup-config.outputs.volume_size }}
           vm-memory: ${{ needs.setup-config.outputs.vm_memory }}
           vm-cpu-kind: ${{ needs.setup-config.outputs.cpu_kind }}
           vm-cpu-count: ${{ needs.setup-config.outputs.cpu_count }}
-          volume-size: ${{ needs.setup-config.outputs.volume_size }}
 
       - name: Deploy Fly.io app
         uses: ./.github/actions/deploy-fly-app
         with:
           app-name: ${{ steps.setup.outputs.app-name }}
           region: ${{ needs.setup-config.outputs.region }}
+          volume-name: ${{ needs.setup-config.outputs.volume_name }}
+          volume-size: ${{ needs.setup-config.outputs.volume_size }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           deploy-timeout: "600"
-          retry-attempts: "3"
           pre-built-image: ${{ needs.setup-config.outputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 

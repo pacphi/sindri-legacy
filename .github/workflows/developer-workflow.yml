@@ -54,6 +54,7 @@ jobs:
           app-prefix: ${{ inputs.test_app_prefix }}
           extension-name: "workflow"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
           vm-memory: "2048"
           vm-cpu-kind: "shared"
           vm-cpu-count: "1"
