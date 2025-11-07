@@ -4,30 +4,37 @@ Comprehensive guide to Sindri's GitHub Actions workflows for automated testing, 
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Quick Reference](#quick-reference)
-- [Core Testing Workflows](#core-testing-workflows)
-  - [Extension System Tests](#extension-system-tests)
-  - [Integration Tests](#integration-tests)
-- [Validation Workflows](#validation-workflows)
-  - [Project Validation](#project-validation)
-  - [Lint Documentation](#lint-documentation)
-- [Build & Release Workflows](#build--release-workflows)
-  - [Build and Push Docker Image](#build-and-push-docker-image)
-  - [Release Automation](#release-automation)
-- [Utility Workflows](#utility-workflows)
-  - [Self-Service Deploy](#self-service-deploy)
-  - [Report Results](#report-results)
-- [Reusable Components](#reusable-components)
-  - [Composite Actions](#composite-actions)
-  - [Test Scripts](#test-scripts)
-- [CI/CD Best Practices](#cicd-best-practices)
-  - [Pre-Built Images](#pre-built-images)
-  - [Workflow Triggers](#workflow-triggers)
-  - [Manual Workflow Dispatch](#manual-workflow-dispatch)
-  - [Debugging Failed Workflows](#debugging-failed-workflows)
-- [Workflow Status Badges](#workflow-status-badges)
-- [Related Documentation](#related-documentation)
+- [GitHub Workflows](#github-workflows)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Quick Reference](#quick-reference)
+  - [Core Testing Workflows](#core-testing-workflows)
+    - [Quick Checks](#quick-checks)
+    - [Single Extension Test](#single-extension-test)
+    - [Extension System Tests](#extension-system-tests)
+    - [Integration Tests](#integration-tests)
+  - [Validation Workflows](#validation-workflows)
+    - [Project Validation](#project-validation)
+    - [Lint Documentation](#lint-documentation)
+  - [Build \& Release Workflows](#build--release-workflows)
+    - [Build and Push Docker Image](#build-and-push-docker-image)
+    - [Release Automation](#release-automation)
+  - [Utility Workflows](#utility-workflows)
+    - [Self-Service Deploy](#self-service-deploy)
+    - [Report Results](#report-results)
+  - [Reusable Components](#reusable-components)
+    - [Composite Actions](#composite-actions)
+    - [Test Scripts](#test-scripts)
+  - [CI/CD Best Practices](#cicd-best-practices)
+    - [Multi-Tier Testing Strategy](#multi-tier-testing-strategy)
+    - [Required GitHub Secrets](#required-github-secrets)
+    - [Pre-Built Images](#pre-built-images)
+    - [Workflow Triggers](#workflow-triggers)
+      - [Best Practice: Use Explicit Paths, Not Wildcards](#best-practice-use-explicit-paths-not-wildcards)
+    - [Manual Workflow Dispatch](#manual-workflow-dispatch)
+    - [Debugging Failed Workflows](#debugging-failed-workflows)
+  - [Workflow Status Badges](#workflow-status-badges)
+  - [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -192,7 +199,6 @@ End-to-end testing of VM deployment, developer workflows, and mise-powered stack
 - **Optimized Path Filters**:
   - Removed shared script triggers (`.github/scripts/common/**`)
   - Added explicit action dependencies (6 specific actions)
-  - Added `paths-ignore` for documentation files (skips docs-only commits)
   - Result: Reduced trigger rate from ~35% to ~25% of commits
 
 **What It Tests**:
@@ -478,6 +484,7 @@ Comprehensive test suites run on a staggered weekly schedule to prevent resource
 - **Sunday 2:00 AM UTC**: `extension-tests.yml` - Full extension system validation
 
 This staggered approach:
+
 - Prevents Fly.io resource contention
 - Allows extension-tests to reuse Docker images built during integration tests
 - Provides better failure isolation (different days)
@@ -541,7 +548,7 @@ flyctl apps create sindri-registry --org personal
 
 Workflows are designed to run only when relevant changes occur, using explicit path filters to prevent unnecessary CI runs.
 
-**Best Practice: Use Explicit Paths, Not Wildcards**
+#### Best Practice: Use Explicit Paths, Not Wildcards
 
 ```yaml
 # ❌ BAD: Wildcard triggers on ALL workflow changes
@@ -565,13 +572,10 @@ on:
       # Specific actions used by this workflow
       - ".github/actions/deploy-fly-app/**"
       - ".github/actions/setup-fly-test-env/**"
-    paths-ignore:
-      # Skip docs-only changes
-      - "**/*.md"
-      - "docs/**"
 ```
 
 **Impact of Optimization**:
+
 - extension-tests.yml: 75% → 15% trigger rate (60% reduction)
 - integration.yml: 35% → 25% trigger rate (10-15% reduction)
 - Prevents unrelated workflow changes from triggering heavy test suites

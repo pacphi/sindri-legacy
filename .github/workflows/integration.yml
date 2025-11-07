@@ -28,13 +28,6 @@ on:
       - ".github/actions/test-ssh-connectivity/**"
       - ".github/actions/test-vm-configuration/**"
       - ".github/actions/run-vm-script/**"
-    paths-ignore:
-      # Skip integration tests for documentation-only changes
-      - "**/*.md"
-      - "docs/**"
-      - "CHANGELOG.md"
-      - "README.md"
-      - "LICENSE"
 
   pull_request:
     branches: [main, develop]
@@ -63,13 +56,6 @@ on:
       - ".github/actions/test-ssh-connectivity/**"
       - ".github/actions/test-vm-configuration/**"
       - ".github/actions/run-vm-script/**"
-    paths-ignore:
-      # Skip integration tests for documentation-only changes
-      - "**/*.md"
-      - "docs/**"
-      - "CHANGELOG.md"
-      - "README.md"
-      - "LICENSE"
 
   schedule:
     - cron: '0 2 * * 6'  # Weekly on Saturday at 2:00 AM UTC
