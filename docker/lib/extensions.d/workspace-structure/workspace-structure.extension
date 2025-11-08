@@ -238,14 +238,18 @@ status() {
   # Count directories to determine installation status (multi-project design)
   local dir_count=0
   local required_dirs=(projects scripts config agents context bin backups docs)
+  local total_dirs=${#required_dirs[@]}
+
   for dir in "${required_dirs[@]}"; do
     if [[ -d "$WORKSPACE_DIR/$dir" ]]; then
       ((dir_count++))
     fi
   done
 
-  if [[ $dir_count -eq 0 ]]; then
-    echo "Status: ✗ NOT INSTALLED"
+  # Extension is considered installed only if ALL required directories exist
+  # This prevents false positives when only some directories are present (e.g., scripts from Docker image)
+  if [[ $dir_count -ne $total_dirs ]]; then
+    echo "Status: ✗ NOT INSTALLED (only $dir_count/$total_dirs directories present)"
     return 1
   fi
 
