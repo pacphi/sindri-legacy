@@ -16,7 +16,9 @@ apt_update_retry 3
 
 # Install system dependencies with retry
 # Note: libssl-dev, zlib1g-dev, libyaml-dev, libreadline-dev are required for compiling language runtimes and their native extensions
+# Using --no-install-recommends to avoid pulling in unnecessary packages
 apt_install_retry 3 \
+    --no-install-recommends \
     software-properties-common \
     openssh-server \
     sudo \
@@ -60,8 +62,7 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of
 chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
 apt_update_retry 3
-apt_install_retry 3 gh
+apt_install_retry 3 --no-install-recommends gh
 
 # Clean up to reduce image size
-rm -rf /var/lib/apt/lists/*
 apt-get clean

@@ -2,143 +2,115 @@
 # ============================================================================
 # Extensions execute in the order listed below.
 # Uncomment lines to activate extensions (remove the # at the start).
-# Lines starting with # are comments and are ignored.
 #
-# To manage extensions:
-#   1. Edit this file to uncomment desired extensions
-#   2. Run: extension-manager install-all
+# Usage:
+#   extension-manager install-all       # Install all uncommented extensions
+#   extension-manager --interactive     # Interactive setup
+# ============================================================================
+
+# ============================================================================
+# PRE-INSTALLED BASE SYSTEM
+# ============================================================================
+# The following are pre-installed in the Docker image and always available:
+# • workspace-structure - /workspace directory tree
+# • mise - Unified tool version manager
+# • ssh-environment - Non-interactive SSH session support
+# • claude - Claude Code CLI
 #
-# Or use interactive mode:
-#   extension-manager --interactive
-#
-# Manual editing:
-#   - Uncomment the extension name to activate
-#   - Comment out or remove lines to deactivate
-#   - Reorder lines to change execution priority
-# ============================================================================
+# Do not add these to the manifest.
 
 # ============================================================================
-# CORE INFRASTRUCTURE (protected - cannot be removed)
+# FOUNDATIONAL LANGUAGES
 # ============================================================================
-# These extensions are automatically ensured by extension-manager and
-# installed first. They provide foundational system functionality.
+# Recommended: nodejs is required by many tools
 
-# Creates /workspace directory structure (PROTECTED)
-workspace-structure
-
-# Unified tool version manager - enables mise-powered extensions (PROTECTED)
-# Required by: nodejs, python, rust, golang, nodejs-devtools
-mise-config
-
-# Configures SSH daemon for non-interactive sessions (PROTECTED)
-# Required for CI/CD and remote command execution
-ssh-environment
-
-# ============================================================================
-# FOUNDATIONAL LANGUAGES (install at least one)
-# ============================================================================
-# While not protected, nodejs is highly recommended as many tools depend on it
-
-# Node.js LTS via mise and npm (required by nodejs-devtools, playwright, monitoring)
-# Depends on: mise-config
+# Node.js LTS via mise (required by nodejs-devtools, playwright, monitoring)
 nodejs
 
-# Python 3 via mise and pip (required by monitoring and many tools)
-# Depends on: mise-config
+# Python 3 via mise (required by monitoring and many tools)
 python
 
 # ============================================================================
-# CLAUDE AI (recommended)
+# CLAUDE EXTENSIONS
 # ============================================================================
 
-# Claude Code CLI with developer configuration
-# Creates ~/.claude/CLAUDE.md and ~/.claude/settings.json with hooks
-claude
-
-# Claude plugin marketplace for installing curated plugins from claudecodemarketplace.com
-# Automatically installs plugins listed in /workspace/.plugins file
-# Depends on: claude, git
+# Claude marketplace plugin manager (requires claude, git)
 # claude-marketplace
 
-# OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
-# Implements Agent Skills specification for progressive skill disclosure
-# Depends on: nodejs (requires Node.js 20.6+, npm, git)
+# OpenSkills from Anthropic's marketplace (requires nodejs 20.6+, git)
 # openskills
 
 # ============================================================================
-# DEVELOPMENT TOOLS (optional - uncomment as needed)
+# DEVELOPMENT TOOLS
 # ============================================================================
 
-# GitHub CLI authentication and workflow configuration
+# GitHub CLI authentication
 github-cli
 
-# Node.js development tools: TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
+# TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
 nodejs-devtools
 
-# Browser automation with Playwright and Chromium (depends on nodejs)
+# Browser automation with Playwright (requires nodejs)
 playwright
 
-# Claude monitoring and usage tracking tools (depends on python, nodejs)
+# Claude usage monitoring (requires python, nodejs)
 monitoring
 
-# Agent manager for Claude Code agents (depends on curl, jq)
+# Claude Code agent manager (requires curl, jq)
 agent-manager
 
-# Tmux workspace management with helper scripts
+# Tmux session management
 tmux-workspace
 
-# Context management utilities for Claude Code
+# Context utilities for Claude
 context-loader
 
 # ============================================================================
-# ADDITIONAL LANGUAGES (uncomment as needed)
+# ADDITIONAL LANGUAGES
 # ============================================================================
 
-# Rust toolchain with cargo via mise (depends on mise-config)
+# Rust toolchain via mise
 # rust
 
-# Go programming language via mise (depends on mise-config)
+# Go language via mise
 # golang
 
-# Docker and Docker Compose
+# Docker Engine and Compose
 # docker
 
-# JVM languages (Java, Kotlin, Scala)
+# Java, Kotlin, Scala via SDKMAN
 # jvm
 
 # PHP and Composer
 # php
 
-# Ruby and Bundler
+# Ruby and Rails via mise
 # ruby
 
-# .NET Core SDK
+# .NET SDK
 # dotnet
 
 # ============================================================================
-# INFRASTRUCTURE & CLOUD TOOLS (uncomment as needed)
+# INFRASTRUCTURE & CLOUD
 # ============================================================================
 
-# Infrastructure tools (Terraform, Ansible, K8s tools)
+# Terraform, Ansible, kubectl, Helm
 # infra-tools
 
-# Cloud CLI tools (AWS, GCP, Azure)
+# AWS, GCP, Azure CLIs
 # cloud-tools
 
-# AI coding assistants and tools
+# AI coding assistants
 # ai-tools
 
 # ============================================================================
 # NOTES
 # ============================================================================
-# - Order matters: extensions execute top to bottom
-# - Protected extensions (workspace-structure, mise-config, ssh-environment)
-#   are automatically added to manifest and cannot be removed
-# - Dependencies are checked in prerequisites()
-# - Use extension-manager commands for management:
+# • Order matters: extensions execute top to bottom
+# • Dependencies are checked in prerequisites()
+# • Common commands:
 #     extension-manager list              # Show all extensions
-#     extension-manager install <name>    # Install extension (auto-activates)
-#     extension-manager install-all       # Install all uncommented extensions
-#     extension-manager --interactive     # Interactive setup with prompts
-#     extension-manager validate-all      # Validate all installed extensions
+#     extension-manager install <name>    # Install single extension
+#     extension-manager install-all       # Install all uncommented
+#     extension-manager validate-all      # Validate installations
 # ============================================================================

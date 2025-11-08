@@ -52,17 +52,17 @@ if [ ! -d "/workspace/scripts/lib" ]; then
     # Setup extension manifest based on CI mode
     echo "📋 Configuring extension manifest..."
     if [ "$CI_MODE" = "true" ]; then
-        # CI mode: Use pre-configured CI manifest with protected extensions
+        # CI mode: Use pre-configured CI manifest
         if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
             cp /docker/lib/extensions.d/active-extensions.ci.conf /workspace/scripts/lib/extensions.d/active-extensions.conf
-            echo "✅ Using CI extension manifest (protected extensions pre-configured)"
+            echo "✅ Using CI extension manifest"
         else
             echo "⚠️  CI manifest not found, creating empty manifest"
             mkdir -p /workspace/scripts/lib/extensions.d
             touch /workspace/scripts/lib/extensions.d/active-extensions.conf
         fi
     else
-        # Production mode: Check if manifest exists, create empty if not
+        # Production mode: Check if manifest exists, create from template if not
         if [ ! -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]; then
             echo "Creating default extension manifest..."
             # Use CI manifest as template (has good documentation)
@@ -168,10 +168,9 @@ if [ -f "/docker/scripts/setup-motd.sh" ]; then
     bash /docker/scripts/setup-motd.sh
 fi
 
-# Note: Extensions are NOT installed automatically at startup.
-# Users should run 'extension-manager install-all' to install extensions.
-# Protected extensions (workspace-structure, mise-config, ssh-environment) will
-# be automatically ensured in the manifest and installed first when install-all runs.
+# Note: Base system (workspace, mise, SSH environment, Claude) is pre-installed.
+# Additional extensions are NOT installed automatically at startup.
+# Users should run 'extension-manager install-all' to install optional extensions.
 
 # Start SSH daemon (check for CI mode)
 if [ "$CI_MODE" = "true" ]; then

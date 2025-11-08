@@ -116,11 +116,15 @@ extension-manager upgrade-history        # View upgrade history
 
 ### Available Extensions
 
-**Core Extensions (Protected - Cannot be Removed):**
+**Baked Base System (Pre-installed in Docker Image):**
 
-- `workspace-structure` - Base directory structure (must be first)
-- `mise-config` - Unified tool version manager for all mise-powered extensions
-- `ssh-environment` - SSH configuration for non-interactive sessions and CI/CD
+The following components are pre-installed and cannot be removed:
+- `workspace-structure` - /workspace directory structure
+- `mise-config` - Unified tool version manager (mise)
+- `ssh-environment` - SSH configuration for non-interactive sessions
+- `claude` - Claude Code CLI and developer configuration
+
+These are baked into the Docker image for faster startup (~10s vs ~90-120s) and improved reliability.
 
 **Foundational Languages:**
 
@@ -167,10 +171,11 @@ or `active-extensions.ci.conf` (CI mode).
 Example manifest:
 
 ```bash
-# Protected extensions (required for system functionality):
-workspace-structure
-mise-config
-ssh-environment
+# Baked base system (pre-installed, do not add to manifest):
+# - workspace-structure
+# - mise-config
+# - ssh-environment
+# - claude
 
 # Foundational languages
 nodejs
@@ -357,8 +362,8 @@ Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management 
 mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, Ruby, and their associated tools,
 replacing multiple version managers (NVM, pyenv, rbenv, rustup, etc.) with one tool.
 
-**Note:** The `mise-config` extension is a **protected core extension** that is automatically installed and cannot be removed.
-It must be installed before any mise-powered extensions.
+**Note:** `mise-config` is pre-installed in the Docker image and is always available.
+It does not need to be installed manually.
 
 ### mise-Managed Extensions
 
