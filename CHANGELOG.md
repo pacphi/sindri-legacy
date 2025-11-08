@@ -1,7 +1,46 @@
 # Changelog
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0-rc.4] - 2025-11-08
+
+### ✨ Features
+
+* feat(ci): add automated workflow logs cleanup (dd475f5)
+
+### 🐛 Bug Fixes
+
+* fix: add -n to flyctl logs command in self-service deploy connection details output (cf4604d)
+* fix: Claude installer timeout and workspace-structure installation (#13) (f38550b)
+* fix(claude): use $HOME instead of ~ in quoted string (a968dd8)
+* fix(claude): handle symlink installation and add PATH configuration (d965fc8)
+* fix(ci): use --app-name flag for vm-teardown.sh in upgrade test (a8ff6f3)
+* fix(workspace-structure): downgrade to v2.1.0 for API v2.0 compatibility (955f0b5)
+
+### 📚 Documentation
+
+* docs: update CHANGELOG.md for v1.0.0-rc.3 (5e1cae7)
+
+### 🔧 Other Changes
+
+* refactor(workspace): migrate to multi-project directory structure (46209ff)
+
+
+### 📦 Installation
+
+To use this version:
+
+```bash
+git clone https://github.com/pacphi/sindri.git
+cd sindri
+git checkout v1.0.0-rc.4
+./scripts/vm-setup.sh --app-name my-sindri-dev
+```
+
+**Full Changelog**: https://github.com/pacphi/sindri/compare/v1.0.0-rc.3...v1.0.0-rc.4
 
 ## [1.0.0-rc.3] - 2025-11-07
 
