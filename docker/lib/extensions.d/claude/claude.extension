@@ -90,7 +90,7 @@ install() {
       echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
       print_success "Added ~/.local/bin to PATH in .bashrc"
     else
-      print_status "~/.local/bin already in .bashrc PATH"
+      print_status "$HOME/.local/bin already in .bashrc PATH"
     fi
   else
     print_error "Claude Code binary not found at: $claude_path"
