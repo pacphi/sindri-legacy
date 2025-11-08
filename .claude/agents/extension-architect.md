@@ -221,9 +221,8 @@ check_extension_installed "dependency-name" || {
 
 **Dependency Order** (in active-extensions.conf):
 
-- Protected extensions first
 - Dependencies before dependents
-- Mise-config before all mise-powered extensions
+- Extensions requiring mise should be installed after base system is ready
 
 ## Idempotency Patterns
 
@@ -378,7 +377,7 @@ When designing or reviewing extensions:
 - [ ] Error handling comprehensive
 - [ ] Logging uses standard functions
 - [ ] Mise integration if applicable
-- [ ] Protected extension dependencies checked
+- [ ] Base system dependencies (mise, workspace, ssh) available
 - [ ] Validation tests cover core functionality
 - [ ] Remove function is safe and complete
 - [ ] Upgrade function preserves user data

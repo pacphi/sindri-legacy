@@ -9,13 +9,6 @@ fi
 EXTENSIONS_COMMON_SH_LOADED="true"
 
 # ============================================================================
-# CONSTANTS
-# ============================================================================
-
-# Protected extensions that cannot be removed or reordered
-export PROTECTED_EXTENSIONS="workspace-structure mise-config ssh-environment"
-
-# ============================================================================
 # EXTENSION INITIALIZATION
 # ============================================================================
 

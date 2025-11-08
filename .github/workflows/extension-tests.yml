@@ -283,23 +283,6 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
-  # Protected Extensions Tests
-  # ============================================================================
-
-  protected-extensions-tests:
-    name: Protected Extensions
-    needs: [setup-config, build-image, extension-manager-validation, extension-syntax-validation]
-    uses: ./.github/workflows/protected-extensions-tests.yml
-    with:
-      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
-      region: ${{ needs.setup-config.outputs.region }}
-      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
-      pre_built_image: ${{ needs.build-image.outputs.should-use-image == 'true' && needs.build-image.outputs.image-url || '' }}
-    secrets:
-      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
-  # ============================================================================
   # Manifest Operations Tests
   # ============================================================================
 
@@ -402,7 +385,6 @@ jobs:
       - extension-syntax-validation
       - per-extension-tests
       - extension-api-tests
-      - protected-extensions-tests
       - manifest-operations-tests
       - dependency-chain-tests
       - extension-combinations

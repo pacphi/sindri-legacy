@@ -14,7 +14,7 @@ bash extension-manager.sh list
 echo ""
 echo "✅ Extension manager available"
 
-# Test extension installation (mise-config already installed from protected extensions)
+# Test extension installation (mise already available from base image)
 echo ""
 echo "Installing nodejs extension..."
 if bash extension-manager.sh install nodejs 2>&1; then

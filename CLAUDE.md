@@ -119,6 +119,7 @@ extension-manager upgrade-history        # View upgrade history
 **Baked Base System (Pre-installed in Docker Image):**
 
 The following components are pre-installed and cannot be removed:
+
 - `workspace-structure` - /workspace directory structure
 - `mise-config` - Unified tool version manager (mise)
 - `ssh-environment` - SSH configuration for non-interactive sessions

@@ -36,12 +36,11 @@ retry_with_backoff 3 5 30 some-flaky-command
 
 ### verify-manifest.sh
 
-Verifies CI extension manifest was created and contains all protected extensions.
+Verifies CI extension manifest was created successfully.
 
 **Checks**:
 
 - Manifest file exists at `/workspace/scripts/extensions.d/active-extensions.conf`
-- All protected extensions present: workspace-structure, mise-config, ssh-environment
 - Displays active extensions for debugging
 
 **Usage**:
@@ -62,15 +61,15 @@ Sets up extension manifest from CI template for testing.
 **Actions**:
 
 - Copies `active-extensions.ci.conf` to `active-extensions.conf` if not exists
-- Displays protected extensions in manifest
+- Displays manifest contents for debugging
 
-### verify-protected.sh
+### test-extension-system.sh
 
-Verifies protected extensions are installed and functional.
+Verifies extension manager and base system are functional.
 
 **Checks**:
 
-- mise command available and working
+- mise command available and working (from base image)
 - /workspace directory exists with correct structure
 
 ### test-basic-workflow.sh
@@ -104,7 +103,6 @@ Similar to integration/verify-manifest.sh but with fallback logic for test envir
 **Additional Features**:
 
 - Creates manifest from CI template if missing
-- Auto-repairs missing protected extensions
 
 ### add-extension.sh
 
@@ -115,18 +113,7 @@ Handles adding an extension to manifest with dependency resolution.
 **Features**:
 
 - Processes dependency list
-- Skips protected extensions (already in CI conf)
-- Adds extension to manifest
-
-### test-protected.sh
-
-Tests protected extension enforcement (cannot deactivate/uninstall).
-
-**Tests**:
-
-- Deactivation prevention with correct error messages
-- Uninstall prevention with correct error messages
-- Uses PIPESTATUS to capture exit codes correctly
+- Adds dependencies and extension to manifest
 
 ### test-dependency.sh
 

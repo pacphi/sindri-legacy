@@ -16,21 +16,3 @@ if [ ! -f "$manifest_file" ]; then
 fi
 
 echo "✅ Manifest exists: $manifest_file"
-
-# Verify protected extensions are present
-missing=()
-for ext in workspace-structure mise-config ssh-environment; do
-  if ! grep -q "^${ext}$" "$manifest_file"; then
-    missing+=("$ext")
-  fi
-done
-
-if [ ${#missing[@]} -gt 0 ]; then
-  echo "❌ Missing protected extensions: ${missing[*]}"
-  echo "Adding missing protected extensions..."
-  for ext in "${missing[@]}"; do
-    echo "$ext" >> "$manifest_file"
-  done
-else
-  echo "✅ All protected extensions present"
-fi

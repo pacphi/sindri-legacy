@@ -24,8 +24,8 @@ else
 fi
 
 # Verify installation
-if su - "$DEVELOPER_USER" -c 'command -v ~/.local/bin/mise >/dev/null 2>&1'; then
-    MISE_VERSION=$(su - "$DEVELOPER_USER" -c '~/.local/bin/mise --version 2>/dev/null | head -n1')
+if su - "$DEVELOPER_USER" -c "command -v $DEVELOPER_HOME/.local/bin/mise >/dev/null 2>&1"; then
+    MISE_VERSION=$(su - "$DEVELOPER_USER" -c "$DEVELOPER_HOME/.local/bin/mise --version 2>/dev/null | head -n1")
     echo "  ✓ mise version: $MISE_VERSION"
 else
     echo "  ✗ mise installation verification failed"
