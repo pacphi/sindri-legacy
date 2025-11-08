@@ -8,10 +8,25 @@ on:
   workflow_dispatch:
     inputs:
       runs_to_keep:
-        description: 'Number of recent runs to keep per workflow'
+        description: 'Number of recent runs to keep per workflow (default branches)'
         required: false
         default: '3'
         type: string
+      feature_branch_runs_to_keep:
+        description: 'Number of runs to keep for feature branches'
+        required: false
+        default: '2'
+        type: string
+      branch_filter:
+        description: 'Branch pattern to filter (e.g., "feature/*", "pr-*", or "all")'
+        required: false
+        default: 'all'
+        type: string
+      cleanup_deleted_branches:
+        description: 'Clean up runs from deleted branches'
+        required: false
+        default: true
+        type: boolean
       dry_run:
         description: 'Dry run mode (preview deletions without executing)'
         required: false
@@ -21,6 +36,9 @@ on:
 env:
   # Default number of runs to keep per workflow
   DEFAULT_RUNS_TO_KEEP: 3
+  FEATURE_BRANCH_RUNS_TO_KEEP: 2
+  # Protected branches that get higher retention
+  PROTECTED_BRANCHES: 'main,develop'
 
 jobs:
   cleanup:
@@ -38,14 +56,46 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNS_TO_KEEP: ${{ inputs.runs_to_keep || env.DEFAULT_RUNS_TO_KEEP }}
+          FEATURE_RUNS_TO_KEEP: ${{ inputs.feature_branch_runs_to_keep || env.FEATURE_BRANCH_RUNS_TO_KEEP }}
+          BRANCH_FILTER: ${{ inputs.branch_filter || 'all' }}
+          CLEANUP_DELETED_BRANCHES: ${{ inputs.cleanup_deleted_branches != false }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
 
           echo "::group::Cleanup Configuration"
-          echo "Runs to keep per workflow: $RUNS_TO_KEEP"
+          echo "Protected branch runs to keep: $RUNS_TO_KEEP"
+          echo "Feature branch runs to keep: $FEATURE_RUNS_TO_KEEP"
+          echo "Branch filter: $BRANCH_FILTER"
+          echo "Cleanup deleted branches: $CLEANUP_DELETED_BRANCHES"
           echo "Dry run mode: $DRY_RUN"
+          echo "Protected branches: $PROTECTED_BRANCHES"
           echo "::endgroup::"
+
+          # Helper function to check if branch is protected
+          is_protected_branch() {
+            local branch="$1"
+            echo "$PROTECTED_BRANCHES" | grep -q -w "$branch"
+          }
+
+          # Helper function to check if branch exists
+          branch_exists() {
+            local branch="$1"
+            gh api "repos/${{ github.repository }}/branches/$branch" &>/dev/null
+          }
+
+          # Helper function to match branch filter
+          matches_filter() {
+            local branch="$1"
+            if [ "$BRANCH_FILTER" = "all" ]; then
+              return 0
+            fi
+            # Simple glob matching
+            case "$branch" in
+              $BRANCH_FILTER) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
 
           # Get all workflows
           echo "::group::Fetching workflows"
@@ -56,6 +106,8 @@ jobs:
 
           total_deleted=0
           total_kept=0
+          deleted_from_deleted_branches=0
+          declare -A branch_stats
 
           # Process each workflow
           for workflow_id in $workflows; do
@@ -64,70 +116,121 @@ jobs:
 
             echo "::group::Processing: $workflow_name (ID: $workflow_id)"
 
-            # Get all runs for this workflow (sorted by created date, newest first)
-            runs=$(gh api "repos/${{ github.repository }}/actions/workflows/$workflow_id/runs" \
+            # Get all runs for this workflow with branch info (sorted by created date, newest first)
+            runs_json=$(gh api "repos/${{ github.repository }}/actions/workflows/$workflow_id/runs" \
               --paginate \
-              --jq '.workflow_runs[] | select(.status == "completed") | .id' 2>/dev/null || echo "")
+              --jq '.workflow_runs[] | select(.status == "completed") | {id: .id, branch: .head_branch, number: .run_number, created: .created_at}' 2>/dev/null || echo "")
 
-            if [ -z "$runs" ]; then
+            if [ -z "$runs_json" ]; then
               echo "No completed runs found"
               echo "::endgroup::"
               continue
             fi
 
-            # Convert to array
-            readarray -t run_ids <<< "$runs"
-            total_runs=${#run_ids[@]}
+            # Group runs by branch
+            declare -A branch_runs
+            while IFS= read -r run; do
+              branch=$(echo "$run" | jq -r '.branch')
+              run_id=$(echo "$run" | jq -r '.id')
 
-            echo "Total completed runs: $total_runs"
-            echo "Runs to keep: $RUNS_TO_KEEP"
+              if [ -z "${branch_runs[$branch]:-}" ]; then
+                branch_runs[$branch]="$run"
+              else
+                branch_runs[$branch]="${branch_runs[$branch]}"$'\n'"$run"
+              fi
+            done <<< "$runs_json"
 
-            # Calculate runs to delete
-            if [ "$total_runs" -le "$RUNS_TO_KEEP" ]; then
-              echo "All runs will be kept (total runs <= retention count)"
-              total_kept=$((total_kept + total_runs))
-              echo "::endgroup::"
-              continue
-            fi
+            echo "Found runs across ${#branch_runs[@]} branches"
 
-            runs_to_delete=$((total_runs - RUNS_TO_KEEP))
-            echo "Runs to delete: $runs_to_delete"
+            # Process each branch
+            for branch in "${!branch_runs[@]}"; do
+              runs_for_branch="${branch_runs[$branch]}"
 
-            # Keep first N runs, delete the rest
-            deleted_count=0
-            for ((i=$RUNS_TO_KEEP; i<$total_runs; i++)); do
-              run_id="${run_ids[$i]}"
+              # Check if branch matches filter
+              if ! matches_filter "$branch"; then
+                echo "Skipping branch '$branch' (doesn't match filter)"
+                continue
+              fi
 
-              # Get run details for logging
-              run_details=$(gh api "repos/${{ github.repository }}/actions/runs/$run_id" \
-                --jq '{number: .run_number, created: .created_at, status: .status, conclusion: .conclusion}')
+              # Check if branch still exists
+              branch_deleted=false
+              if [ "$CLEANUP_DELETED_BRANCHES" = "true" ]; then
+                if ! branch_exists "$branch"; then
+                  branch_deleted=true
+                  echo "Branch '$branch' has been deleted"
+                fi
+              fi
+
+              # Determine retention policy
+              if [ "$branch_deleted" = "true" ]; then
+                # Keep only 1 run for deleted branches (for historical reference)
+                keep_count=1
+                echo "Branch '$branch': Using deleted branch policy (keep $keep_count)"
+              elif is_protected_branch "$branch"; then
+                keep_count=$RUNS_TO_KEEP
+                echo "Branch '$branch': Using protected branch policy (keep $keep_count)"
+              else
+                keep_count=$FEATURE_RUNS_TO_KEEP
+                echo "Branch '$branch': Using feature branch policy (keep $keep_count)"
+              fi
+
+              # Convert to array and sort
+              readarray -t run_data <<< "$runs_for_branch"
+              total_runs=${#run_data[@]}
+
+              echo "Total runs for branch '$branch': $total_runs (keeping $keep_count)"
+
+              # Calculate runs to delete
+              if [ "$total_runs" -le "$keep_count" ]; then
+                echo "All runs will be kept (total runs <= retention count)"
+                total_kept=$((total_kept + total_runs))
+                branch_stats["$branch:kept"]=$((${branch_stats["$branch:kept"]:-0} + total_runs))
+                continue
+              fi
+
+              # Keep first N runs, delete the rest
+              deleted_count=0
+              for ((i=$keep_count; i<$total_runs; i++)); do
+                run=$(echo "${run_data[$i]}" | jq -c '.')
+                run_id=$(echo "$run" | jq -r '.id')
+                run_number=$(echo "$run" | jq -r '.number')
+                created=$(echo "$run" | jq -r '.created')
+
+                if [ "$DRY_RUN" = "true" ]; then
+                  echo "[DRY RUN] Would delete run #$run_number from branch '$branch' (created: $created)"
+                else
+                  echo "Deleting run #$run_number from branch '$branch' (created: $created)"
+
+                  # Delete the run
+                  if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" --silent; then
+                    deleted_count=$((deleted_count + 1))
+                    if [ "$branch_deleted" = "true" ]; then
+                      deleted_from_deleted_branches=$((deleted_from_deleted_branches + 1))
+                    fi
+                  else
+                    echo "Warning: Failed to delete run $run_id"
+                  fi
+
+                  # Small delay to avoid rate limiting
+                  sleep 0.5
+                fi
+              done
+
+              total_deleted=$((total_deleted + deleted_count))
+              total_kept=$((total_kept + keep_count))
+
+              # Update branch statistics
+              branch_stats["$branch:deleted"]=$((${branch_stats["$branch:deleted"]:-0} + deleted_count))
+              branch_stats["$branch:kept"]=$((${branch_stats["$branch:kept"]:-0} + keep_count))
 
               if [ "$DRY_RUN" = "true" ]; then
-                echo "[DRY RUN] Would delete run #$(echo "$run_details" | jq -r '.number') (created: $(echo "$run_details" | jq -r '.created'))"
+                echo "Branch summary: Would delete $deleted_count runs, keep $keep_count runs"
               else
-                echo "Deleting run #$(echo "$run_details" | jq -r '.number') (created: $(echo "$run_details" | jq -r '.created'))"
-
-                # Delete the run
-                if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" --silent; then
-                  deleted_count=$((deleted_count + 1))
-                else
-                  echo "Warning: Failed to delete run $run_id"
-                fi
-
-                # Small delay to avoid rate limiting
-                sleep 0.5
+                echo "Branch summary: Deleted $deleted_count runs, kept $keep_count runs"
               fi
             done
 
-            total_deleted=$((total_deleted + deleted_count))
-            total_kept=$((total_kept + RUNS_TO_KEEP))
-
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "Summary: Would delete $deleted_count runs, keep $RUNS_TO_KEEP runs"
-            else
-              echo "Summary: Deleted $deleted_count runs, kept $RUNS_TO_KEEP runs"
-            fi
-
+            unset branch_runs
             echo "::endgroup::"
           done
 
@@ -137,9 +240,11 @@ jobs:
             echo "DRY RUN MODE - No runs were actually deleted"
             echo "Would delete: $total_deleted runs"
             echo "Would keep: $total_kept runs"
+            echo "From deleted branches: $deleted_from_deleted_branches runs"
           else
             echo "Total runs deleted: $total_deleted"
             echo "Total runs kept: $total_kept"
+            echo "From deleted branches: $deleted_from_deleted_branches"
           fi
           echo "::endgroup::"
 
@@ -152,14 +257,33 @@ jobs:
               echo ""
               echo "- Runs that would be deleted: **$total_deleted**"
               echo "- Runs that would be kept: **$total_kept**"
+              echo "- From deleted branches: **$deleted_from_deleted_branches**"
             else
               echo "**Mode:** Execution"
               echo ""
               echo "- Runs deleted: **$total_deleted**"
               echo "- Runs kept: **$total_kept**"
+              echo "- From deleted branches: **$deleted_from_deleted_branches**"
             fi
             echo ""
             echo "**Configuration:**"
-            echo "- Runs to keep per workflow: **$RUNS_TO_KEEP**"
+            echo "- Protected branch retention: **$RUNS_TO_KEEP**"
+            echo "- Feature branch retention: **$FEATURE_RUNS_TO_KEEP**"
+            echo "- Branch filter: **$BRANCH_FILTER**"
+            echo "- Cleanup deleted branches: **$CLEANUP_DELETED_BRANCHES**"
             echo "- Workflows processed: **$workflow_count**"
+            echo ""
+            echo "## Per-Branch Statistics"
+            echo ""
+            echo "| Branch | Deleted | Kept |"
+            echo "|--------|---------|------|"
+
+            # Sort branches and display stats
+            for key in "${!branch_stats[@]}"; do
+              echo "$key"
+            done | cut -d: -f1 | sort -u | while read -r branch; do
+              deleted=${branch_stats["$branch:deleted"]:-0}
+              kept=${branch_stats["$branch:kept"]:-0}
+              echo "| \`$branch\` | $deleted | $kept |"
+            done
           } >> $GITHUB_STEP_SUMMARY
