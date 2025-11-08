@@ -128,7 +128,7 @@ check_mise_prerequisite() {
     fi
 
     print_error "mise is required but not installed"
-    print_status "Install mise-config extension first: extension-manager install mise-config"
+    print_status "mise should be pre-installed in the base image. Check Docker image build."
     return 1
 }
 

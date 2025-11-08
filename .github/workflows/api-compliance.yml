@@ -96,19 +96,23 @@ jobs:
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
-            # Add dependencies if needed
+            # Add extension dependencies to manifest
+            # Note: mise is a core feature, already available
             case \"$extension\" in
-              nodejs|python|rust|golang)
-                echo \"mise-config\" > \$manifest
+              nodejs|python|rust|golang|tmux-workspace)
+                # These extensions have no dependencies (mise is core)
                 ;;
               monitoring)
-                echo \"mise-config\" > \$manifest
-                echo \"nodejs\" >> \$manifest
+                # monitoring depends on nodejs and python extensions
+                echo \"nodejs\" > \$manifest
                 echo \"python\" >> \$manifest
                 ;;
             esac
 
+            # Add the test extension itself
             echo \"$extension\" >> \$manifest
+
+            # Install all extensions from manifest
             bash extension-manager.sh install-all
           '"
 
