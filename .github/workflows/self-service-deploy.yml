@@ -411,7 +411,7 @@ jobs:
           echo "flyctl status -a ${app_name}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# View logs:" >> $GITHUB_STEP_SUMMARY
-          echo "flyctl logs -a ${app_name}" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl logs -a ${app_name} -n" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Suspend VM (save costs when not in use):" >> $GITHUB_STEP_SUMMARY
           echo "flyctl machine stop \$(flyctl machine list -a ${app_name} -q)" >> $GITHUB_STEP_SUMMARY
