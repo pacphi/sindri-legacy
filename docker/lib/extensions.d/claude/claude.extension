@@ -61,10 +61,20 @@ install() {
     return 0
   fi
 
-  # Install Claude Code using official installer
+  # Install Claude Code using official installer with timeout
   print_status "Downloading and running Claude Code installer..."
-  if ! curl -fsSL https://claude.ai/install.sh | bash; then
-    print_error "Claude Code installation failed"
+  print_status "Timeout: 5 minutes (installer may prompt or hang in non-interactive mode)"
+
+  # Add explicit timeout (5 minutes) to prevent indefinite hangs in CI
+  # Use -o pipefail to catch curl failures
+  if ! timeout 300 bash -c "set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash"; then
+    local exit_code=$?
+    if [ $exit_code -eq 124 ]; then
+      print_error "Claude Code installation timed out after 5 minutes"
+      print_status "This may indicate the installer is waiting for input or network issues"
+    else
+      print_error "Claude Code installation failed (exit code: $exit_code)"
+    fi
     return 1
   fi
 
@@ -318,9 +328,13 @@ upgrade() {
   fi
   echo ""
 
-  # Upgrade by running the installer again
+  # Upgrade by running the installer again with timeout
   print_status "Running Claude Code installer to upgrade..."
-  if curl -fsSL https://claude.ai/install.sh | bash; then
+  print_status "Timeout: 5 minutes (installer may prompt or hang in non-interactive mode)"
+
+  # Add explicit timeout (5 minutes) to prevent indefinite hangs in CI
+  # Use -o pipefail to catch curl failures
+  if timeout 300 bash -c "set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash"; then
     print_success "Claude Code upgraded successfully"
 
     echo ""
@@ -332,7 +346,13 @@ upgrade() {
 
     return 0
   else
-    print_error "Failed to upgrade Claude Code"
+    local exit_code=$?
+    if [ $exit_code -eq 124 ]; then
+      print_error "Claude Code upgrade timed out after 5 minutes"
+      print_status "This may indicate the installer is waiting for input or network issues"
+    else
+      print_error "Failed to upgrade Claude Code (exit code: $exit_code)"
+    fi
     return 1
   fi
 }
