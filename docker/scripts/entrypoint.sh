@@ -13,6 +13,13 @@ set -e
 # ------------------------------------------------------------------------------
 setup_workspace() {
     /docker/scripts/setup-workspace.sh
+
+    # Ensure developer user owns workspace root for write access
+    # This is critical for volume mount tests and developer usage
+    if id developer >/dev/null 2>&1; then
+        chown developer:developer /workspace
+        chmod 775 /workspace
+    fi
 }
 
 # ------------------------------------------------------------------------------

@@ -884,7 +884,10 @@ reorder_extension() {
     local result=()
     local inserted=false
     for i in "${!filtered[@]}"; do
-        if [[ $((i + 1)) -eq $new_position ]]; then
+        # Check if we should insert before this element
+        # new_position is 1-indexed, i is 0-indexed
+        # To place extension at position N, insert before index N-1
+        if [[ $i -eq $((new_position - 1)) ]]; then
             result+=("$ext_name")
             inserted=true
         fi

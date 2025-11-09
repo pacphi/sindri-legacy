@@ -47,35 +47,30 @@ jobs:
       matrix:
         combination:
           - {
-              name: "core-stack",
-              extensions: "workspace-structure,mise-config,ssh-environment",
-              description: "Protected Core Extensions",
-            }
-          - {
               name: "mise-stack",
-              extensions: "workspace-structure,mise-config,nodejs,python,rust,golang,ssh-environment",
-              description: "mise-Powered Languages",
+              extensions: "nodejs,python,rust,golang",
+              description: "mise-Powered Languages (mise pre-installed in base image)",
             }
           - {
               name: "full-node",
-              extensions: "workspace-structure,nodejs,nodejs-devtools,claude",
+              extensions: "nodejs,nodejs-devtools",
               description: "Complete Node.js Development Stack",
             }
           - {
               name: "fullstack",
-              extensions: "workspace-structure,nodejs,python,docker,cloud-tools",
-              description: "Python + Docker + Cloud",
+              extensions: "nodejs,python,docker,cloud-tools",
+              description: "Node.js + Python + Docker + Cloud",
             }
-          - { name: "systems", extensions: "workspace-structure,rust,golang,docker", description: "Rust + Go + Docker" }
+          - { name: "systems", extensions: "rust,golang,docker", description: "Rust + Go + Docker" }
           - {
               name: "enterprise",
-              extensions: "workspace-structure,nodejs,jvm,docker,infra-tools",
+              extensions: "nodejs,jvm,docker,infra-tools",
               description: "JVM + Docker + Infrastructure",
             }
           - {
               name: "ai-dev",
-              extensions: "workspace-structure,nodejs,python,ai-tools,monitoring",
-              description: "Python + AI Tools + Monitoring",
+              extensions: "nodejs,python,ai-tools,monitoring",
+              description: "Node.js + Python + AI Tools + Monitoring",
             }
 
     steps:

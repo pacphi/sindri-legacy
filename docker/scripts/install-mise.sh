@@ -39,11 +39,12 @@ fi
 # Configure mise in shell rc files
 echo "  ⚙️  Configuring mise activation..."
 
-# Add mise activation to .bashrc
-BASHRC="$DEVELOPER_HOME/.bashrc"
-if [ -f "$BASHRC" ]; then
-    if ! grep -q 'mise activate bash' "$BASHRC"; then
-        cat >> "$BASHRC" << 'EOF'
+# Add mise activation to /etc/skel/.bashrc (template for developer home)
+# This ensures mise is activated when developer user logs in
+SKEL_BASHRC="/etc/skel/.bashrc"
+if [ -f "$SKEL_BASHRC" ]; then
+    if ! grep -q 'mise activate bash' "$SKEL_BASHRC"; then
+        cat >> "$SKEL_BASHRC" << 'EOF'
 
 # mise - unified tool version manager
 # Activates mise for this shell session
@@ -52,9 +53,9 @@ if command -v mise >/dev/null 2>&1; then
     eval "$(mise activate bash)"
 fi
 EOF
-        echo "  ✓ mise activation added to .bashrc"
+        echo "  ✓ mise activation added to /etc/skel/.bashrc"
     else
-        echo "  ✓ mise already configured in .bashrc"
+        echo "  ✓ mise already configured in /etc/skel/.bashrc"
     fi
 fi
 

@@ -62,8 +62,8 @@ on:
         default: "full-node"
         type: choice
         options:
-          - minimal # Core only (workspace-structure, mise-config, ssh-environment)
-          - full-node # Complete Node.js stack (nodejs, nodejs-devtools, claude)
+          - minimal # Base system only (workspace, mise, ssh, claude pre-installed)
+          - full-node # Complete Node.js stack (nodejs, nodejs-devtools)
           - mise-stack # All mise-powered languages (nodejs, python, rust, golang)
           - fullstack # Web development (nodejs, python, docker, cloud-tools)
           - systems # Systems programming (rust, golang, docker)
@@ -150,7 +150,7 @@ jobs:
               extensions=""
               ;;
             full-node)
-              extensions="nodejs,nodejs-devtools,claude"
+              extensions="nodejs,nodejs-devtools"
               ;;
             mise-stack)
               extensions="nodejs,python,rust,golang"

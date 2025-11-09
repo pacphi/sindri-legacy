@@ -118,33 +118,35 @@ extension-manager upgrade-history        # View upgrade history
 
 **Baked Base System (Pre-installed in Docker Image):**
 
-The following components are pre-installed and cannot be removed:
+The following components are pre-installed in every Sindri instance:
 
-- `workspace-structure` - /workspace directory structure
-- `mise-config` - Unified tool version manager (mise)
-- `ssh-environment` - SSH configuration for non-interactive sessions
-- `claude` - Claude Code CLI and developer configuration
+- **Workspace Structure** - `/workspace` directory layout (projects/, scripts/, config/, etc.)
+- **mise** - Unified tool version manager for Node.js, Python, Rust, Go, Ruby
+- **SSH Environment** - Non-interactive session support for CI/CD workflows
+- **Claude Code** - AI-powered development CLI with global preferences
 
 These are baked into the Docker image for faster startup (~10s vs ~90-120s) and improved reliability.
 
 **Foundational Languages:**
 
-- `nodejs` - Node.js LTS via mise with npm (requires mise-config, recommended - many tools depend on it)
-- `python` - Python 3.13 via mise with pip, venv, uv, pipx (requires mise-config)
+- `nodejs` - Node.js LTS via mise with npm (recommended - many tools depend on it)
+- `python` - Python 3.13 via mise with pip, venv, uv, pipx
 
-**Claude AI:**
+**Claude AI Extensions:**
 
-- `claude` - Claude Code CLI with developer configuration
-- `claude-marketplace` - YAML-based marketplace configuration for Claude Code (requires claude)
+- `claude-marketplace` - YAML-based marketplace configuration for Claude Code
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
-- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (mise-powered, requires nodejs)
+- `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
+
+**Additional Languages:**
+
+- `rust` - Rust toolchain with cargo, clippy, rustfmt (mise-powered)
+- `golang` - Go 1.24 with gopls, delve, golangci-lint (mise-powered)
+- `ruby` - Ruby 3.4.7 via mise with Rails, Bundler (mise-powered)
 
 **Development Tools:**
 
 - `github-cli` - GitHub CLI authentication and workflow configuration
-- `rust` - Rust toolchain with cargo, clippy, rustfmt (requires mise-config)
-- `golang` - Go 1.24 with gopls, delve, golangci-lint (requires mise-config)
-- `ruby` - Ruby 3.4.7 via mise with Rails, Bundler (requires mise-config)
 - `php` - PHP 8.4 with Composer, Symfony CLI
 - `jvm` - SDKMAN with Java, Kotlin, Scala, Maven, Gradle
 - `dotnet` - .NET SDK 9.0/8.0 with ASP.NET Core
@@ -172,11 +174,11 @@ or `active-extensions.ci.conf` (CI mode).
 Example manifest:
 
 ```bash
-# Baked base system (pre-installed, do not add to manifest):
-# - workspace-structure
-# - mise-config
-# - ssh-environment
-# - claude
+# Base system (pre-installed in Docker image, always available):
+# - Workspace structure (/workspace directories)
+# - mise (tool version manager)
+# - SSH environment (non-interactive session support)
+# - Claude Code CLI
 
 # Foundational languages
 nodejs
@@ -363,12 +365,12 @@ Sindri uses **mise** (https://mise.jdx.dev) for unified tool version management 
 mise provides a single, consistent interface for managing Node.js, Python, Rust, Go, Ruby, and their associated tools,
 replacing multiple version managers (NVM, pyenv, rbenv, rustup, etc.) with one tool.
 
-**Note:** `mise-config` is pre-installed in the Docker image and is always available.
+**Note:** mise is pre-installed in the Docker image and is always available.
 It does not need to be installed manually.
 
 ### mise-Managed Extensions
 
-The following extensions use mise for tool installation and version management (all require `mise-config`):
+The following extensions use mise for tool installation and version management (mise is pre-installed):
 
 - **nodejs**: Node.js LTS via mise (replaces NVM)
   - Manages Node.js versions
