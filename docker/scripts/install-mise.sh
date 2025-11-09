@@ -5,10 +5,10 @@ set -e
 
 echo "🔧 Installing mise (unified tool version manager)..."
 
-# mise will be installed system-wide to /usr/local/bin
+# mise will be installed system-wide to /usr/local/bin/mise
 DEVELOPER_USER="developer"
 DEVELOPER_HOME="/home/developer"
-MISE_INSTALL_PATH="/usr/local/bin"
+MISE_INSTALL_PATH="/usr/local/bin/mise"
 
 # Create temporary home directory for Docker build
 # (runtime home will be on persistent volume at /workspace/developer)
@@ -24,13 +24,15 @@ else
     exit 1
 fi
 
-# Verify installation
-if command -v mise >/dev/null 2>&1; then
-    MISE_VERSION=$(mise --version 2>/dev/null | head -n1)
+# Verify installation using full path (PATH may not be set during Docker build)
+if [ -x "$MISE_INSTALL_PATH" ]; then
+    MISE_VERSION=$("$MISE_INSTALL_PATH" --version 2>/dev/null | head -n1)
     echo "  ✓ mise version: $MISE_VERSION"
-    echo "  📍 Location: $(which mise)"
+    echo "  📍 Location: $MISE_INSTALL_PATH"
 else
     echo "  ✗ mise installation verification failed"
+    echo "  ℹ️  Expected location: $MISE_INSTALL_PATH"
+    ls -la "$(dirname "$MISE_INSTALL_PATH")" 2>/dev/null || echo "  ℹ️  Directory $(dirname "$MISE_INSTALL_PATH") does not exist"
     exit 1
 fi
 
