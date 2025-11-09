@@ -1,13 +1,19 @@
 #!/bin/bash
-# setup-workspace.sh - Create /workspace directory structure
+# setup-workspace.sh - Initialize and sync /workspace directory structure
+# This runs at container startup and must be idempotent
+# Handles both fresh volumes (empty) and existing volumes (with content)
 
 set -e
 
-echo "📁 Setting up workspace directory structure..."
-
 WORKSPACE_DIR="/workspace"
 
-# Helper function to create directory if it doesn't exist
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# create_dir_if_needed - Create directory if it doesn't exist
+# ------------------------------------------------------------------------------
 create_dir_if_needed() {
     local dir="$1"
     if [ ! -d "$dir" ]; then
@@ -16,61 +22,190 @@ create_dir_if_needed() {
     fi
 }
 
-# Create workspace root if it doesn't exist
-if [ ! -d "$WORKSPACE_DIR" ]; then
-    mkdir -p "$WORKSPACE_DIR"
-    echo "  ✓ Created workspace root: $WORKSPACE_DIR"
-fi
+# ==============================================================================
+# Workspace Initialization Functions
+# ==============================================================================
 
-# Create main directories
-main_dirs=(
-    "projects"
-    "scripts"
-    "config"
-    "agents"
-    "context"
-    "bin"
-    "backups"
-    "docs"
-)
+# ------------------------------------------------------------------------------
+# create_directory_structure - Create all workspace directories
+# ------------------------------------------------------------------------------
+create_directory_structure() {
+    echo "📁 Creating directory structure..."
 
-for dir in "${main_dirs[@]}"; do
-    create_dir_if_needed "$WORKSPACE_DIR/$dir"
-done
+    # Create workspace root if it doesn't exist
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        mkdir -p "$WORKSPACE_DIR"
+        echo "  ✓ Created workspace root: $WORKSPACE_DIR"
+    fi
 
-# Create projects subdirectory
-create_dir_if_needed "$WORKSPACE_DIR/projects/active"
+    # Create main directories
+    local main_dirs=(
+        "projects"
+        "projects/active"
+        "scripts"
+        "scripts/lib"
+        "scripts/lib/extensions.d"
+        "config"
+        "config/templates"
+        "agents"
+        "context"
+        "context/global"
+        "context/templates"
+        "bin"
+        "backups"
+        "docs"
+    )
 
-# Create subdirectories for context management
-context_dirs=(
-    "context/global"
-    "context/templates"
-)
+    for dir in "${main_dirs[@]}"; do
+        create_dir_if_needed "$WORKSPACE_DIR/$dir"
+    done
+}
 
-for dir in "${context_dirs[@]}"; do
-    create_dir_if_needed "$WORKSPACE_DIR/$dir"
-done
+# ------------------------------------------------------------------------------
+# sync_extension_manager - Sync extension-manager.sh from Docker image
+# ------------------------------------------------------------------------------
+sync_extension_manager() {
+    if [ ! -d "/docker/lib" ]; then
+        return
+    fi
 
-# Create scripts subdirectories
-script_dirs=(
-    "scripts/lib"
-    "scripts/lib/extensions.d"
-)
+    # Ensure extension-manager.sh exists and is current
+    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ] || \
+       [ "/docker/lib/extension-manager.sh" -nt "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ]; then
+        cp /docker/lib/extension-manager.sh "$WORKSPACE_DIR/scripts/lib/"
+        chmod +x "$WORKSPACE_DIR/scripts/lib/extension-manager.sh"
+        echo "  ✓ Synced extension-manager.sh"
+    fi
+}
 
-for dir in "${script_dirs[@]}"; do
-    create_dir_if_needed "$WORKSPACE_DIR/$dir"
-done
+# ------------------------------------------------------------------------------
+# sync_extension_scripts - Sync top-level extension scripts
+# ------------------------------------------------------------------------------
+sync_extension_scripts() {
+    if [ ! -d "/docker/lib" ]; then
+        return
+    fi
 
-# Create config subdirectories
-create_dir_if_needed "$WORKSPACE_DIR/config/templates"
+    # Sync top-level extension scripts
+    if [ "$(ls -A /docker/lib/extensions.d/*.extension 2>/dev/null)" ]; then
+        for ext in /docker/lib/extensions.d/*.extension; do
+            local ext_name
+            ext_name=$(basename "$ext")
+            if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_name" ] || \
+               [ "$ext" -nt "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_name" ]; then
+                cp "$ext" "$WORKSPACE_DIR/scripts/lib/extensions.d/"
+                echo "  ✓ Synced $ext_name"
+            fi
+        done
+    fi
+}
 
-# Set proper permissions on key directories
-[ -d "$WORKSPACE_DIR/bin" ] && chmod 755 "$WORKSPACE_DIR/bin"
-[ -d "$WORKSPACE_DIR/scripts" ] && chmod 755 "$WORKSPACE_DIR/scripts"
-[ -d "$WORKSPACE_DIR/scripts/lib" ] && chmod 755 "$WORKSPACE_DIR/scripts/lib"
+# ------------------------------------------------------------------------------
+# sync_extension_subdirectories - Sync nested extension directories
+# ------------------------------------------------------------------------------
+sync_extension_subdirectories() {
+    if [ ! -d "/docker/lib" ]; then
+        return
+    fi
 
-# Create a README in the workspace
-if [ ! -f "$WORKSPACE_DIR/README.md" ]; then
+    # Sync nested extension directories (e.g., claude/, nodejs/, etc.)
+    for ext_dir in /docker/lib/extensions.d/*/; do
+        [ ! -d "$ext_dir" ] && continue
+        local ext_dir_name
+        ext_dir_name=$(basename "$ext_dir")
+
+        # Create extension subdirectory if needed
+        create_dir_if_needed "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_dir_name"
+
+        # Sync extension files from subdirectory
+        for ext_file in "$ext_dir"/*; do
+            [ ! -f "$ext_file" ] && continue
+            local ext_file_name
+            ext_file_name=$(basename "$ext_file")
+            local dest_file="$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_dir_name/$ext_file_name"
+
+            if [ ! -f "$dest_file" ] || [ "$ext_file" -nt "$dest_file" ]; then
+                cp "$ext_file" "$dest_file"
+                [ -x "$ext_file" ] && chmod +x "$dest_file"
+                echo "  ✓ Synced $ext_dir_name/$ext_file_name"
+            fi
+        done
+    done
+}
+
+# ------------------------------------------------------------------------------
+# sync_manifest_templates - Sync manifest configuration templates
+# ------------------------------------------------------------------------------
+sync_manifest_templates() {
+    if [ ! -d "/docker/lib" ]; then
+        return
+    fi
+
+    # Sync CI manifest template
+    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/active-extensions.ci.conf" ] && \
+       [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
+        cp /docker/lib/extensions.d/active-extensions.ci.conf "$WORKSPACE_DIR/scripts/lib/extensions.d/"
+        echo "  ✓ Synced CI manifest template"
+    fi
+
+    # Sync manifest example
+    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/active-extensions.conf.example" ] && \
+       [ -f "/docker/lib/extensions.d/active-extensions.conf.example" ]; then
+        cp /docker/lib/extensions.d/active-extensions.conf.example "$WORKSPACE_DIR/scripts/lib/extensions.d/"
+        echo "  ✓ Synced manifest example"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# sync_extension_system - Sync all extension components from Docker image
+# ------------------------------------------------------------------------------
+sync_extension_system() {
+    echo "🔧 Syncing extension system..."
+
+    sync_extension_manager
+    sync_extension_scripts
+    sync_extension_subdirectories
+    sync_manifest_templates
+}
+
+# ------------------------------------------------------------------------------
+# create_symlinks - Create symlinks for workspace tools
+# ------------------------------------------------------------------------------
+create_symlinks() {
+    echo "🔗 Creating symlinks..."
+
+    # Create symlink for extension-manager
+    if [ -f "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ] && \
+       [ ! -L "$WORKSPACE_DIR/bin/extension-manager" ]; then
+        ln -sf "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" "$WORKSPACE_DIR/bin/extension-manager"
+        echo "  ✓ Created extension-manager symlink"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# set_permissions - Set proper permissions on workspace directories
+# ------------------------------------------------------------------------------
+set_permissions() {
+    echo "🔒 Setting permissions..."
+
+    chmod 755 "$WORKSPACE_DIR" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/bin" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/scripts" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/scripts/lib" 2>/dev/null || true
+
+    echo "  ✓ Permissions set"
+}
+
+# ------------------------------------------------------------------------------
+# create_readme - Create workspace README documentation
+# ------------------------------------------------------------------------------
+create_readme() {
+    if [ -f "$WORKSPACE_DIR/README.md" ]; then
+        return
+    fi
+
+    echo "📝 Creating workspace README..."
+
     cat > "$WORKSPACE_DIR/README.md" << 'EOF'
 # Sindri Workspace
 
@@ -103,7 +238,30 @@ All data in `/workspace` persists across VM restarts and is stored on a Fly.io v
 
 For more information, see the main project documentation.
 EOF
-    echo "  ✓ Created workspace README"
-fi
 
-echo "✅ Workspace directory structure created successfully"
+    echo "  ✓ README created"
+}
+
+# ==============================================================================
+# Main Entry Point
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# main - Orchestrate workspace initialization
+# ------------------------------------------------------------------------------
+main() {
+    echo "🚀 Initializing workspace..."
+
+    create_directory_structure
+    sync_extension_system
+    create_symlinks
+    set_permissions
+    create_readme
+
+    echo "✅ Workspace initialization complete"
+}
+
+# ==============================================================================
+# Execute main function
+# ==============================================================================
+main "$@"
