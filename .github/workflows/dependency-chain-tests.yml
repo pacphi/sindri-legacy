@@ -105,7 +105,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Testing transitive dependencies: nodejs-devtools -> nodejs -> mise-config..."
+          echo "Testing transitive dependencies: nodejs-devtools -> nodejs..."
 
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
@@ -130,7 +130,7 @@ jobs:
 
               echo \"\"
               echo \"Verifying dependency chain was installed...\"
-              for dep in mise-config nodejs nodejs-devtools; do
+              for dep in nodejs nodejs-devtools; do
                 if grep -q \"^\$dep\" \$manifest; then
                   echo \"✅ \$dep in manifest\"
                 else
@@ -138,6 +138,15 @@ jobs:
                   exit 1
                 fi
               done
+
+              echo \"\"
+              echo \"Verifying mise package manager is available...\"
+              if command -v mise &> /dev/null; then
+                echo \"✅ mise package manager available\"
+              else
+                echo \"❌ mise package manager not available\"
+                exit 1
+              fi
             else
               echo \"❌ install-all failed\"
               tail -50 /tmp/install.log
@@ -158,10 +167,8 @@ jobs:
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
-            echo \"Creating minimal manifest with only protected extensions...\"
-            echo \"workspace-structure\" > \$manifest
-            echo \"mise-config\" >> \$manifest
-            echo \"ssh-environment\" >> \$manifest
+            echo \"Creating empty manifest...\"
+            > \$manifest
 
             echo \"\"
             echo \"=== Manifest before test ===\"
@@ -209,10 +216,8 @@ jobs:
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
-            echo \"Creating minimal manifest with only protected extensions...\"
-            echo \"workspace-structure\" > \$manifest
-            echo \"mise-config\" >> \$manifest
-            echo \"ssh-environment\" >> \$manifest
+            echo \"Creating empty manifest...\"
+            > \$manifest
 
             echo \"\"
             echo \"=== Manifest before test ===\"

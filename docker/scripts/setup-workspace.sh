@@ -1,11 +1,20 @@
 #!/bin/bash
-# setup-workspace.sh - Create /workspace directory structure during Docker build
+# setup-workspace.sh - Create /workspace directory structure
 
 set -e
 
-echo "📁 Creating workspace directory structure..."
+echo "📁 Setting up workspace directory structure..."
 
 WORKSPACE_DIR="/workspace"
+
+# Helper function to create directory if it doesn't exist
+create_dir_if_needed() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        echo "  ✓ Created: ${dir#"$WORKSPACE_DIR"/}"
+    fi
+}
 
 # Create workspace root if it doesn't exist
 if [ ! -d "$WORKSPACE_DIR" ]; then
@@ -13,7 +22,7 @@ if [ ! -d "$WORKSPACE_DIR" ]; then
     echo "  ✓ Created workspace root: $WORKSPACE_DIR"
 fi
 
-# Create main directories (multi-project design)
+# Create main directories
 main_dirs=(
     "projects"
     "scripts"
@@ -26,13 +35,11 @@ main_dirs=(
 )
 
 for dir in "${main_dirs[@]}"; do
-    mkdir -p "$WORKSPACE_DIR/$dir"
-    echo "  ✓ Created: $dir"
+    create_dir_if_needed "$WORKSPACE_DIR/$dir"
 done
 
 # Create projects subdirectory
-mkdir -p "$WORKSPACE_DIR/projects/active"
-echo "  ✓ Created: projects/active"
+create_dir_if_needed "$WORKSPACE_DIR/projects/active"
 
 # Create subdirectories for context management
 context_dirs=(
@@ -41,8 +48,7 @@ context_dirs=(
 )
 
 for dir in "${context_dirs[@]}"; do
-    mkdir -p "$WORKSPACE_DIR/$dir"
-    echo "  ✓ Created: $dir"
+    create_dir_if_needed "$WORKSPACE_DIR/$dir"
 done
 
 # Create scripts subdirectories
@@ -52,18 +58,16 @@ script_dirs=(
 )
 
 for dir in "${script_dirs[@]}"; do
-    mkdir -p "$WORKSPACE_DIR/$dir"
-    echo "  ✓ Created: $dir"
+    create_dir_if_needed "$WORKSPACE_DIR/$dir"
 done
 
 # Create config subdirectories
-mkdir -p "$WORKSPACE_DIR/config/templates"
-echo "  ✓ Created: config/templates"
+create_dir_if_needed "$WORKSPACE_DIR/config/templates"
 
-# Set proper permissions
-chmod 755 "$WORKSPACE_DIR"/bin
-chmod 755 "$WORKSPACE_DIR"/scripts
-chmod 755 "$WORKSPACE_DIR"/scripts/lib
+# Set proper permissions on key directories
+[ -d "$WORKSPACE_DIR/bin" ] && chmod 755 "$WORKSPACE_DIR/bin"
+[ -d "$WORKSPACE_DIR/scripts" ] && chmod 755 "$WORKSPACE_DIR/scripts"
+[ -d "$WORKSPACE_DIR/scripts/lib" ] && chmod 755 "$WORKSPACE_DIR/scripts/lib"
 
 # Create a README in the workspace
 if [ ! -f "$WORKSPACE_DIR/README.md" ]; then

@@ -167,19 +167,6 @@ is_extension_in_manifest() {
     grep -q "^${extension}$" "$manifest"
 }
 
-# Check if extension is protected
-is_protected_extension() {
-    local extension="$1"
-    case "$extension" in
-        workspace-structure|mise-config|ssh-environment)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
 # Run extension-manager command
 run_extension_manager() {
     local cmd="$*"
@@ -418,7 +405,7 @@ export -f print_success print_error print_warning print_info print_section
 export -f source_environment command_exists check_command_with_version
 export -f wait_for_condition retry_command
 export -f get_extension_manager_path get_manifest_path
-export -f is_extension_in_manifest is_protected_extension
+export -f is_extension_in_manifest
 export -f run_extension_manager verify_extension_installed get_extension_status
 export -f dump_environment dump_manifest
 export -f check_vm_resources verify_ssh_connection

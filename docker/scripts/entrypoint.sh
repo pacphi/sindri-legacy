@@ -12,16 +12,7 @@ set -e
 # setup_workspace - Create workspace directory structure
 # ------------------------------------------------------------------------------
 setup_workspace() {
-    echo "📁 Setting up workspace..."
-
-    if [ ! -d "/workspace" ]; then
-        mkdir -p /workspace
-    fi
-
-    chown developer:developer /workspace
-    chmod 755 /workspace
-
-    echo "✅ Workspace directory configured"
+    /docker/scripts/setup-workspace.sh
 }
 
 # ------------------------------------------------------------------------------

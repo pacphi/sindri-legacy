@@ -55,16 +55,12 @@ jobs:
       max-parallel: 3
       matrix:
         extension:
-          # Core extensions (always needed)
-          - { name: "workspace-structure", commands: "mkdir,ls", key_tool: "mkdir", timeout: "10m" }
-          - { name: "ssh-environment", commands: "ssh,sshd", key_tool: "ssh", timeout: "15m" }
-          - { name: "mise-config", commands: "mise", key_tool: "mise", timeout: "10m" }
-          # mise-powered language extensions (faster with mise)
-          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m", depends_on: "mise-config" }
-          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m", depends_on: "mise-config" }
-          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m", depends_on: "mise-config" }
-          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m", depends_on: "mise-config" }
-          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "mise-config,nodejs" }
+          # mise-powered language extensions
+          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m" }
+          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m" }
+          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m" }
+          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m" }
+          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs" }
           # Claude AI extensions
           - { name: "claude", commands: "claude", key_tool: "claude", timeout: "15m" }
           - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m", depends_on: "claude" }

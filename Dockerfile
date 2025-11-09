@@ -28,10 +28,6 @@ RUN /docker/scripts/setup-bashrc.sh
 # ===========================================================================
 # BASE SYSTEM SETUP
 # ===========================================================================
-# Install workspace structure, mise, SSH configuration, and Claude Code
-
-# Setup workspace directory structure
-RUN /docker/scripts/setup-workspace.sh
 
 # Install and configure mise (unified tool version manager)
 RUN /docker/scripts/install-mise.sh

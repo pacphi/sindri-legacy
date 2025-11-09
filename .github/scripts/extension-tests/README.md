@@ -30,7 +30,7 @@ Shared utility functions for test scripts.
 - **Commands**: `command_exists()`, `check_command_with_version()`
 - **Utilities**: `wait_for_condition()`, `retry_command()`
 - **Extension Manager**: `get_extension_manager_path()`, `get_manifest_path()`, `run_extension_manager()`
-- **Validation**: `is_extension_in_manifest()`, `is_protected_extension()`, `verify_extension_installed()`
+- **Validation**: `is_extension_in_manifest()`, `verify_extension_installed()`
 - **Debugging**: `dump_environment()`, `dump_manifest()`
 
 **Usage:**
@@ -97,8 +97,7 @@ Verifies CI extension manifest structure.
 **What it does:**
 
 1. Checks manifest file exists
-2. Verifies protected extensions are present
-3. Adds missing protected extensions if needed
+2. Creates from CI template if missing
 
 **Usage (on VM):**
 

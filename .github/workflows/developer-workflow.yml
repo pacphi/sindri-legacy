@@ -87,31 +87,44 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          echo "Setting up manifest with protected core extensions..."
+          echo "Verifying base system components..."
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest from CI template (already has protected extensions)
+            # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
               cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
             echo \"\"
-            echo \"=== Protected Extensions in Manifest (from CI config) ===\"
+            echo \"=== Manifest Contents ===\"
             grep -v \"^[[:space:]]*#\" \"\$manifest_file\" | grep -v \"^[[:space:]]*$\" || echo \"(empty)\"
 
-            # Verify protected extensions are present
+            # Verify base system components are available
             echo \"\"
-            echo \"Verifying protected extensions...\"
-            for ext in workspace-structure mise-config ssh-environment; do
-              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
-                echo \"✅ \$ext present in manifest\"
-              else
-                echo \"❌ \$ext missing from CI config - this should not happen\"
-                exit 1
-              fi
-            done
+            echo \"Verifying base system components...\"
+
+            if command -v mise &> /dev/null; then
+              echo \"✅ mise package manager available\"
+            else
+              echo \"❌ mise package manager not available\"
+              exit 1
+            fi
+
+            if command -v claude &> /dev/null; then
+              echo \"✅ claude CLI available\"
+            else
+              echo \"❌ claude CLI not available\"
+              exit 1
+            fi
+
+            if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
+              echo \"✅ SSH environment configured\"
+            else
+              echo \"❌ SSH environment not configured\"
+              exit 1
+            fi
           '"
 
       - name: Install all extensions from manifest
@@ -186,15 +199,14 @@ jobs:
           flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
             cd /workspace/scripts/lib
 
-            for ext in workspace-structure nodejs ssh-environment; do
-              echo \"\"
-              echo \"Checking status of \$ext...\"
-              if bash extension-manager.sh status \$ext; then
-                echo \"✅ Status command works for \$ext\"
-              else
-                echo \"⚠️  Status command failed for \$ext\"
-              fi
-            done
+            echo \"\"
+            echo \"Checking status of nodejs...\"
+            if bash extension-manager.sh status nodejs; then
+              echo \"✅ Status command works for nodejs\"
+            else
+              echo \"⚠️  Status command failed for nodejs\"
+              exit 1
+            fi
           '"
 
       # Using composite action for cleanup

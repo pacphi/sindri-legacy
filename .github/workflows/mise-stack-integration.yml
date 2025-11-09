@@ -92,23 +92,12 @@ jobs:
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest from CI template (already has protected extensions)
+            # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
               cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Verify protected extensions are present
-            echo \"Verifying protected extensions from CI config...\"
-            for ext in workspace-structure mise-config ssh-environment; do
-              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
-                echo \"✅ \$ext present\"
-              else
-                echo \"❌ \$ext missing from CI config\"
-                exit 1
-              fi
-            done
-
-            # Add additional mise-stack extensions (skip protected ones already in CI conf)
+            # Add mise-stack extensions
             echo \"\"
             echo \"Adding additional mise-stack extensions...\"
             for ext in nodejs python rust golang; do
