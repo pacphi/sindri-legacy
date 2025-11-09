@@ -5,9 +5,10 @@ set -e
 
 echo "🤖 Installing Claude Code CLI..."
 
-# Claude will be installed for the developer user
+# Claude will be installed for the developer user then moved to system location
 DEVELOPER_USER="developer"
 DEVELOPER_HOME="/home/developer"
+SYSTEM_BIN_DIR="/usr/local/bin"
 
 # Ensure home directory exists (should be created by mise script, but double-check)
 if [ ! -d "$DEVELOPER_HOME" ]; then
@@ -35,35 +36,35 @@ else
 fi
 
 # The installer places Claude at ~/.local/bin/claude (symlink to versioned binary)
-CLAUDE_BIN_DIR="$DEVELOPER_HOME/.local/bin"
-CLAUDE_PATH="$CLAUDE_BIN_DIR/claude"
+CLAUDE_USER_PATH="$DEVELOPER_HOME/.local/bin/claude"
 
-# Verify installation (check symlink with -L)
-if [ -L "$CLAUDE_PATH" ] || [ -f "$CLAUDE_PATH" ]; then
-    # Verify the binary works
-    CLAUDE_VERSION=$(su - "$DEVELOPER_USER" -c "$CLAUDE_PATH --version 2>/dev/null" || echo "Installed successfully")
-    echo "  ✓ Claude Code installed: $CLAUDE_VERSION"
-    echo "  📍 Location: $CLAUDE_PATH"
+# Verify user installation
+if [ -L "$CLAUDE_USER_PATH" ] || [ -f "$CLAUDE_USER_PATH" ]; then
+    echo "  ✓ Claude Code installed to user directory"
 else
-    echo "  ✗ Claude Code binary not found at: $CLAUDE_PATH"
+    echo "  ✗ Claude Code binary not found at: $CLAUDE_USER_PATH"
     echo "  ℹ️  Installer may have failed silently"
     exit 1
 fi
 
-# Add ~/.local/bin to PATH in shell config (installer doesn't do this)
-BASHRC="$DEVELOPER_HOME/.bashrc"
-if [ -f "$BASHRC" ]; then
-    if ! grep -q "/.local/bin" "$BASHRC" 2>/dev/null; then
-        cat >> "$BASHRC" << 'EOF'
+# Move Claude to system-wide location
+echo "  🔧 Moving Claude Code to system-wide location..."
+# Copy the binary (following symlinks) to /usr/local/bin
+cp -L "$CLAUDE_USER_PATH" "$SYSTEM_BIN_DIR/claude"
+chmod +x "$SYSTEM_BIN_DIR/claude"
 
-# Added by Claude Code installation - CLI binary location
-export PATH="$HOME/.local/bin:$PATH"
-EOF
-        echo "  ✓ Added ~/.local/bin to PATH in .bashrc"
-    else
-        echo "  ✓ ~/.local/bin already in .bashrc PATH"
-    fi
+# Verify system installation
+if command -v claude >/dev/null 2>&1; then
+    CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "Installed successfully")
+    echo "  ✓ Claude Code installed system-wide: $CLAUDE_VERSION"
+    echo "  📍 Location: $SYSTEM_BIN_DIR/claude"
+else
+    echo "  ✗ Claude Code not available in system PATH"
+    exit 1
 fi
+
+# Clean up user installation (no longer needed)
+rm -rf "$DEVELOPER_HOME/.local/bin/claude"* 2>/dev/null || true
 
 # Create Claude configuration directory
 echo "  ⚙️  Setting up Claude Code configuration..."
@@ -135,5 +136,6 @@ chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$CLAUDE_CONFIG_DIR"
 rm -rf /tmp/* 2>/dev/null || true
 
 echo "✅ Claude Code installed and configured successfully"
+echo "  📍 Binary location: $SYSTEM_BIN_DIR/claude"
 echo "  📝 Authenticate with: claude"
 echo "  📝 Or set ANTHROPIC_API_KEY environment variable for auto-authentication"

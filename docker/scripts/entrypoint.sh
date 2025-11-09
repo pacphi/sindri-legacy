@@ -13,10 +13,29 @@ fi
 if [ ! -d "/workspace/developer" ]; then
     echo "🏠 Creating developer home directory on persistent volume..."
     mkdir -p /workspace/developer
+
     # Copy skeleton files from /etc/skel
     if [ -d "/etc/skel" ]; then
         cp -r /etc/skel/. /workspace/developer/
     fi
+
+    # Copy core tool configurations from Docker build home to persistent volume
+    # Binaries are in /usr/local/bin (system-wide), but configs are user-specific
+    echo "🔧 Copying core tool configurations to persistent volume..."
+
+    # Copy mise configuration
+    if [ -d "/home/developer/.config/mise" ]; then
+        mkdir -p /workspace/developer/.config
+        cp -r /home/developer/.config/mise /workspace/developer/.config/
+        echo "  ✓ Copied mise configuration"
+    fi
+
+    # Copy Claude configuration
+    if [ -d "/home/developer/.claude" ]; then
+        cp -r /home/developer/.claude /workspace/developer/
+        echo "  ✓ Copied Claude configuration"
+    fi
+
     chown -R developer:developer /workspace/developer
     chmod 755 /workspace/developer
     echo "✅ Developer home directory created at /workspace/developer"
