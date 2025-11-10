@@ -227,6 +227,37 @@ check_dns_resolution() {
     fi
 }
 
+# Check domains required by extension (via EXT_REQUIRED_DOMAINS metadata)
+# Usage: check_required_domains
+# Returns: 0 if all domains resolve, 1 if any fail
+check_required_domains() {
+    local domains="${EXT_REQUIRED_DOMAINS:-}"
+
+    if [[ -z "$domains" ]]; then
+        print_debug "No required domains specified"
+        return 0
+    fi
+
+    print_status "Checking DNS for required domains..."
+    local failed_domains=()
+
+    for domain in $domains; do
+        print_debug "Testing DNS: $domain"
+        if ! timeout 5s nslookup "$domain" >/dev/null 2>&1 && \
+           ! timeout 5s host "$domain" >/dev/null 2>&1; then
+            failed_domains+=("$domain")
+        fi
+    done
+
+    if [[ ${#failed_domains[@]} -gt 0 ]]; then
+        print_error "DNS resolution failed for: ${failed_domains[*]}"
+        return 1
+    fi
+
+    print_success "All required domains accessible"
+    return 0
+}
+
 # ============================================================================
 # PACKAGE INSTALLATION HELPERS (with automatic retry)
 # ============================================================================

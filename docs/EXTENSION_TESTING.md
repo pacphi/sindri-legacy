@@ -310,14 +310,17 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 
 #### Test Matrix
 
-Representative sample of 6 extensions tested for full API compliance:
+Representative sample of 9 extensions tested for full API compliance:
 
 - nodejs (mise-powered language)
 - python (mise-powered language)
 - rust (mise-powered language)
 - golang (mise-powered language)
-- tmux-workspace (traditional utility)
-- monitoring (multi-dependency extension)
+- tmux-workspace (native apt-based utility)
+- monitoring (apt packages with multi-dependency)
+- docker (mixed: apt + binary downloads, complex multi-step)
+- openskills (npm global install pattern)
+- agent-manager (git/GitHub release binary pattern)
 
 **When It Runs**: On every push/PR affecting extension files
 
@@ -761,6 +764,43 @@ bash extension-manager.sh deactivate r
 5. **Document Dependencies**: Note any required extensions
 6. **Set Reasonable Timeouts**: Consider installation time
 7. **Implement upgrade()**: Support API v2.0 for upgrade functionality
+8. **Declare Required Domains** (API v2.1+): Use `EXT_REQUIRED_DOMAINS` to specify domains needed during installation
+
+#### DNS Check Best Practices (API v2.1+)
+
+Extensions should declare domains they need to access:
+
+```bash
+# In extension metadata
+EXT_REQUIRED_DOMAINS="example.com github.com registry.npmjs.org"
+
+# In prerequisites() function
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Other prerequisite checks...
+  check_disk_space 1000
+
+  # Check extension-specific DNS requirements
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
+  fi
+
+  print_success "All prerequisites met"
+  return 0
+}
+```
+
+**Benefits**:
+
+- Automatic DNS checks via `check_required_domains()` helper
+- Pre-flight aggregation in `extension-manager install-all`
+- Clear error messages when specific domains are unreachable
+- Faster failure (DNS check before attempting installation)
+- Self-documenting domain requirements
 
 See [EXTENSIONS.md - Development Guidelines](EXTENSIONS.md#development-guidelines) for complete guidelines.
 
@@ -827,7 +867,7 @@ The extension testing system continuously evolves:
 │  Jobs 3-9 Run in Parallel (Matrix Tests)                    │
 ├─────────────────────────────────────────────────────────────┤
 │  3. Per-Extension Tests (24 extensions × install/validate)  │
-│  4. Extension API Tests (6 extensions × all API functions)  │
+│  4. Extension API Tests (9 extensions × all API functions)  │
 │  5. Protected Extensions (enforcement tests)                │
 │  6. Cleanup Extensions (ordering tests)                     │
 │  7. Manifest Operations (reorder, comments)                 │

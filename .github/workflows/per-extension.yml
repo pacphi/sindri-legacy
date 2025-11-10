@@ -132,46 +132,6 @@ jobs:
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           timeout-seconds: "300"
 
-      - name: Wait for VM network initialization
-        if: steps.should-test.outputs.should_test == 'true'
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
-        run: |
-          app_name="${{ steps.setup.outputs.app-name }}"
-
-          echo "Waiting for VM network stack initialization..."
-          max_attempts=12
-          attempt=1
-
-          while [ $attempt -le $max_attempts ]; do
-            echo "Attempt $attempt/$max_attempts: Testing network connectivity..."
-
-            if flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-              # Test basic network connectivity
-              if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1 && \
-                 ping -c 1 -W 2 archive.ubuntu.com > /dev/null 2>&1; then
-                echo \"✅ Network connectivity verified\"
-                exit 0
-              else
-                echo \"⚠️  Network not ready yet\"
-                exit 1
-              fi
-            '"; then
-              echo "✅ VM network stack ready"
-              break
-            else
-              if [ $attempt -lt $max_attempts ]; then
-                echo "⏳ Waiting 5s before retry..."
-                sleep 5
-                attempt=$((attempt + 1))
-              else
-                echo "❌ VM network stack did not become ready in time"
-                echo "Continuing anyway (may cause package installation failures)..."
-              fi
-            fi
-          done
-
-      # Keep these steps as they're extension-specific
       - name: Verify CI extension manifest
         if: steps.should-test.outputs.should_test == 'true'
         env:
@@ -241,8 +201,8 @@ jobs:
                     echo \"⚠️  No completion markers found, but no errors detected\"
                   fi
 
-                  echo \"⏳ Waiting for SSH environment to stabilize (15 seconds)...\"
-                  sleep 15
+                  echo \"⏳ Waiting for SSH environment to stabilize (45 seconds)...\"
+                  sleep 45
 
                   if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
                     echo \"✅ SSH environment file present\"

@@ -27,6 +27,7 @@ EXT_DESCRIPTION="Cloud provider CLI tools (AWS, Azure, GCP, OCI, Alibaba, DO, IB
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="mixed"  # Binary downloads + apt
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_REQUIRED_DOMAINS="awscli.amazonaws.com aka.ms packages.cloud.google.com github.com api.github.com raw.githubusercontent.com aliyuncli.alicdn.com clis.cloud.ibm.com"
 
 # Initialize extension environment
 extension_init
@@ -61,6 +62,14 @@ prerequisites() {
 
   # Check disk space (cloud CLIs need ~2GB)
   check_disk_space 2500
+
+  # Check extension-specific DNS requirements (non-blocking warning)
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
+  fi
 
   print_success "All prerequisites met"
   return 0

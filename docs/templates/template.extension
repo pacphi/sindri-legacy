@@ -14,11 +14,13 @@
 # Note: Priority/order is defined in /workspace/config/active-extensions.conf
 
 EXT_NAME="template"
-EXT_VERSION="2.0.0"
+EXT_VERSION="2.1.0"
+EXT_API_VERSION="2.1"
 EXT_DESCRIPTION="Extension template and reference implementation"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mixed"        # NEW: mise | apt | binary | git | native | mixed | manual
 EXT_UPGRADE_STRATEGY="automatic"  # NEW: automatic | manual | pinned | security-only
+EXT_REQUIRED_DOMAINS="example.com github.com"  # NEW (API v2.1): Space-separated list of required domains
 
 # ============================================================================
 # COMMON UTILITIES
@@ -80,6 +82,15 @@ prerequisites() {
 
   # Example: Check if mise is required (for mise-powered extensions)
   # check_mise_prerequisite || return 1
+
+  # Example: Check extension-specific DNS requirements (API v2.1)
+  # This checks domains listed in EXT_REQUIRED_DOMAINS metadata
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
+  fi
 
   # Example: Check CI mode using helper function
   if ! is_ci_mode; then

@@ -195,7 +195,7 @@ infra-tools
 
 ### Extension API
 
-Each extension implements 6 standard functions:
+Each extension implements 6 standard functions (API v1.0) or 7 functions (API v2.0):
 
 - `prerequisites()` - Check system requirements
 - `install()` - Install packages and tools
@@ -203,6 +203,23 @@ Each extension implements 6 standard functions:
 - `validate()` - Run smoke tests
 - `status()` - Check installation state
 - `remove()` - Uninstall and cleanup
+- `upgrade()` - Upgrade installed tools (API v2.0+)
+
+#### DNS Checks (API v2.1+)
+
+Extensions can declare required domains via the `EXT_REQUIRED_DOMAINS` metadata field:
+
+```bash
+EXT_REQUIRED_DOMAINS="example.com github.com registry.npmjs.org"
+```
+
+These domains are:
+
+- Automatically checked in `prerequisites()` via `check_required_domains()` helper
+- Aggregated and checked once upfront during `extension-manager install-all`
+- Used to provide clear DNS error messages before installation attempts
+
+Extensions without external domain dependencies can simply omit this field
 
 ### Node.js Development Stack
 

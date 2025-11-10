@@ -793,6 +793,42 @@ interactive_install() {
     install_all_extensions
 }
 
+# Aggregate required domains from all extensions in manifest
+# Usage: aggregate_required_domains
+# Returns: Space-separated list of unique domains
+aggregate_required_domains() {
+    local -A all_domains  # Associative array for deduplication
+    local active_extensions=()
+    mapfile -t active_extensions < <(read_manifest)
+
+    if [[ ${#active_extensions[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    for ext_name in "${active_extensions[@]}"; do
+        local ext_file
+        ext_file=$(find_extension_file "$ext_name")
+
+        if [[ -z "$ext_file" ]] || [[ ! -f "$ext_file" ]]; then
+            continue
+        fi
+
+        # Extract EXT_REQUIRED_DOMAINS from extension file
+        local domains
+        domains=$(grep "^EXT_REQUIRED_DOMAINS=" "$ext_file" 2>/dev/null | cut -d'"' -f2)
+
+        if [[ -n "$domains" ]]; then
+            # Add each domain to associative array
+            for domain in $domains; do
+                all_domains["$domain"]=1
+            done
+        fi
+    done
+
+    # Output unique domains
+    printf '%s ' "${!all_domains[@]}"
+}
+
 # Function to install all active extensions
 install_all_extensions() {
     print_status "Installing all active extensions..."
@@ -805,6 +841,34 @@ install_all_extensions() {
         print_warning "No extensions in activation manifest"
         print_status "Edit the manifest: $MANIFEST_FILE"
         return 0
+    fi
+
+    # Phase 2: Pre-flight DNS checks
+    print_status "Running pre-flight checks for ${#active_extensions[@]} extensions..."
+    local required_domains
+    required_domains=$(aggregate_required_domains)
+
+    if [[ -n "$required_domains" ]]; then
+        local -a domain_array
+        read -ra domain_array <<< "$required_domains"
+        print_status "Checking DNS for ${#domain_array[@]} unique domains..."
+
+        local dns_failures=()
+        for domain in "${domain_array[@]}"; do
+            print_debug "Testing DNS: $domain"
+            if ! timeout 5s nslookup "$domain" >/dev/null 2>&1 && \
+               ! timeout 5s host "$domain" >/dev/null 2>&1; then
+                dns_failures+=("$domain")
+            fi
+        done
+
+        if [[ ${#dns_failures[@]} -gt 0 ]]; then
+            print_warning "DNS issues detected for: ${dns_failures[*]}"
+            print_warning "Installations may fail if these domains are needed"
+        else
+            print_success "All DNS checks passed"
+        fi
+        echo ""
     fi
 
     local installed_count=0

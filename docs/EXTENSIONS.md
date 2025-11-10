@@ -497,6 +497,35 @@ EXT_INSTALL_METHOD="mise"          # New in v2.0
 EXT_UPGRADE_STRATEGY="automatic"   # New in v2.0
 ```
 
+#### API v2.1 Metadata (DNS Checks)
+
+```bash
+EXT_NAME="myextension"
+EXT_VERSION="2.1.0"
+EXT_API_VERSION="2.1"
+EXT_DESCRIPTION="My tool via mise"
+EXT_CATEGORY="language"
+EXT_INSTALL_METHOD="mise"
+EXT_UPGRADE_STRATEGY="automatic"
+EXT_REQUIRED_DOMAINS="example.com github.com"  # New in v2.1: Space-separated list
+```
+
+The `EXT_REQUIRED_DOMAINS` field (API v2.1+) declares domains that the extension needs to access during installation.
+
+These domains are:
+
+- Checked automatically via `check_required_domains()` in `prerequisites()`
+- Aggregated and checked once during `extension-manager install-all` (pre-flight checks)
+- Used to provide clear error messages when DNS resolution fails
+
+**Examples**:
+
+- PHP: `EXT_REQUIRED_DOMAINS="composer.github.io getcomposer.org ppa.launchpadcontent.net get.symfony.com"`
+- .NET: `EXT_REQUIRED_DOMAINS="packages.microsoft.com dist.nuget.org"`
+- Cloud Tools: `EXT_REQUIRED_DOMAINS="awscli.amazonaws.com aka.ms packages.cloud.google.com github.com api.github.com
+  raw.githubusercontent.com aliyuncli.alicdn.com clis.cloud.ibm.com"`
+- Extensions without external domains: Simply omit `EXT_REQUIRED_DOMAINS` (defaults to empty)
+
 ### Installation Methods (API v2.0)
 
 Valid values for `EXT_INSTALL_METHOD`:
@@ -718,6 +747,7 @@ activate_mise_environment       # Activate mise in current shell
 ```bash
 check_mise_prerequisite         # Verify mise is installed
 check_disk_space 1000          # Check available disk space (MB)
+check_required_domains          # Check DNS for EXT_REQUIRED_DOMAINS (API v2.1+)
 ```
 
 #### Status Helpers

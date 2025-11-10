@@ -45,7 +45,14 @@ jobs:
       max-parallel: 2
       matrix:
         # Test representative sample of extensions for API compliance
-        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring"]
+        # Coverage by install method:
+        # - mise: nodejs, python, rust, golang (language runtimes)
+        # - native: tmux-workspace (apt-based utility)
+        # - apt: monitoring (apt packages with dependencies)
+        # - mixed: docker (apt + binary downloads, complex multi-step)
+        # - npm: openskills (npm global install pattern)
+        # - git: agent-manager (GitHub release binary pattern)
+        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring", "docker", "openskills", "agent-manager"]
 
     steps:
       - name: Checkout repository
@@ -99,13 +106,17 @@ jobs:
             # Add extension dependencies to manifest
             # Note: mise is a core feature, already available
             case \"$extension\" in
-              nodejs|python|rust|golang|tmux-workspace)
+              nodejs|python|rust|golang|tmux-workspace|docker|agent-manager)
                 # These extensions have no dependencies (mise is core)
                 ;;
               monitoring)
                 # monitoring depends on nodejs and python extensions
                 echo \"nodejs\" > \$manifest
                 echo \"python\" >> \$manifest
+                ;;
+              openskills)
+                # openskills depends on nodejs extension
+                echo \"nodejs\" > \$manifest
                 ;;
             esac
 
