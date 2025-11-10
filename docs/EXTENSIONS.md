@@ -35,6 +35,7 @@ The extension system supports two approaches:
 
 - **API v1.0**: Core functionality (prerequisites, install, configure, validate, status, remove)
 - **API v2.0**: Adds standardized upgrade support with `upgrade()` function and installation metadata
+- **API v2.1**: Adds DNS pre-flight checks via `EXT_REQUIRED_DOMAINS` metadata field
 
 All extensions implement the Extension API, providing consistent installation, validation, and upgrade experiences.
 
@@ -175,17 +176,16 @@ These are highly recommended as many tools depend on them.
 
 | Extension | Description                                | Tool Manager | Version | Dependencies |
 | --------- | ------------------------------------------ | ------------ | ------- | ------------ |
-| `nodejs`  | Node.js LTS and npm                        | mise         | 2.0.0   | mise (pre-installed)  |
-| `python`  | Python 3.13 with pip, venv, uv, pipx tools | mise         | 2.0.0   | mise (pre-installed)  |
+| `nodejs`  | Node.js LTS and npm                        | mise         | 2.1.0   | mise (pre-installed)  |
+| `python`  | Python 3.13 with pip, venv, uv, pipx tools | mise         | 2.1.0   | mise (pre-installed)  |
 
 ### Claude AI Tools
 
 | Extension            | Description                                                     | Tool Manager       | Version | Dependencies        |
 | -------------------- | --------------------------------------------------------------- | ------------------ | ------- | ------------------- |
-| `claude`             | Claude Code CLI with developer configuration                    | native             | 2.0.0   | -                   |
-| `claude-marketplace` | Plugin installer for https://claudecodemarketplace.com/         | native             | 2.0.0   | claude, git         |
-| `openskills`         | OpenSkills CLI for managing Claude Code skills from marketplace | npm                | 2.0.0   | nodejs (20.6+), git |
-| `nodejs-devtools`    | TypeScript, ESLint, Prettier, nodemon, goalie, research-swarm   | mise (npm backend) | 2.0.0   | nodejs, mise (pre-installed) |
+| `claude-marketplace` | Plugin installer for https://claudecodemarketplace.com/         | native             | 2.1.0   | git                 |
+| `openskills`         | OpenSkills CLI for managing Claude Code skills from marketplace | npm                | 2.1.0   | nodejs (20.6+), git |
+| `nodejs-devtools`    | TypeScript, ESLint, Prettier, nodemon, goalie, research-swarm   | mise (npm backend) | 2.1.0   | nodejs, mise (pre-installed) |
 
 #### nodejs-devtools Tools
 
@@ -207,32 +207,32 @@ All tools are managed via mise with the npm backend, ensuring version consistenc
 
 | Extension | Description                                    | Tool Manager     | Version | Dependencies |
 | --------- | ---------------------------------------------- | ---------------- | ------- | ------------ |
-| `rust`    | Rust toolchain with cargo, clippy, rustfmt     | mise             | 2.0.0   | mise (pre-installed)  |
-| `golang`  | Go 1.24 with gopls, delve, golangci-lint       | mise             | 2.0.0   | mise (pre-installed)  |
-| `ruby`    | Ruby 3.4.7 with mise, Rails, Bundler           | mise             | 2.0.0   | automatic    |
+| `rust`    | Rust toolchain with cargo, clippy, rustfmt     | mise             | 2.1.0   | mise (pre-installed)  |
+| `golang`  | Go 1.24 with gopls, delve, golangci-lint       | mise             | 2.1.0   | mise (pre-installed)  |
+| `ruby`    | Ruby 3.4.7 with mise, Rails, Bundler           | mise             | 2.1.0   | automatic    |
 | `php`     | PHP 8.4 with Composer, Symfony CLI             | apt (Ondrej PPA) | 2.1.0   | automatic    |
-| `jvm`     | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN           | 2.0.0   | N/A          |
-| `dotnet`  | .NET SDK 9.0/8.0 with ASP.NET Core             | apt (Microsoft)  | 2.0.0   | N/A          |
+| `jvm`     | SDKMAN with Java, Kotlin, Scala, Maven, Gradle | SDKMAN           | 2.1.0   | N/A          |
+| `dotnet`  | .NET SDK 9.0/8.0 with ASP.NET Core             | apt (Microsoft)  | 2.1.0   | N/A          |
 
 ### Infrastructure & DevOps
 
 | Extension     | Description                                        | Tool Manager        | Version |
 | ------------- | -------------------------------------------------- | ------------------- | ------- |
-| `docker`      | Docker Engine with compose, dive, ctop             | apt + binary        | 2.0.0   |
-| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel          | Mixed               | 2.0.0   |
-| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs         | Official installers | 2.0.0   |
-| `ai-tools`    | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed               | 2.0.0   |
+| `docker`      | Docker Engine with compose, dive, ctop             | apt + binary        | 2.1.0   |
+| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel          | Mixed               | 2.1.0   |
+| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs         | Official installers | 2.1.0   |
+| `ai-tools`    | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed               | 2.1.0   |
 
 ### Monitoring & Utilities
 
 | Extension        | Description                                         | Tool Manager  | Version |
 | ---------------- | --------------------------------------------------- | ------------- | ------- |
-| `monitoring`     | System monitoring tools (htop, glances, btop, etc.) | apt           | 2.0.0   |
-| `tmux-workspace` | Tmux session management                             | apt           | 2.0.0   |
-| `playwright`     | Browser automation testing                          | npm           | 2.0.0   |
-| `agent-manager`  | Claude Code agent management                        | Custom        | 2.0.0   |
-| `context-loader` | Context system for Claude                           | Custom        | 2.0.0   |
-| `github-cli`     | GitHub CLI authentication and workflows             | Pre-installed | 2.0.0   |
+| `monitoring`     | System monitoring tools (htop, glances, btop, etc.) | apt           | 2.1.0   |
+| `tmux-workspace` | Tmux session management                             | apt           | 2.1.0   |
+| `playwright`     | Browser automation testing                          | npm           | 2.1.0   |
+| `agent-manager`  | Claude Code agent management                        | Custom        | 2.1.0   |
+| `context-loader` | Context system for Claude                           | Custom        | 2.1.0   |
+| `github-cli`     | GitHub CLI authentication and workflows             | Pre-installed | 2.1.0   |
 
 ---
 
@@ -487,7 +487,7 @@ EXT_UPGRADE_STRATEGY="automatic"   # New in v2.0
 ```bash
 EXT_NAME="myextension"
 EXT_VERSION="2.1.0"
-EXT_API_VERSION="2.1"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="My tool via mise"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="mise"
@@ -577,11 +577,13 @@ source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="myextension"
-EXT_VERSION="2.0.0"
+EXT_VERSION="2.1.0"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="My tool via mise"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="mise"
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_REQUIRED_DOMAINS=""  # Space-separated list of required domains (optional)
 
 extension_init
 
@@ -595,6 +597,9 @@ prerequisites() {
   # Require mise
   check_mise_prerequisite || return 1
   check_disk_space 500
+
+  # Check DNS for required domains (API v2.1+)
+  check_required_domains || return 1
 
   print_success "All prerequisites met"
   return 0

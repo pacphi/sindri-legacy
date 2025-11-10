@@ -15,7 +15,7 @@
 
 EXT_NAME="template"
 EXT_VERSION="2.1.0"
-EXT_API_VERSION="2.1"
+EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Extension template and reference implementation"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mixed"        # NEW: mise | apt | binary | git | native | mixed | manual

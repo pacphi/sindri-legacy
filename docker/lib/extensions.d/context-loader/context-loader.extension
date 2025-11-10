@@ -265,17 +265,15 @@ validate() {
 status() {
   print_extension_header
 
-  # Check installation status
   if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
     echo "Status: ✗ NOT INSTALLED"
     echo ""
     print_status "Missing files:"
     echo "  ✗ /workspace/scripts/lib/context-loader.sh"
     echo "  ✗ /workspace/scripts/cf-with-context.sh"
-    return 1
+    return 0
   fi
 
-  # Check if context-load command is available (critical component)
   if ! command_exists context-load; then
     echo "Status: ⚠ PARTIALLY INSTALLED (missing context-load command)"
     echo ""
@@ -285,18 +283,16 @@ status() {
     echo "  ✗ context-load command not found"
     echo ""
     print_status "Run 'extension-manager install context-loader' to complete installation"
-    return 1
+    return 0
   fi
 
   echo "Status: ✓ INSTALLED"
   echo ""
 
-  # Extension-specific tool listing with versions
   print_status "Installed tools:"
   [[ -f "/workspace/scripts/lib/context-loader.sh" ]] && echo "  ✓ context-loader.sh" || echo "  ✗ context-loader.sh"
   [[ -f "/workspace/scripts/cf-with-context.sh" ]] && echo "  ✓ cf-with-context.sh" || echo "  ✗ cf-with-context.sh"
 
-  # Show context directories
   echo ""
   print_status "Context directories:"
   if [[ -d "/workspace/context/global" ]]; then
@@ -315,7 +311,6 @@ status() {
     echo "  ✗ templates: not found"
   fi
 
-  # Always return 0 for status checks
   return 0
 }
 

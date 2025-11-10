@@ -11,6 +11,27 @@ on:
     paths:
       - "Dockerfile"
       - "docker/**"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Custom image tag (default: auto-generated)"
+        required: false
+        type: string
+      push_latest:
+        description: "Tag as latest"
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+    outputs:
+      image-url:
+        description: "URL of the built image"
+        value: ${{ jobs.build-push.outputs.image-url }}
+      image-tag:
+        description: "Tag of the built image"
+        value: ${{ jobs.build-push.outputs.image-tag }}
   workflow_dispatch:
     inputs:
       tag:

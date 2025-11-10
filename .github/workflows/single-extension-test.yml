@@ -41,7 +41,6 @@ on:
         type: choice
         options:
           # Claude AI Extensions
-          - claude
           - claude-marketplace
           - openskills
           # mise-powered Languages
@@ -146,6 +145,11 @@ jobs:
 
       - name: Setup test environment
         uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: ${{ inputs.extension_name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
 
       - name: Deploy test VM
         id: deploy

@@ -37,8 +37,8 @@ The test suite is designed to:
 ### Test Statistics
 
 - **Total Test Jobs**: 10
-- **Extensions Tested**: 20 out of 20 (100%)
-- **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0)
+- **Extensions Tested**: 21 out of 21 (100%)
+- **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0, 7/7 v2.1)
 - **Feature Coverage**: 96%
 - **Test Fixtures**: 3 manifest test files
 - **Base System Components**: 4 (mise, workspace, SSH, Claude) - pre-installed and always available
@@ -228,10 +228,9 @@ Comprehensive functional testing for each extension individually using the Exten
 
 For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 
-#### Tested Extensions (20 Total)
+#### Tested Extensions (21 Total)
 
-**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the Docker image and
-not tested as extensions.
+**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the Docker image and not tested as extensions.
 
 | Extension                    | Key Tools          | Dependencies        | Test Focus               |
 | ---------------------------- | ------------------ | ------------------- | ------------------------ |
@@ -241,13 +240,14 @@ not tested as extensions.
 | rust                         | rustc, cargo       | mise (pre-installed) | Compilation, cargo       |
 | golang                       | go                 | mise (pre-installed) | Compilation, modules     |
 | nodejs-devtools              | tsc, eslint        | mise (pre-installed), nodejs | TypeScript, linting      |
+| ruby                         | ruby, gem, bundle  | mise (pre-installed) | Ruby execution, Rails    |
 | **Languages (Traditional)**  |                    |                     |                          |
-| ruby                         | ruby, gem, bundle  | -                   | Ruby execution, Rails    |
 | php                          | php, composer      | -                   | PHP, Symfony             |
 | jvm                          | java, sdk          | -                   | SDKMAN, Java             |
 | dotnet                       | dotnet             | -                   | .NET SDK, ASP.NET        |
 | **Claude AI**                |                    |                     |                          |
-| claude                       | claude             | -                   | CLI authentication       |
+| claude-marketplace           | marketplace config | git                 | Plugin installation      |
+| openskills                   | openskills, skills | nodejs, git         | Skills management        |
 | **Infrastructure**           |                    |                     |                          |
 | docker                       | docker, compose    | -                   | Container runtime        |
 | infra-tools                  | terraform, ansible | -                   | IaC tools                |
@@ -512,7 +512,7 @@ gh workflow run extension-tests.yml \
 | `remove()`         | ✅     | extension-api-tests                         | 100%     |
 | `upgrade()` (v2.0) | ✅     | extension-api-tests                         | 100%     |
 
-#### Overall API Coverage: 100% (7/7 functions including v2.0)
+#### Overall API Coverage: 100% (7/7 functions including v2.0 and v2.1)
 
 ### Feature Coverage
 
@@ -530,10 +530,10 @@ gh workflow run extension-tests.yml \
 
 ### Extension Coverage
 
-- **Total Extensions**: 20 (base system components not counted as extensions)
-- **Extensions Tested**: 20
+- **Total Extensions**: 21 (base system components not counted as extensions)
+- **Extensions Tested**: 21
 - **Coverage**: 100%
-- **Untested**: template (intentionally excluded, used as development reference)
+- **Untested**: None (template intentionally excluded, used as development reference)
 
 ---
 
@@ -745,43 +745,27 @@ bash extension-manager.sh deactivate r
 5. **Document Dependencies**: Note any required extensions
 6. **Set Reasonable Timeouts**: Consider installation time
 7. **Implement upgrade()**: Support API v2.0 for upgrade functionality
-8. **Declare Required Domains** (API v2.1+): Use `EXT_REQUIRED_DOMAINS` to specify domains needed during installation
+8. **Declare Required Domains** (API v2.1+): Use `EXT_REQUIRED_DOMAINS` for domains needed during installation
 
 #### DNS Check Best Practices (API v2.1+)
 
-Extensions should declare domains they need to access:
+Declare domains needed for installation:
 
 ```bash
-# In extension metadata
+# Extension metadata
 EXT_REQUIRED_DOMAINS="example.com github.com registry.npmjs.org"
 
-# In prerequisites() function
+# In prerequisites()
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
-
-  # Other prerequisite checks...
   check_disk_space 1000
-
-  # Check extension-specific DNS requirements
-  if command_exists check_required_domains; then
-    check_required_domains || {
-      print_warning "DNS issues detected for required domains"
-      print_warning "Installation may fail if domains are unreachable"
-    }
-  fi
-
+  check_required_domains || return 1
   print_success "All prerequisites met"
   return 0
 }
 ```
 
-**Benefits**:
-
-- Automatic DNS checks via `check_required_domains()` helper
-- Pre-flight aggregation in `extension-manager install-all`
-- Clear error messages when specific domains are unreachable
-- Faster failure (DNS check before attempting installation)
-- Self-documenting domain requirements
+**Benefits**: Automatic DNS checks, pre-flight aggregation, clear error messages, faster failure detection
 
 See [EXTENSIONS.md - Development Guidelines](EXTENSIONS.md#development-guidelines) for complete guidelines.
 
@@ -816,10 +800,11 @@ The extension testing system continuously evolves:
 - [x] **Manifest Operations Testing** - Reorder and comment preservation tested
 - [x] **Dependency Chain Testing** - Transitive dependency resolution validated
 - [x] **Test Fixtures** - Clean, maintainable test data approach
-- [x] **Expanded Matrix** - 20 extensions tested (100% coverage)
+- [x] **Expanded Matrix** - 21 extensions tested (100% coverage)
 - [x] **Error Handling** - Prerequisites failure testing added
 - [x] **API v2.0 Testing** - Upgrade functionality tested
 - [x] **Pre-Installed Base System** - Moved core components to Docker image for faster startup
+- [x] **API v2.1 DNS Checks** - DNS pre-flight checks and domain validation
 
 ### Planned Enhancements
 
@@ -829,6 +814,7 @@ The extension testing system continuously evolves:
 - [ ] Extension marketplace scoring
 - [ ] Installation time optimization tracking
 - [ ] Automated conflict detection across all combinations
+- [ ] Network reliability testing for DNS checks
 
 ### Test Job Workflow
 
