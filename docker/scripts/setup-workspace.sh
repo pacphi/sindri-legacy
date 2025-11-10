@@ -79,6 +79,45 @@ sync_extension_manager() {
 }
 
 # ------------------------------------------------------------------------------
+# sync_common_scripts - Sync common utility scripts from Docker image
+# ------------------------------------------------------------------------------
+sync_common_scripts() {
+    if [ ! -d "/docker/lib" ]; then
+        return
+    fi
+
+    # Sync common.sh
+    if [ -f "/docker/lib/common.sh" ]; then
+        if [ ! -f "$WORKSPACE_DIR/scripts/lib/common.sh" ] || \
+           [ "/docker/lib/common.sh" -nt "$WORKSPACE_DIR/scripts/lib/common.sh" ]; then
+            cp /docker/lib/common.sh "$WORKSPACE_DIR/scripts/lib/"
+            chmod +x "$WORKSPACE_DIR/scripts/lib/common.sh"
+            echo "  ✓ Synced common.sh"
+        fi
+    fi
+
+    # Sync extensions-common.sh
+    if [ -f "/docker/lib/extensions-common.sh" ]; then
+        if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions-common.sh" ] || \
+           [ "/docker/lib/extensions-common.sh" -nt "$WORKSPACE_DIR/scripts/lib/extensions-common.sh" ]; then
+            cp /docker/lib/extensions-common.sh "$WORKSPACE_DIR/scripts/lib/"
+            chmod +x "$WORKSPACE_DIR/scripts/lib/extensions-common.sh"
+            echo "  ✓ Synced extensions-common.sh"
+        fi
+    fi
+
+    # Sync registry-retry.sh if it exists
+    if [ -f "/docker/lib/registry-retry.sh" ]; then
+        if [ ! -f "$WORKSPACE_DIR/scripts/lib/registry-retry.sh" ] || \
+           [ "/docker/lib/registry-retry.sh" -nt "$WORKSPACE_DIR/scripts/lib/registry-retry.sh" ]; then
+            cp /docker/lib/registry-retry.sh "$WORKSPACE_DIR/scripts/lib/"
+            chmod +x "$WORKSPACE_DIR/scripts/lib/registry-retry.sh"
+            echo "  ✓ Synced registry-retry.sh"
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # sync_extension_scripts - Sync top-level extension scripts
 # ------------------------------------------------------------------------------
 sync_extension_scripts() {
@@ -163,6 +202,7 @@ sync_extension_system() {
     echo "🔧 Syncing extension system..."
 
     sync_extension_manager
+    sync_common_scripts
     sync_extension_scripts
     sync_extension_subdirectories
     sync_manifest_templates
