@@ -187,6 +187,12 @@ install() {
 configure() {
   print_status "Configuring cloud provider CLIs..."
 
+  # Add cloud CLIs to PATH for non-interactive SSH sessions (CI/CD)
+  if ! grep -q "# Cloud Tools" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/cloud-tools.ssh-environment.template" | sudo tee -a /etc/profile.d/00-ssh-environment.sh >/dev/null
+    print_success "Added cloud CLIs to PATH (SSH environment)"
+  fi
+
   # Configure Oracle CLI PATH for SSH sessions
   if command_exists oci; then
     if command_exists setup_tool_path 2>/dev/null; then
@@ -197,7 +203,7 @@ configure() {
         echo "" >> "$HOME/.bashrc"
         echo "# ${EXT_NAME} - Oracle Cloud CLI" >> "$HOME/.bashrc"
         echo 'export PATH=$PATH:$HOME/bin' >> "$HOME/.bashrc"
-        print_success "Added Oracle CLI to PATH"
+        print_success "Added Oracle CLI to PATH (.bashrc)"
       fi
     fi
     export PATH=$PATH:$HOME/bin

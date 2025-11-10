@@ -102,18 +102,39 @@ install() {
   local UBUNTU_VERSION
   UBUNTU_VERSION=$(lsb_release -rs)
 
+  # Retry logic for downloading Microsoft package configuration
   print_status "Downloading Microsoft package configuration for Ubuntu $UBUNTU_VERSION..."
-  if wget -q https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb -O packages-microsoft-prod.deb; then
-    print_status "Installing Microsoft package repository..."
-    sudo dpkg -i packages-microsoft-prod.deb
-    rm packages-microsoft-prod.deb
-    print_status "Updating package lists..."
-    apt_update_retry 3
-    print_success "Microsoft package repository configured"
-  else
-    print_error "Failed to configure Microsoft package repository"
+  local max_retries=3
+  local retry_count=0
+  local download_success=false
+
+  while [ $retry_count -lt $max_retries ]; do
+    if wget -q --timeout=30 --tries=2 \
+         https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb \
+         -O packages-microsoft-prod.deb; then
+      download_success=true
+      break
+    fi
+
+    retry_count=$((retry_count + 1))
+    if [ $retry_count -lt $max_retries ]; then
+      print_warning "Download attempt $retry_count failed, retrying in $((retry_count * 2)) seconds..."
+      sleep $((retry_count * 2))
+    fi
+  done
+
+  if [ "$download_success" = false ]; then
+    print_error "Failed to download Microsoft package configuration after $max_retries attempts"
+    print_error "Please check network connectivity and DNS resolution"
     return 1
   fi
+
+  print_status "Installing Microsoft package repository..."
+  sudo dpkg -i packages-microsoft-prod.deb
+  rm packages-microsoft-prod.deb
+  print_status "Updating package lists..."
+  apt_update_retry 3
+  print_success "Microsoft package repository configured"
 
   # Install .NET SDK versions
   print_status "Installing .NET SDKs (this may take 2-5 minutes)..."

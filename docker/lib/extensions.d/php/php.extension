@@ -274,13 +274,19 @@ install() {
 configure() {
   print_status "Configuring PHP environment..."
 
-  # Add Composer global bin to PATH
+  # Add Composer global bin to PATH for interactive sessions
   if ! grep -q ".composer/vendor/bin" "$HOME/.bashrc" 2>/dev/null; then
     echo '' >> "$HOME/.bashrc"
     echo '# Composer global bin' >> "$HOME/.bashrc"
     echo 'export PATH="$HOME/.composer/vendor/bin:$PATH"' >> "$HOME/.bashrc"
     echo 'export PATH="$HOME/.config/composer/vendor/bin:$PATH"' >> "$HOME/.bashrc"
-    print_success "Added Composer bin to PATH"
+    print_success "Added Composer bin to PATH (.bashrc)"
+  fi
+
+  # Add Composer to PATH for non-interactive SSH sessions (CI/CD)
+  if ! grep -q "# PHP/Composer" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
+    cat "$(dirname "${BASH_SOURCE[0]}")/php.ssh-environment.template" | sudo tee -a /etc/profile.d/00-ssh-environment.sh >/dev/null
+    print_success "Added Composer bin to PATH (SSH environment)"
   fi
 
   # Configure PHP for development

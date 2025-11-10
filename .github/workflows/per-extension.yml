@@ -61,9 +61,8 @@ jobs:
           - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m" }
           - { name: "golang", commands: "go", key_tool: "go", timeout: "20m" }
           - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs" }
-          # Claude AI extensions
-          - { name: "claude", commands: "claude", key_tool: "claude", timeout: "15m" }
-          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m", depends_on: "claude" }
+          # Claude AI extensions (claude pre-installed in Docker image)
+          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m" }
           - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs" }
           # Traditional extensions (unchanged)
           - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2 }

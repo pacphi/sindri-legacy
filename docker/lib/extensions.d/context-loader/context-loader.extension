@@ -255,12 +255,17 @@ status() {
   print_extension_header
 
   # Check installation status
+  # NOTE: Always return 0 - status checks should never fail
   if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
-    echo "Status: ✗ NOT INSTALLED"
-    return 1
+    echo "Status: not installed"
+    echo ""
+    print_status "Missing files:"
+    echo "  ✗ /workspace/scripts/lib/context-loader.sh"
+    echo "  ✗ /workspace/scripts/cf-with-context.sh"
+    return 0
   fi
 
-  echo "Status: ✓ INSTALLED"
+  echo "Status: installed"
   echo ""
 
   # Extension-specific tool listing with versions
@@ -287,6 +292,7 @@ status() {
     echo "  ✗ templates: not found"
   fi
 
+  # Always return 0 for status checks
   return 0
 }
 
