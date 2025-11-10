@@ -8,6 +8,26 @@ set -e
 # Functions are called serially from main() to ensure proper startup sequence.
 # ==============================================================================
 
+# ==============================================================================
+# Environment Configuration
+# ==============================================================================
+DEVELOPER_USER="developer"
+WORKSPACE_DIR="/workspace"
+DEVELOPER_HOME_BUILD="/home/$DEVELOPER_USER"
+DEVELOPER_HOME_RUNTIME="$WORKSPACE_DIR/$DEVELOPER_USER"
+SKEL_DIR="/etc/skel"
+DOCKER_LIB_DIR="/docker/lib"
+WORKSPACE_SCRIPTS_DIR="$WORKSPACE_DIR/scripts"
+WORKSPACE_LIB_DIR="$WORKSPACE_SCRIPTS_DIR/lib"
+WORKSPACE_BIN_DIR="$WORKSPACE_DIR/bin"
+EXTENSIONS_DIR="$WORKSPACE_LIB_DIR/extensions.d"
+EXTENSION_MANIFEST="$EXTENSIONS_DIR/active-extensions.conf"
+EXTENSION_MANIFEST_CI="$DOCKER_LIB_DIR/extensions.d/active-extensions.ci.conf"
+
+# ==============================================================================
+# Functions
+# ==============================================================================
+
 # ------------------------------------------------------------------------------
 # setup_workspace - Create workspace directory structure
 # ------------------------------------------------------------------------------
@@ -16,9 +36,9 @@ setup_workspace() {
 
     # Ensure developer user owns workspace root for write access
     # This is critical for volume mount tests and developer usage
-    if id developer >/dev/null 2>&1; then
-        chown developer:developer /workspace
-        chmod 775 /workspace
+    if id "$DEVELOPER_USER" >/dev/null 2>&1; then
+        chown "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_DIR"
+        chmod 775 "$WORKSPACE_DIR"
     fi
 }
 
@@ -28,13 +48,13 @@ setup_workspace() {
 setup_developer_home() {
     echo "🏠 Setting up developer home directory..."
 
-    if [ ! -d "/workspace/developer" ]; then
+    if [ ! -d "$DEVELOPER_HOME_RUNTIME" ]; then
         echo "  Creating developer home on persistent volume..."
-        mkdir -p /workspace/developer
+        mkdir -p "$DEVELOPER_HOME_RUNTIME"
 
         # Copy skeleton files from /etc/skel
-        if [ -d "/etc/skel" ]; then
-            cp -r /etc/skel/. /workspace/developer/
+        if [ -d "$SKEL_DIR" ]; then
+            cp -r "$SKEL_DIR/." "$DEVELOPER_HOME_RUNTIME/"
         fi
 
         # Copy core tool configurations from Docker build home to persistent volume
@@ -42,24 +62,24 @@ setup_developer_home() {
         echo "  🔧 Copying core tool configurations..."
 
         # Copy mise configuration
-        if [ -d "/home/developer/.config/mise" ]; then
-            mkdir -p /workspace/developer/.config
-            cp -r /home/developer/.config/mise /workspace/developer/.config/
+        if [ -d "$DEVELOPER_HOME_BUILD/.config/mise" ]; then
+            mkdir -p "$DEVELOPER_HOME_RUNTIME/.config"
+            cp -r "$DEVELOPER_HOME_BUILD/.config/mise" "$DEVELOPER_HOME_RUNTIME/.config/"
             echo "    ✓ Copied mise configuration"
         fi
 
         # Copy Claude configuration
-        if [ -d "/home/developer/.claude" ]; then
-            cp -r /home/developer/.claude /workspace/developer/
+        if [ -d "$DEVELOPER_HOME_BUILD/.claude" ]; then
+            cp -r "$DEVELOPER_HOME_BUILD/.claude" "$DEVELOPER_HOME_RUNTIME/"
             echo "    ✓ Copied Claude configuration"
         fi
 
-        chown -R developer:developer /workspace/developer
-        chmod 755 /workspace/developer
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME"
+        chmod 755 "$DEVELOPER_HOME_RUNTIME"
     fi
 
     # Update the user's home directory to point to persistent volume
-    usermod -d /workspace/developer developer
+    usermod -d "$DEVELOPER_HOME_RUNTIME" "$DEVELOPER_USER"
 
     echo "✅ Developer home directory configured"
 }
@@ -71,11 +91,11 @@ setup_ssh_keys() {
     if [ -n "$AUTHORIZED_KEYS" ]; then
         echo "🔑 Configuring SSH keys..."
 
-        mkdir -p /workspace/developer/.ssh
-        echo "$AUTHORIZED_KEYS" > /workspace/developer/.ssh/authorized_keys
-        chown -R developer:developer /workspace/developer/.ssh
-        chmod 700 /workspace/developer/.ssh
-        chmod 600 /workspace/developer/.ssh/authorized_keys
+        mkdir -p "$DEVELOPER_HOME_RUNTIME/.ssh"
+        echo "$AUTHORIZED_KEYS" > "$DEVELOPER_HOME_RUNTIME/.ssh/authorized_keys"
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.ssh"
+        chmod 700 "$DEVELOPER_HOME_RUNTIME/.ssh"
+        chmod 600 "$DEVELOPER_HOME_RUNTIME/.ssh/authorized_keys"
 
         echo "✅ SSH keys configured"
     else
@@ -87,12 +107,12 @@ setup_ssh_keys() {
 # setup_scripts_lib - Copy library scripts to workspace
 # ------------------------------------------------------------------------------
 setup_scripts_lib() {
-    if [ ! -d "/workspace/scripts/lib" ]; then
+    if [ ! -d "$WORKSPACE_LIB_DIR" ]; then
         echo "📚 Setting up scripts library..."
 
-        cp -r /docker/lib /workspace/scripts/
-        chown -R developer:developer /workspace/scripts/lib
-        chmod +x /workspace/scripts/lib/*.sh
+        cp -r "$DOCKER_LIB_DIR" "$WORKSPACE_SCRIPTS_DIR/"
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_LIB_DIR"
+        chmod +x "$WORKSPACE_LIB_DIR"/*.sh
 
         echo "✅ Scripts library configured"
     fi
@@ -106,27 +126,25 @@ setup_extension_manifest() {
 
     if [ "$CI_MODE" = "true" ]; then
         # CI mode: Use pre-configured CI manifest
-        if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
-            cp /docker/lib/extensions.d/active-extensions.ci.conf \
-               /workspace/scripts/lib/extensions.d/active-extensions.conf
+        if [ -f "$EXTENSION_MANIFEST_CI" ]; then
+            cp "$EXTENSION_MANIFEST_CI" "$EXTENSION_MANIFEST"
             echo "✅ Using CI extension manifest"
         else
             echo "⚠️  CI manifest not found, creating empty manifest"
-            mkdir -p /workspace/scripts/lib/extensions.d
-            touch /workspace/scripts/lib/extensions.d/active-extensions.conf
+            mkdir -p "$EXTENSIONS_DIR"
+            touch "$EXTENSION_MANIFEST"
         fi
     else
         # Production mode: Check if manifest exists, create from template if not
-        if [ ! -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]; then
+        if [ ! -f "$EXTENSION_MANIFEST" ]; then
             echo "  Creating default extension manifest..."
             # Use CI manifest as template (has good documentation)
-            if [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
-                cp /docker/lib/extensions.d/active-extensions.ci.conf \
-                   /workspace/scripts/lib/extensions.d/active-extensions.conf
+            if [ -f "$EXTENSION_MANIFEST_CI" ]; then
+                cp "$EXTENSION_MANIFEST_CI" "$EXTENSION_MANIFEST"
                 echo "✅ Extension manifest created from template"
             else
-                mkdir -p /workspace/scripts/lib/extensions.d
-                touch /workspace/scripts/lib/extensions.d/active-extensions.conf
+                mkdir -p "$EXTENSIONS_DIR"
+                touch "$EXTENSION_MANIFEST"
                 echo "✅ Empty extension manifest created"
             fi
         else
@@ -135,8 +153,8 @@ setup_extension_manifest() {
     fi
 
     # Ensure correct permissions
-    chown developer:developer /workspace/scripts/lib/extensions.d/active-extensions.conf
-    chmod 644 /workspace/scripts/lib/extensions.d/active-extensions.conf
+    chown "$DEVELOPER_USER:$DEVELOPER_USER" "$EXTENSION_MANIFEST"
+    chmod 644 "$EXTENSION_MANIFEST"
 }
 
 # ------------------------------------------------------------------------------
@@ -145,16 +163,16 @@ setup_extension_manifest() {
 setup_workspace_bin() {
     echo "🔗 Setting up workspace bin directory..."
 
-    if [ ! -d "/workspace/bin" ]; then
-        mkdir -p /workspace/bin
-        chown developer:developer /workspace/bin
+    if [ ! -d "$WORKSPACE_BIN_DIR" ]; then
+        mkdir -p "$WORKSPACE_BIN_DIR"
+        chown "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR"
     fi
 
     # Create symlink for extension-manager if script exists and symlink doesn't
-    if [ -f "/workspace/scripts/lib/extension-manager.sh" ] && \
-       [ ! -L "/workspace/bin/extension-manager" ]; then
-        ln -sf /workspace/scripts/lib/extension-manager.sh /workspace/bin/extension-manager
-        chown -h developer:developer /workspace/bin/extension-manager
+    if [ -f "$WORKSPACE_LIB_DIR/extension-manager.sh" ] && \
+       [ ! -L "$WORKSPACE_BIN_DIR/extension-manager" ]; then
+        ln -sf "$WORKSPACE_LIB_DIR/extension-manager.sh" "$WORKSPACE_BIN_DIR/extension-manager"
+        chown -h "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR/extension-manager"
     fi
 
     echo "✅ Workspace bin directory configured"
@@ -166,7 +184,7 @@ setup_workspace_bin() {
 setup_environment_variables() {
     if [ -n "$ANTHROPIC_API_KEY" ]; then
         echo "🔐 Configuring environment variables..."
-        echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> /workspace/developer/.bashrc
+        echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
         echo "✅ Environment variables configured"
     fi
 }
@@ -178,18 +196,18 @@ setup_github_auth() {
     if [ -n "$GITHUB_TOKEN" ]; then
         echo "🔐 Configuring GitHub authentication..."
 
-        echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> /workspace/developer/.bashrc
+        echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
 
         # Create GitHub CLI config for gh commands
-        sudo -u developer mkdir -p /workspace/developer/.config/gh
-        cat > /workspace/developer/.config/gh/hosts.yml << EOF
+        sudo -u "$DEVELOPER_USER" mkdir -p "$DEVELOPER_HOME_RUNTIME/.config/gh"
+        cat > "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml" << EOF
 github.com:
     oauth_token: $GITHUB_TOKEN
     user: $GITHUB_USER
     git_protocol: https
 EOF
-        chown -R developer:developer /workspace/developer/.config/gh
-        chmod 600 /workspace/developer/.config/gh/hosts.yml
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.config/gh"
+        chmod 600 "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml"
 
         echo "✅ GitHub authentication configured"
     fi
@@ -202,13 +220,13 @@ setup_git_config() {
     local configured=false
 
     if [ -n "$GIT_USER_NAME" ]; then
-        sudo -u developer git config --global user.name "$GIT_USER_NAME"
+        sudo -u "$DEVELOPER_USER" git config --global user.name "$GIT_USER_NAME"
         echo "✅ Git user name configured: $GIT_USER_NAME"
         configured=true
     fi
 
     if [ -n "$GIT_USER_EMAIL" ]; then
-        sudo -u developer git config --global user.email "$GIT_USER_EMAIL"
+        sudo -u "$DEVELOPER_USER" git config --global user.email "$GIT_USER_EMAIL"
         echo "✅ Git user email configured: $GIT_USER_EMAIL"
         configured=true
     fi
@@ -216,7 +234,7 @@ setup_git_config() {
     # Setup Git credential helper for GitHub token
     if [ -n "$GITHUB_TOKEN" ]; then
         # Create credential helper script
-        cat > /workspace/developer/.git-credential-helper.sh << 'EOF'
+        cat > "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh" << 'EOF'
 #!/bin/bash
 # Git credential helper for GitHub token authentication
 
@@ -239,11 +257,11 @@ if [ "$1" = "get" ]; then
 fi
 EOF
 
-        chmod +x /workspace/developer/.git-credential-helper.sh
-        chown developer:developer /workspace/developer/.git-credential-helper.sh
+        chmod +x "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
+        chown "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
 
         # Configure Git to use the credential helper
-        sudo -u developer git config --global credential.helper "/workspace/developer/.git-credential-helper.sh"
+        sudo -u "$DEVELOPER_USER" git config --global credential.helper "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
         echo "✅ Git credential helper configured"
         configured=true
     fi

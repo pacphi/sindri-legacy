@@ -5,9 +5,13 @@ set -e
 
 echo "🔐 Configuring SSH environment for non-interactive sessions..."
 
+# ==============================================================================
+# Environment Configuration
+# ==============================================================================
+PROFILE_D_DIR="/etc/profile.d"
 SSHD_CONFIG_D="/etc/ssh/sshd_config.d"
 ENV_CONFIG_FILE="$SSHD_CONFIG_D/99-bash-env.conf"
-SSH_ENV_FILE="/etc/profile.d/00-ssh-environment.sh"
+SSH_ENV_FILE="$PROFILE_D_DIR/00-ssh-environment.sh"
 
 # Create sshd_config.d directory if it doesn't exist
 if [ ! -d "$SSHD_CONFIG_D" ]; then
