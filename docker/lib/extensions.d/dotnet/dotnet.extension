@@ -1,6 +1,6 @@
 #!/bin/bash
 # dotnet.sh.example - .NET SDK and development tools
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs .NET development environment with:
 # - .NET SDK (9.0, 8.0 LTS)
@@ -8,6 +8,10 @@
 # - 19 global tools (EF Core, formatters, diagnostics)
 # - NuGet CLI with Mono wrapper
 # - Comprehensive aliases and templates
+#
+# Installation Method:
+# - Ubuntu 24.04+: Uses Ubuntu native package feeds (recommended)
+# - Ubuntu <24.04: Uses Microsoft package repository
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,13 +22,13 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="dotnet"
-EXT_VERSION="2.0.0"
+EXT_VERSION="2.1.0"
 EXT_API_VERSION="2.0"
 EXT_DESCRIPTION=".NET SDK with ASP.NET Core and development tools"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="apt"
 EXT_UPGRADE_STRATEGY="automatic"
-EXT_REQUIRED_DOMAINS="packages.microsoft.com dist.nuget.org"
+EXT_REQUIRED_DOMAINS="packages.microsoft.com dist.nuget.org archive.ubuntu.com"
 
 # Initialize extension environment
 extension_init
@@ -79,14 +83,6 @@ prerequisites() {
 install() {
   print_status "Installing .NET development environment..."
 
-  # PRE-FLIGHT: Verify APT is functional before attempting installation
-  print_status "Verifying package manager health..."
-  if ! timeout 30s apt-cache policy > /dev/null 2>&1; then
-    print_error "APT package manager not responding"
-    print_error "Network connectivity or DNS resolution may be failing"
-    return 1
-  fi
-
   # Check if .NET is already installed
   if command_exists dotnet; then
     local dotnet_version
@@ -96,44 +92,55 @@ install() {
     return 0
   fi
 
-  # Install Microsoft package repository
-  print_status "Setting up Microsoft package repository..."
+  # Detect Ubuntu version
   local UBUNTU_VERSION
   UBUNTU_VERSION=$(lsb_release -rs)
+  print_status "Detected Ubuntu $UBUNTU_VERSION"
 
-  # Retry logic for downloading Microsoft package configuration
-  print_status "Downloading Microsoft package configuration for Ubuntu $UBUNTU_VERSION..."
-  local max_retries=3
-  local retry_count=0
-  local download_success=false
+  # Ubuntu 24.04+ uses native Ubuntu package feeds (no Microsoft repository)
+  # See: https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu
+  if [[ "$UBUNTU_VERSION" == "24.04" ]] || [[ "${UBUNTU_VERSION%%.*}" -ge 24 ]]; then
+    print_status "Using Ubuntu native package feeds for .NET (recommended for Ubuntu 24.04+)"
+    print_status "Updating package lists..."
+    apt_update_retry 3
+  else
+    # Older Ubuntu versions require Microsoft package repository
+    print_status "Setting up Microsoft package repository for Ubuntu $UBUNTU_VERSION..."
 
-  while [ $retry_count -lt $max_retries ]; do
-    if wget -q --timeout=30 --tries=2 \
-         https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb \
-         -O packages-microsoft-prod.deb; then
-      download_success=true
-      break
+    # Use /tmp for downloads to ensure writable location
+    local max_retries=3
+    local retry_count=0
+    local download_success=false
+
+    while [ $retry_count -lt $max_retries ]; do
+      if wget -q --timeout=30 --tries=2 \
+           https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb \
+           -O /tmp/packages-microsoft-prod.deb; then
+        download_success=true
+        break
+      fi
+
+      retry_count=$((retry_count + 1))
+      if [ $retry_count -lt $max_retries ]; then
+        print_warning "Download attempt $retry_count failed, retrying in $((retry_count * 2)) seconds..."
+        sleep $((retry_count * 2))
+      fi
+    done
+
+    if [ "$download_success" = false ]; then
+      print_error "Failed to download Microsoft package configuration after $max_retries attempts"
+      print_error "Please check network connectivity and DNS resolution"
+      rm -f /tmp/packages-microsoft-prod.deb
+      return 1
     fi
 
-    retry_count=$((retry_count + 1))
-    if [ $retry_count -lt $max_retries ]; then
-      print_warning "Download attempt $retry_count failed, retrying in $((retry_count * 2)) seconds..."
-      sleep $((retry_count * 2))
-    fi
-  done
-
-  if [ "$download_success" = false ]; then
-    print_error "Failed to download Microsoft package configuration after $max_retries attempts"
-    print_error "Please check network connectivity and DNS resolution"
-    return 1
+    print_status "Installing Microsoft package repository..."
+    sudo dpkg -i /tmp/packages-microsoft-prod.deb
+    rm -f /tmp/packages-microsoft-prod.deb
+    print_status "Updating package lists..."
+    apt_update_retry 3
+    print_success "Microsoft package repository configured"
   fi
-
-  print_status "Installing Microsoft package repository..."
-  sudo dpkg -i packages-microsoft-prod.deb
-  rm packages-microsoft-prod.deb
-  print_status "Updating package lists..."
-  apt_update_retry 3
-  print_success "Microsoft package repository configured"
 
   # Install .NET SDK versions
   print_status "Installing .NET SDKs (this may take 2-5 minutes)..."

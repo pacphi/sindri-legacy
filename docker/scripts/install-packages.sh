@@ -19,37 +19,38 @@ apt_update_retry 3
 # Using --no-install-recommends to avoid pulling in unnecessary packages
 apt_install_retry 3 \
     --no-install-recommends \
-    software-properties-common \
-    openssh-server \
-    sudo \
-    curl \
-    wget \
-    git \
-    vim \
-    nano \
-    screen \
-    tree \
-    jq \
-    unzip \
+    bind9-dnsutils \
     build-essential \
-    pkg-config \
-    libssl-dev \
-    zlib1g-dev \
-    libyaml-dev \
+    ca-certificates \
+    curl \
+    gettext-base \
+    git \
+    gnupg \
+    iputils-ping \
+    jq \
     libreadline-dev \
+    libssl-dev \
+    libyaml-dev \
+    nano \
+    net-tools \
+    netcat-openbsd \
+    openssh-server \
     pipx \
-    sqlite3 \
+    pkg-config \
     postgresql-client \
     redis-tools \
-    net-tools \
-    iputils-ping \
-    telnet \
-    netcat-openbsd \
     rsync \
+    screen \
+    software-properties-common \
+    sqlite3 \
+    sudo \
+    telnet \
+    tree \
+    unzip \
+    vim \
+    wget \
     zip \
-    gnupg \
-    ca-certificates \
-    gettext-base
+    zlib1g-dev
 
 # Install yq from GitHub releases (mikefarah/yq)
 echo "Installing yq from GitHub releases..."

@@ -30,18 +30,18 @@ This comprehensive testing ensures that users can confidently activate and use a
 The test suite is designed to:
 
 1. **Validate All API Functions** - Test all Extension API functions for compliance
-2. **Enforce System Policies** - Verify protected extensions cannot be removed
-3. **Test Edge Cases** - Cleanup ordering, dependency chains, manifest operations
-4. **Ensure Reliability** - Idempotency, error handling, and conflict detection
-5. **Maintain Quality** - Syntax validation, best practices, and documentation
+2. **Test Edge Cases** - Cleanup ordering, dependency chains, manifest operations
+3. **Ensure Reliability** - Idempotency, error handling, and conflict detection
+4. **Maintain Quality** - Syntax validation, best practices, and documentation
 
 ### Test Statistics
 
 - **Total Test Jobs**: 10
-- **Extensions Tested**: 24 out of 25 (96%)
+- **Extensions Tested**: 20 out of 20 (100%)
 - **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0)
-- **Feature Coverage**: 97%
-- **Test Fixtures**: 4 manifest test files
+- **Feature Coverage**: 96%
+- **Test Fixtures**: 3 manifest test files
+- **Base System Components**: 4 (mise, workspace, SSH, Claude) - pre-installed and always available
 
 ---
 
@@ -49,27 +49,34 @@ The test suite is designed to:
 
 ### Extension Auto-Installation Architecture
 
-The CI testing environment uses a two-phase approach to set up extensions:
+The CI testing environment uses a pre-installed base system with optional extension installation:
 
-#### Phase 1: Manifest Template Deployment (Build Time)
+#### Pre-Installed Base System (Build Time)
+
+**Built into Docker image** (`Dockerfile`):
+
+The following components are baked into the Docker image and always available:
+
+- **workspace-structure** - `/workspace` directory layout
+- **mise** - Unified tool version manager
+- **ssh-environment** - Non-interactive SSH session support
+- **claude** - Claude Code CLI
+
+**Benefits**: ~10-12 second startup vs ~90-120 seconds with extension-based installation.
+
+#### Optional Extensions (Runtime)
 
 **File**: `docker/lib/extensions.d/active-extensions.ci.conf`
 
-This pre-configured template is built into the Docker image and contains:
+This manifest template defines additional extensions to install in CI mode.
 
-- All protected extensions (workspace-structure, mise-config, ssh-environment)
-- Comprehensive documentation and comments
-- Proper execution order (protected extensions first)
+#### Runtime Installation (Container Startup)
 
-**Purpose**: Provides a blueprint of what extensions should be installed in CI mode.
+**File**: `docker/scripts/entrypoint.sh`
 
-#### Phase 2: Runtime Installation (Container Startup)
+When the container starts, entrypoint.sh copies the extension library to the persistent volume:
 
-**File**: `docker/scripts/entrypoint.sh` (lines 52-97, 176-190)
-
-When the container starts, entrypoint.sh executes in sequence:
-
-1. **Copy Library to Persistent Volume** (lines 52-55)
+1. **Copy Library to Persistent Volume**
 
    ```bash
    if [ ! -d "/workspace/scripts/lib" ]; then
@@ -79,7 +86,7 @@ When the container starts, entrypoint.sh executes in sequence:
    - Only runs on first boot (volume empty)
    - Copies extension library and manager from Docker image
 
-2. **Select Appropriate Manifest** (lines 57-89)
+2. **Select Appropriate Manifest**
 
    ```bash
    if [ "$CI_MODE" = "true" ]; then
@@ -87,51 +94,40 @@ When the container starts, entrypoint.sh executes in sequence:
           /workspace/scripts/extensions.d/active-extensions.conf
    ```
 
-   - CI mode: Uses CI template (pre-configured with protected extensions)
-   - Production mode: Uses CI template as default or existing manifest
+   - CI mode: Uses CI template
+   - Production mode: Uses existing manifest or default
 
-3. **Auto-Install Protected Extensions** (lines 176-190)
+3. **Optional Extension Installation** (test-specific)
 
-   ```bash
-   if ! sudo -u developer bash -c 'command -v mise' &>/dev/null; then
-       sudo -u developer HOME=/workspace/developer bash -c \
-           'cd /workspace/scripts/lib && extension-manager install-all'
-   ```
+   Tests that require additional extensions (nodejs, python, rust, etc.) use `extension-manager install-all` to install
+   them from the manifest.
 
-   - Detects if extensions already installed (checks for `mise` command)
-   - If not installed: Runs `extension-manager install-all`
-   - Reads manifest created in Phase 2
-   - Executes installation for all listed extensions
-   - Runs as developer user with proper HOME environment
+#### Why Pre-Install Base System?
 
-#### Why Two Phases?
+**Performance:**
 
-**The Problem Solved:**
+- ✅ **10-12 seconds** startup vs **90-120 seconds** with extension-based installation
+- ✅ **75% faster** CI/CD workflows
+- ✅ **Immediate availability** of core tools
 
-- Initial attempt only copied manifest → Extensions listed but never installed
-- Tests failed with "mise not found" because mise-config never executed
+**Reliability:**
 
-**The Solution:**
+- ✅ No DNS/network failures during startup
+- ✅ Consistent versions across all instances
+- ✅ Reduced complexity in entrypoint scripts
 
-1. **Template (Phase 1)**: Defines WHAT to install (declarative)
-2. **Installation (Phase 2)**: Actually installs it (imperative)
-
-**Benefits:**
-
-- ✅ Idempotent: Only installs on first boot (checks `mise` presence)
-- ✅ Transparent: Installation logs visible in container startup output
-- ✅ Flexible: Works for both CI and production deployments
-- ✅ Persistent: Volume storage means installs survive restarts
-
-#### Manifest Flow Diagram
+#### Deployment Flow Diagram
 
 ```text
 Docker Build
     │
-    ├─→ active-extensions.ci.conf (template)
+    ├─→ Installs base system (workspace, mise, ssh, claude)
+    ├─→ Includes active-extensions.ci.conf (template)
     │
     ▼
 Container Startup (entrypoint.sh)
+    │
+    ├─→ Base system: ✓ Already available (mise, workspace, SSH, Claude)
     │
     ├─→ Check: First boot? (/workspace/scripts/lib missing?)
     │   │
@@ -140,69 +136,60 @@ Container Startup (entrypoint.sh)
     │   │
     │   └─→ NO: Skip (volume already has lib/)
     │
-    ├─→ Check: mise installed? (mise-config extension ran?)
-    │   │
-    │   ├─→ NO: Run extension-manager install-all
-    │   │        └─→ Reads active-extensions.conf
-    │   │            └─→ Installs: workspace-structure, mise-config, ssh-environment
-    │   │
-    │   └─→ YES: Skip (already installed on previous boot)
-    │
     ▼
 Container Ready
     │
-    ├─→ Protected extensions: ✓ Installed and functional
-    ├─→ mise: ✓ Available in PATH
-    └─→ Workspace: ✓ Directory structure created
+    ├─→ Base system: ✓ Available (mise, workspace, SSH, Claude)
+    └─→ Optional: Tests install additional extensions as needed
 ```
 
 #### Testing Implications
 
 **Workflow Verification Steps** (integration.yml, extension-tests.yml):
 
-After deployment, workflows verify:
+After deployment, workflows verify the base system:
 
 ```bash
-# 1. Manifest exists and has protected extensions
-grep -q "^workspace-structure$" /workspace/scripts/extensions.d/active-extensions.conf
-grep -q "^mise-config$" /workspace/scripts/extensions.d/active-extensions.conf
-grep -q "^ssh-environment$" /workspace/scripts/extensions.d/active-extensions.conf
+# Verify base system components
+mise --version
+ls /workspace/projects
+which ssh
+claude --version
 
-# 2. Extensions were actually installed (not just listed)
-mise --version           # Proves mise-config ran
-ls /workspace/projects   # Proves workspace-structure ran
+# Verify extension library copied to volume
+ls /workspace/scripts/lib/extension-manager.sh
 ```
 
-**Key Difference from Production:**
+**Key Differences:**
 
-- **CI**: Fresh volume every test → Always runs installation on first boot
-- **Production**: Persistent volume → Installation runs once, then skipped
+- **Base System**: Always available immediately (pre-installed in Docker image)
+- **Extensions**: Installed on-demand via `extension-manager install-all`
+- **CI**: Fresh volume every test
+- **Production**: Persistent volume
 
-#### Debugging Extension Installation
+#### Debugging Base System Issues
 
-**Check if auto-installation ran:**
+**Verify base system is available:**
 
 ```bash
-# View container startup logs
-flyctl logs --app <app-name> | grep "Installing protected extensions"
+which mise
+# Expected: /usr/local/bin/mise
 
-# Expected output:
-# 🔧 Installing protected extensions...
-# [INFO] Installing extension: workspace-structure
-# [SUCCESS] Extension 'workspace-structure' installed successfully
-# [INFO] Installing extension: mise-config
-# [SUCCESS] Extension 'mise-config' installed successfully
-# [INFO] Installing extension: ssh-environment
-# [SUCCESS] Extension 'ssh-environment' installed successfully
-# ✅ Protected extensions installed
+ls -la /workspace
+# Expected: projects/ scripts/ config/ developer/ docs/
+
+which ssh
+# Expected: /usr/local/bin/ssh (wrapper script)
+
+which claude
+# Expected: /usr/local/bin/claude
 ```
 
-**If mise not found:**
+**If components missing:**
 
-1. Check entrypoint logs for installation errors
-2. Verify CI_MODE secret is set: `flyctl secrets list --app <name>`
-3. Verify manifest was created: `flyctl ssh console -C "cat /workspace/scripts/extensions.d/active-extensions.conf"`
-4. Manually trigger: `flyctl ssh console -C "extension-manager install-all"`
+1. Docker image may not be built correctly
+2. Check Dockerfile for base system installation steps
+3. Rebuild Docker image: `fly deploy` or CI build workflow
 
 ---
 
@@ -241,20 +228,19 @@ Comprehensive functional testing for each extension individually using the Exten
 
 For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 
-#### Tested Extensions (24 Total)
+#### Tested Extensions (20 Total)
+
+**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the Docker image and
+not tested as extensions.
 
 | Extension                    | Key Tools          | Dependencies        | Test Focus               |
 | ---------------------------- | ------------------ | ------------------- | ------------------------ |
-| **Core (Protected)**         |                    |                     |                          |
-| workspace-structure          | mkdir, ls          | -                   | Directory creation       |
-| mise-config                  | mise               | -                   | Tool version manager     |
-| ssh-environment              | ssh, sshd          | -                   | SSH daemon config        |
 | **Languages (mise-powered)** |                    |                     |                          |
-| nodejs                       | node, npm          | mise-config         | Runtime, package manager |
-| python                       | python3, pip3      | mise-config         | Execution, packages      |
-| rust                         | rustc, cargo       | mise-config         | Compilation, cargo       |
-| golang                       | go                 | mise-config         | Compilation, modules     |
-| nodejs-devtools              | tsc, eslint        | mise-config, nodejs | TypeScript, linting      |
+| nodejs                       | node, npm          | mise (pre-installed) | Runtime, package manager |
+| python                       | python3, pip3      | mise (pre-installed) | Execution, packages      |
+| rust                         | rustc, cargo       | mise (pre-installed) | Compilation, cargo       |
+| golang                       | go                 | mise (pre-installed) | Compilation, modules     |
+| nodejs-devtools              | tsc, eslint        | mise (pre-installed), nodejs | TypeScript, linting      |
 | **Languages (Traditional)**  |                    |                     |                          |
 | ruby                         | ruby, gem, bundle  | -                   | Ruby execution, Rails    |
 | php                          | php, composer      | -                   | PHP, Symfony             |
@@ -281,11 +267,11 @@ For each extension using `extension-manager`:
 
 1. **Dependency Installation**: Auto-install dependencies based on `depends_on` field
 2. **Manifest Addition**: Add extension to `active-extensions.conf`
-3. **Installation**: `extension-manager install-all` (runs prerequisites, install, configure)
+3. **Installation**: Run `extension-manager install-all`
 4. **Command Availability**: Verify all expected commands in PATH
 5. **mise Verification**: For mise-powered extensions, verify managed by mise
-6. **Key Functionality**: Test core capability (compilation, execution, etc.)
-7. **Status Check**: `extension-manager status <name>` shows metadata
+6. **Key Functionality**: Test core capability
+7. **Status Check**: Verify `extension-manager status <name>` output
 8. **Idempotency**: Re-run installation to verify safe re-execution
 9. **Resource Cleanup**: Destroy test VM and volumes
 
@@ -324,26 +310,20 @@ Representative sample of 9 extensions tested for full API compliance:
 
 **When It Runs**: On every push/PR affecting extension files
 
-### 5. Protected Extensions Tests (CRITICAL)
+### 5. Base System Verification Tests
 
-Tests enforcement of protected extension policies.
+Tests that the pre-installed base system is available and functional.
 
-For details on protected extensions, see [EXTENSIONS.md - Protected Extensions](EXTENSIONS.md#protected-extensions).
+For details on the base system, see [EXTENSIONS.md - Pre-Installed Base System](EXTENSIONS.md#pre-installed-base-system-architecture).
 
-#### Protection Tests
+#### Verification Tests
 
-- **Deactivation Prevention**: Protected extensions cannot be deactivated
-  - Tests: workspace-structure, mise-config, ssh-environment
-  - Verifies error message mentions "protected"
-- **Uninstall Prevention**: Protected extensions cannot be uninstalled
-  - Verifies error message mentions "cannot uninstall protected"
-- **Auto-Repair**: Missing protected extensions are auto-added to manifest
-  - Removes protected extensions from manifest
-  - Runs `extension-manager list` to trigger repair
-  - Verifies all protected extensions restored to top
-- **Visual Markers**: Protected extensions show `[PROTECTED]` in list output
+- **mise Availability**: Verifies `mise --version` works
+- **Workspace Structure**: Verifies `/workspace` directory tree exists
+- **SSH Environment**: Verifies SSH wrapper scripts are in place
+- **Claude CLI**: Verifies `claude --version` works
 
-**When It Runs**: On every push/PR affecting extension files
+**When It Runs**: On every push/PR affecting extension files or Docker image
 
 ### 6. Manifest Operations Tests
 
@@ -374,13 +354,13 @@ Tests dependency resolution and error handling:
 #### Dependency Tests
 
 - **Transitive Dependencies**:
-  - Tests multi-level dependency chain (nodejs-devtools → nodejs → mise-config)
+  - Tests multi-level dependency chain (nodejs-devtools → nodejs)
   - Adds only top-level extension to manifest
   - Verifies all dependencies auto-install
   - Uses test fixture with single extension
 - **Missing Dependency Errors**:
-  - Disables mise temporarily to break prerequisites
-  - Attempts to install nodejs (which depends on mise-config)
+  - Simulates mise unavailability to break prerequisites
+  - Attempts to install nodejs (which requires mise)
   - Verifies installation fails with clear error message
   - Confirms error mentions "prerequisite" or "mise required"
 
@@ -396,18 +376,19 @@ Tests common extension combinations for conflicts using manifest-based activatio
 
 Each combination activates multiple extensions in `active-extensions.conf`:
 
-- **core-stack**: workspace-structure, mise-config, ssh-environment (Protected Core Extensions)
-- **mise-stack**: workspace-structure, mise-config, nodejs, python, rust, golang, ssh-environment (mise-Powered Languages)
-- **full-node**: workspace-structure, nodejs, nodejs-devtools, claude (Complete Node.js Development Stack)
-- **fullstack**: workspace-structure, nodejs, python, docker, cloud-tools (Python + Docker + Cloud)
-- **systems**: workspace-structure, rust, golang, docker (Rust + Go + Docker)
-- **enterprise**: workspace-structure, nodejs, jvm, docker, infra-tools (JVM + Docker + Infrastructure)
-- **ai-dev**: workspace-structure, nodejs, python, ai-tools, monitoring (Python + AI Tools + Monitoring)
+**Note**: Base system (workspace, mise, ssh, claude) is pre-installed and not included in manifest.
+
+- **mise-stack**: nodejs, python, rust, golang (mise-Powered Languages)
+- **full-node**: nodejs, nodejs-devtools (Complete Node.js Development Stack)
+- **fullstack**: nodejs, python, docker, cloud-tools (Python + Docker + Cloud)
+- **systems**: rust, golang, docker (Rust + Go + Docker)
+- **enterprise**: nodejs, jvm, docker, infra-tools (JVM + Docker + Infrastructure)
+- **ai-dev**: nodejs, python, ai-tools, monitoring (Python + AI Tools + Monitoring)
 
 #### Validation
 
 - All extensions activate successfully via `extension-manager install-all`
-- Manifest processes extensions in correct order (protected first, cleanup last)
+- Base system (mise, workspace, SSH, Claude) is already available
 - No installation conflicts between extensions
 - Cross-extension functionality works
 - Tools from different extensions coexist
@@ -535,25 +516,24 @@ gh workflow run extension-tests.yml \
 
 ### Feature Coverage
 
-| Feature                          | Tested | Test Job                   | Coverage |
-| -------------------------------- | ------ | -------------------------- | -------- |
-| Protected Extensions Enforcement | ✅     | protected-extensions-tests | 100%     |
-| Cleanup Extensions Ordering      | ✅     | cleanup-extensions-tests   | 100%     |
-| Manifest Auto-Repair             | ✅     | protected-extensions-tests | 100%     |
-| Dependency Resolution            | ✅     | dependency-chain-tests     | 100%     |
-| Manifest Comment Preservation    | ✅     | manifest-operations-tests  | 100%     |
-| Extension Reordering             | ✅     | manifest-operations-tests  | 100%     |
-| Error Handling                   | ✅     | dependency-chain-tests     | 75%      |
-| Idempotency                      | ✅     | per-extension-tests        | 100%     |
+| Feature                       | Tested | Test Job                  | Coverage |
+| ----------------------------- | ------ | ------------------------- | -------- |
+| Base System Verification      | ✅     | base-system-tests         | 100%     |
+| Cleanup Extensions Ordering   | ✅     | cleanup-extensions-tests  | 100%     |
+| Dependency Resolution         | ✅     | dependency-chain-tests    | 100%     |
+| Manifest Comment Preservation | ✅     | manifest-operations-tests | 100%     |
+| Extension Reordering          | ✅     | manifest-operations-tests | 100%     |
+| Error Handling                | ✅     | dependency-chain-tests    | 75%      |
+| Idempotency                   | ✅     | per-extension-tests       | 100%     |
 
-#### Overall Feature Coverage: ~97%
+#### Overall Feature Coverage: ~96%
 
 ### Extension Coverage
 
-- **Total Extensions**: 25 (excluding template)
-- **Extensions Tested**: 24
-- **Coverage**: 96%
-- **Untested**: template (intentionally excluded)
+- **Total Extensions**: 20 (base system components not counted as extensions)
+- **Extensions Tested**: 20
+- **Coverage**: 100%
+- **Untested**: template (intentionally excluded, used as development reference)
 
 ---
 
@@ -563,15 +543,15 @@ gh workflow run extension-tests.yml \
 
 Different test jobs use different VM sizes:
 
-| Test Type            | Memory | CPUs | Disk | Timeout |
-| -------------------- | ------ | ---- | ---- | ------- |
-| Per-Extension        | 8GB    | 4    | 20GB | 60 min  |
-| Extension API Tests  | 4GB    | 2    | 20GB | 45 min  |
-| Protected Extensions | 2GB    | 1    | 10GB | 40 min  |
-| Cleanup Extensions   | 2GB    | 1    | 10GB | 35 min  |
-| Manifest Operations  | 2GB    | 1    | 10GB | 35 min  |
-| Dependency Chain     | 4GB    | 2    | 15GB | 50 min  |
-| Combinations         | 16GB   | 4    | 20GB | 90 min  |
+| Test Type           | Memory | CPUs | Disk | Timeout |
+| ------------------- | ------ | ---- | ---- | ------- |
+| Per-Extension       | 8GB    | 4    | 20GB | 60 min  |
+| Extension API Tests | 4GB    | 2    | 20GB | 45 min  |
+| Base System Tests   | 2GB    | 1    | 10GB | 40 min  |
+| Cleanup Extensions  | 2GB    | 1    | 10GB | 35 min  |
+| Manifest Operations | 2GB    | 1    | 10GB | 35 min  |
+| Dependency Chain    | 4GB    | 2    | 15GB | 50 min  |
+| Combinations        | 16GB   | 4    | 20GB | 90 min  |
 
 ### Cost Considerations
 
@@ -605,15 +585,15 @@ A test passes when:
 
 ### Common Failures
 
-| Failure Type              | Likely Cause                    | Resolution                                                      |
-| ------------------------- | ------------------------------- | --------------------------------------------------------------- |
-| Configuration timeout     | Extension takes too long        | Increase timeout in matrix                                      |
-| Command not found         | Installation incomplete         | Check installation steps in extension                           |
-| Idempotency failure       | No existence check              | Add `command_exists` checks                                     |
-| Conflict detected         | Duplicate installations         | Review extension interactions                                   |
-| Prerequisites failed      | Missing dependency              | Add dependency to `depends_on` field                            |
-| Protected extension error | Trying to remove core extension | Cannot remove workspace-structure, mise-config, ssh-environment |
-| Dependency chain broken   | mise-config not installed       | Ensure mise-config in manifest before mise-powered extensions   |
+| Failure Type          | Likely Cause               | Resolution                                       |
+| --------------------- | -------------------------- | ------------------------------------------------ |
+| Configuration timeout | Extension takes too long   | Increase timeout in matrix                       |
+| Command not found     | Installation incomplete    | Check installation steps in extension            |
+| Idempotency failure   | No existence check         | Add `command_exists` checks                      |
+| Conflict detected     | Duplicate installations    | Review extension interactions                    |
+| Prerequisites failed  | Missing dependency         | Add dependency to `depends_on` field             |
+| mise not found        | Base system issue          | Check Docker image build, mise should be pre-installed |
+| Dependency chain broken | Required extension missing | Ensure dependencies installed before extension |
 
 ### Debugging Failed Tests
 
@@ -665,8 +645,10 @@ Update `.github/workflows/extension-tests.yml`:
 matrix:
   extension:
     # ... existing extensions ...
-    - { name: "r", commands: "R,Rscript", key_tool: "R", timeout: "20m", depends_on: "mise-config", uses_mise: "true" }
+    - { name: "r", commands: "R,Rscript", key_tool: "R", timeout: "20m", uses_mise: "true" }
 ```
+
+**Note**: `mise` is pre-installed, so no need to specify it as a dependency.
 
 **Matrix Fields:**
 
@@ -689,7 +671,6 @@ case "$key_tool" in
     echo "Testing R..."
     R --version
     Rscript --version
-    # Test basic R execution
     Rscript -e 'print("Hello from R")'
     ;;
 esac
@@ -744,9 +725,9 @@ bash extension-manager.sh deactivate r
 - [ ] deactivate() removes from manifest
 - [ ] upgrade() works (if API v2.0)
 
-#### Job 5-8: Protected/Cleanup/Manifest/Dependencies
+#### Job 5-8: Base System/Cleanup/Manifest/Dependencies
 
-- [ ] Not a protected extension (unless adding new core)
+- [ ] Base system (mise, workspace, SSH, Claude) remains functional
 - [ ] Doesn't interfere with cleanup ordering
 - [ ] Works with manifest comment preservation
 - [ ] Dependencies correctly declared and installed
@@ -830,14 +811,15 @@ The extension testing system continuously evolves:
 ### Recent Enhancements (Completed)
 
 - [x] **Extension API Testing** - All 6 API functions now tested (100% coverage)
-- [x] **Protected Extensions Testing** - Core extension enforcement fully tested
+- [x] **Base System Verification** - Pre-installed components (mise, workspace, SSH, Claude) verified
 - [x] **Cleanup Extensions Testing** - Auto-ordering logic verified
 - [x] **Manifest Operations Testing** - Reorder and comment preservation tested
 - [x] **Dependency Chain Testing** - Transitive dependency resolution validated
 - [x] **Test Fixtures** - Clean, maintainable test data approach
-- [x] **Expanded Matrix** - 24 extensions tested (96% coverage)
+- [x] **Expanded Matrix** - 20 extensions tested (100% coverage)
 - [x] **Error Handling** - Prerequisites failure testing added
 - [x] **API v2.0 Testing** - Upgrade functionality tested
+- [x] **Pre-Installed Base System** - Moved core components to Docker image for faster startup
 
 ### Planned Enhancements
 
@@ -866,13 +848,13 @@ The extension testing system continuously evolves:
 ┌─────────────────────────────────────────────────────────────┐
 │  Jobs 3-9 Run in Parallel (Matrix Tests)                    │
 ├─────────────────────────────────────────────────────────────┤
-│  3. Per-Extension Tests (24 extensions × install/validate)  │
+│  3. Per-Extension Tests (20 extensions × install/validate)  │
 │  4. Extension API Tests (9 extensions × all API functions)  │
-│  5. Protected Extensions (enforcement tests)                │
+│  5. Base System Tests (verification tests)                  │
 │  6. Cleanup Extensions (ordering tests)                     │
 │  7. Manifest Operations (reorder, comments)                 │
 │  8. Dependency Chain (transitive deps, errors)              │
-│  9. Extension Combinations (7 common stacks)                │
+│  9. Extension Combinations (6 common stacks)                │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -887,7 +869,7 @@ The extension testing system continuously evolves:
 
 - Job 1: Extension Manager Validation
 - Job 2: Extension Syntax Validation
-- Job 5: Protected Extensions Tests
+- Job 5: Base System Tests
 - Job 6: Cleanup Extensions Tests
 
 **Recommended Before Merge:**
@@ -920,7 +902,7 @@ For issues with extension testing:
 - **Extension Development**: [EXTENSIONS.md](EXTENSIONS.md) - Complete extension system documentation
 - **Extension API**: [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification)
 - **Creating Extensions**: [EXTENSIONS.md - Creating Extensions](EXTENSIONS.md#creating-extensions)
-- **Protected Extensions**: [EXTENSIONS.md - Protected Extensions](EXTENSIONS.md#protected-extensions)
+- **Pre-Installed Base System**: [EXTENSIONS.md - Pre-Installed Base System Architecture](EXTENSIONS.md#pre-installed-base-system-architecture)
 - **Extension Manager Script**: `docker/lib/extension-manager.sh`
 - **Integration Testing Workflow**: `.github/workflows/integration.yml`
 - **Validation Testing Workflow**: `.github/workflows/validate.yml`

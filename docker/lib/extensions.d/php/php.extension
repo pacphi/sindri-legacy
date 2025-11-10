@@ -90,13 +90,6 @@ install() {
     sleep 3
   fi
 
-  # PRE-FLIGHT: Verify repository accessibility
-  print_status "Verifying PHP repository accessibility..."
-  if ! timeout 30s apt-cache search php8.4 > /dev/null 2>&1; then
-    print_warning "PHP 8.4 packages not found in repositories"
-    print_warning "Repository may not be accessible from this network"
-  fi
-
   # Update package lists with retry
   apt_update_retry 3
 
@@ -168,12 +161,23 @@ install() {
       rm -f composer-setup.php
       return 1
     else
-      if sudo php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer; then
-        rm -f composer-setup.php
-        print_success "Composer installed: $(composer --version 2>&1 | head -n1)"
+      # Follow official Composer installation: https://getcomposer.org/doc/00-intro.md#globally
+      # Step 1: Run installer to create composer.phar
+      if php composer-setup.php; then
+        # Step 2: Move to global location (official recommended approach)
+        if sudo mv composer.phar /usr/local/bin/composer; then
+          # Ensure executable permissions
+          sudo chmod +x /usr/local/bin/composer
+          rm -f composer-setup.php
+          print_success "Composer installed: $(composer --version 2>&1 | head -n1)"
+        else
+          rm -f composer-setup.php composer.phar
+          print_error "Failed to move Composer to /usr/local/bin"
+          return 1
+        fi
       else
         rm -f composer-setup.php
-        print_error "Failed to install Composer"
+        print_error "Failed to run Composer installer"
         return 1
       fi
     fi

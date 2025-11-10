@@ -87,13 +87,14 @@ install() {
   if command_exists aws; then
     print_warning "AWS CLI already installed: $(aws --version)"
   else
-    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; then
-      unzip -q awscliv2.zip
-      sudo ./aws/install 2>/dev/null
-      rm -rf aws awscliv2.zip
+    # Use /tmp for downloads to ensure writable location
+    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"; then
+      (cd /tmp && unzip -q awscliv2.zip && sudo ./aws/install 2>/dev/null)
+      rm -rf /tmp/aws /tmp/awscliv2.zip
       print_success "AWS CLI installed"
     else
-      print_warning "Failed to install AWS CLI"
+      print_warning "Failed to download AWS CLI installer"
+      rm -f /tmp/awscliv2.zip
     fi
   fi
 
@@ -147,13 +148,15 @@ install() {
   if command_exists aliyun; then
     print_warning "Alibaba Cloud CLI already installed: $(aliyun version)"
   else
-    if wget -q https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz; then
-      tar xzf aliyun-cli-linux-latest-amd64.tgz
-      sudo mv aliyun /usr/local/bin/
-      rm aliyun-cli-linux-latest-amd64.tgz
+    # Use /tmp for downloads to ensure writable location
+    if wget -q -O /tmp/aliyun-cli-linux-latest-amd64.tgz https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz; then
+      tar xzf /tmp/aliyun-cli-linux-latest-amd64.tgz -C /tmp
+      sudo mv /tmp/aliyun /usr/local/bin/
+      rm -f /tmp/aliyun-cli-linux-latest-amd64.tgz
       print_success "Alibaba Cloud CLI installed"
     else
-      print_warning "Failed to install Alibaba Cloud CLI"
+      print_warning "Failed to download Alibaba Cloud CLI installer"
+      rm -f /tmp/aliyun-cli-linux-latest-amd64.tgz
     fi
   fi
 
@@ -164,13 +167,15 @@ install() {
   else
     local DOCTL_VERSION
     DOCTL_VERSION=$(curl -s https://api.github.com/repos/digitalocean/doctl/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
-    if [[ -n "$DOCTL_VERSION" ]] && wget -q "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"; then
-      tar xzf "doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
-      sudo mv doctl /usr/local/bin/
-      rm "doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+    # Use /tmp for downloads to ensure writable location
+    if [[ -n "$DOCTL_VERSION" ]] && wget -q -O "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"; then
+      tar xzf "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" -C /tmp
+      sudo mv /tmp/doctl /usr/local/bin/
+      rm -f "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
       print_success "DigitalOcean CLI installed"
     else
-      print_warning "Failed to install DigitalOcean CLI"
+      print_warning "Failed to download DigitalOcean CLI installer"
+      rm -f "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" /tmp/doctl
     fi
   fi
 

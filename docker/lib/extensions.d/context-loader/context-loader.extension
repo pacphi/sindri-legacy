@@ -1,6 +1,6 @@
 #!/bin/bash
 # context-loader.sh.example - Claude Code context management utilities
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs context management utilities for Claude Code,
 # including context loading functions and Claude Flow wrappers.
@@ -14,7 +14,7 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 # ============================================================================
 
 EXT_NAME="context-loader"
-EXT_VERSION="2.0.0"
+EXT_VERSION="2.1.0"
 EXT_API_VERSION="2.0"
 EXT_DESCRIPTION="Claude Code context management utilities"
 EXT_CATEGORY="dev-tools"
@@ -161,6 +161,17 @@ EOF
 
   chmod +x "$HOME/.local/bin/context-load"
   print_success "context-load command installed to ~/.local/bin"
+
+  # Add ~/.local/bin to PATH for non-interactive SSH sessions (CI/CD)
+  if ! grep -q "# Context Loader" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
+    sudo sh -c "cat \"$(dirname "${BASH_SOURCE[0]}")/context-loader.ssh-environment.template\" >> /etc/profile.d/00-ssh-environment.sh"
+    print_success "Added ~/.local/bin to PATH (SSH environment)"
+  fi
+
+  # Create SSH wrapper for context-load command
+  if command_exists create_tool_wrapper 2>/dev/null; then
+    create_tool_wrapper "context-load" "$HOME/.local/bin/context-load"
+  fi
 
   # Create context directories if they don't exist
   mkdir -p /workspace/context/global
