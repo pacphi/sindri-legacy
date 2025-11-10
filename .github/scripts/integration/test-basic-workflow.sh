@@ -43,15 +43,38 @@ echo ""
 echo "Available installable extensions:"
 bash extension-manager.sh list
 
-# Test installing an actual optional extension
+# Test installing an actual optional extension that installs new tools
 echo ""
-echo "Installing github-cli extension as test..."
-echo "github-cli" > extensions.d/active-extensions.conf
-if bash extension-manager.sh install-all; then
-  echo "✅ Extension installed"
+echo "Installing nodejs extension as test..."
 
-  # Verify installation
-  if bash extension-manager.sh status github-cli; then
+# Verify node is NOT available before extension installation
+if command -v node &> /dev/null; then
+  echo "⚠️  Warning: node command already available before extension installation"
+  echo "   This means nodejs may already be installed, making this test less meaningful"
+fi
+
+echo "nodejs" > extensions.d/active-extensions.conf
+if bash extension-manager.sh install-all; then
+  echo "✅ Extension installation completed"
+
+  # Verify actual installation occurred (node command should now be available)
+  if command -v node &> /dev/null; then
+    echo "✅ node command available: $(node --version)"
+  else
+    echo "❌ node command not found after extension installation"
+    exit 1
+  fi
+
+  # Verify npm is also available (comes with nodejs extension)
+  if command -v npm &> /dev/null; then
+    echo "✅ npm command available: $(npm --version)"
+  else
+    echo "❌ npm command not found after extension installation"
+    exit 1
+  fi
+
+  # Verify extension status
+  if bash extension-manager.sh status nodejs; then
     echo "✅ Extension status verified"
   else
     echo "❌ Extension status check failed"

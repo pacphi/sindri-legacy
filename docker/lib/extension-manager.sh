@@ -231,7 +231,8 @@ remove_from_manifest() {
     fi
 
     # Remove from manifest (create temp file to preserve comments)
-    local temp_file=$(mktemp)
+    # Use -p to create temp file in same directory to avoid cross-device issues
+    local temp_file=$(mktemp -p "$(dirname "$MANIFEST_FILE")")
     while IFS= read -r line; do
         # Keep comments and empty lines
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
@@ -246,9 +247,16 @@ remove_from_manifest() {
         fi
     done < "$MANIFEST_FILE"
 
-    mv "$temp_file" "$MANIFEST_FILE"
-    print_success "Removed '$ext_name' from activation manifest"
-    return 0
+    # Use cat instead of mv to avoid cross-device issues, then cleanup
+    if cat "$temp_file" > "$MANIFEST_FILE" 2>/dev/null; then
+        rm -f "$temp_file"
+        print_success "Removed '$ext_name' from activation manifest"
+        return 0
+    else
+        rm -f "$temp_file"
+        print_error "Failed to update manifest file"
+        return 1
+    fi
 }
 
 # Get position of extension in manifest
@@ -903,7 +911,8 @@ reorder_extension() {
     fi
 
     # Write back to manifest
-    local temp_file=$(mktemp)
+    # Use -p to create temp file in same directory to avoid cross-device issues
+    local temp_file=$(mktemp -p "$(dirname "$MANIFEST_FILE")")
 
     # Preserve header comments
     if [[ -f "$MANIFEST_FILE" ]]; then
@@ -915,9 +924,16 @@ reorder_extension() {
         echo "$ext" >> "$temp_file"
     done
 
-    mv "$temp_file" "$MANIFEST_FILE"
-    print_success "Moved '$ext_name' to position $new_position"
-    return 0
+    # Use cat instead of mv to avoid cross-device issues, then cleanup
+    if cat "$temp_file" > "$MANIFEST_FILE" 2>/dev/null; then
+        rm -f "$temp_file"
+        print_success "Moved '$ext_name' to position $new_position"
+        return 0
+    else
+        rm -f "$temp_file"
+        print_error "Failed to update manifest file"
+        return 1
+    fi
 }
 
 # Function to show status of all active extensions
