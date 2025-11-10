@@ -285,7 +285,7 @@ configure() {
 
   # Add Composer to PATH for non-interactive SSH sessions (CI/CD)
   if ! grep -q "# PHP/Composer" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
-    cat "$(dirname "${BASH_SOURCE[0]}")/php.ssh-environment.template" | sudo tee -a /etc/profile.d/00-ssh-environment.sh >/dev/null
+    sudo sh -c "cat \"$(dirname "${BASH_SOURCE[0]}")/php.ssh-environment.template\" >> /etc/profile.d/00-ssh-environment.sh"
     print_success "Added Composer bin to PATH (SSH environment)"
   fi
 

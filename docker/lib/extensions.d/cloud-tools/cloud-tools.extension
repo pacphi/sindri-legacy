@@ -189,7 +189,7 @@ configure() {
 
   # Add cloud CLIs to PATH for non-interactive SSH sessions (CI/CD)
   if ! grep -q "# Cloud Tools" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
-    cat "$(dirname "${BASH_SOURCE[0]}")/cloud-tools.ssh-environment.template" | sudo tee -a /etc/profile.d/00-ssh-environment.sh >/dev/null
+    sudo sh -c "cat \"$(dirname "${BASH_SOURCE[0]}")/cloud-tools.ssh-environment.template\" >> /etc/profile.d/00-ssh-environment.sh"
     print_success "Added cloud CLIs to PATH (SSH environment)"
   fi
 
