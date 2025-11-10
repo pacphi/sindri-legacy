@@ -266,17 +266,29 @@ status() {
   print_extension_header
 
   # Check installation status
-  # NOTE: Always return 0 - status checks should never fail
   if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
-    echo "Status: not installed"
+    echo "Status: ✗ NOT INSTALLED"
     echo ""
     print_status "Missing files:"
     echo "  ✗ /workspace/scripts/lib/context-loader.sh"
     echo "  ✗ /workspace/scripts/cf-with-context.sh"
-    return 0
+    return 1
   fi
 
-  echo "Status: installed"
+  # Check if context-load command is available (critical component)
+  if ! command_exists context-load; then
+    echo "Status: ⚠ PARTIALLY INSTALLED (missing context-load command)"
+    echo ""
+    print_status "Files installed but command not in PATH"
+    echo "  ✓ /workspace/scripts/lib/context-loader.sh"
+    [[ -f "/workspace/scripts/cf-with-context.sh" ]] && echo "  ✓ /workspace/scripts/cf-with-context.sh"
+    echo "  ✗ context-load command not found"
+    echo ""
+    print_status "Run 'extension-manager install context-loader' to complete installation"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
   echo ""
 
   # Extension-specific tool listing with versions

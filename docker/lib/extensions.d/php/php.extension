@@ -139,17 +139,29 @@ install() {
   else
     print_status "Installing Composer..."
 
+    # Use /tmp for downloads to avoid permission issues
+    local COMPOSER_TMP="/tmp/composer-install-$$"
+    mkdir -p "$COMPOSER_TMP"
+    pushd "$COMPOSER_TMP" > /dev/null || {
+      print_error "Failed to create temporary directory for Composer installation"
+      return 1
+    }
+
     # Download signature with timeout
     local EXPECTED_CHECKSUM
     EXPECTED_CHECKSUM=$(timeout 30 php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");' 2>/dev/null)
 
     if [[ -z "$EXPECTED_CHECKSUM" ]]; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Failed to fetch Composer installer signature (timeout or network error)"
       return 1
     fi
 
     # Download installer with timeout using curl (more reliable than php copy)
     if ! curl --max-time 60 -fsSL https://getcomposer.org/installer -o composer-setup.php; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Failed to download Composer installer"
       return 1
     fi
@@ -157,8 +169,9 @@ install() {
     local ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
 
     if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Composer installer checksum verification failed"
-      rm -f composer-setup.php
       return 1
     else
       # Follow official Composer installation: https://getcomposer.org/doc/00-intro.md#globally
@@ -168,15 +181,18 @@ install() {
         if sudo mv composer.phar /usr/local/bin/composer; then
           # Ensure executable permissions
           sudo chmod +x /usr/local/bin/composer
-          rm -f composer-setup.php
+          popd > /dev/null || return
+          rm -rf "$COMPOSER_TMP"
           print_success "Composer installed: $(composer --version 2>&1 | head -n1)"
         else
-          rm -f composer-setup.php composer.phar
+          popd > /dev/null || return
+          rm -rf "$COMPOSER_TMP"
           print_error "Failed to move Composer to /usr/local/bin"
           return 1
         fi
       else
-        rm -f composer-setup.php
+        popd > /dev/null || return
+        rm -rf "$COMPOSER_TMP"
         print_error "Failed to run Composer installer"
         return 1
       fi
@@ -394,6 +410,18 @@ status() {
   # Check installation status
   if ! command_exists php; then
     echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Composer is a critical component - check for it too
+  if ! command_exists composer; then
+    echo "Status: ⚠ PARTIALLY INSTALLED (missing Composer)"
+    echo ""
+    print_status "PHP is installed but Composer is missing"
+    echo "  ✓ PHP $(php -v | head -n1 | awk '{print $2}')"
+    echo "  ✗ Composer not found"
+    echo ""
+    print_status "Run 'extension-manager install php' to complete installation"
     return 1
   fi
 
