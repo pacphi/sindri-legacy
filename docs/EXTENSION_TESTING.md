@@ -457,36 +457,49 @@ Located in `.github/workflows/test-fixtures/`:
 
 ### Automatic Triggers
 
+The workflow runs automatically in two scenarios:
+
+#### Pull Request Trigger
+
 ```yaml
-# On push to main/develop affecting extensions
-push:
+pull_request:
   branches: [main, develop]
   paths:
-    # Deployment configuration
-    - "fly.toml"
-    - "Dockerfile"
-    # CI scripts
-    - "scripts/prepare-fly-config.sh"
-    - "scripts/lib/fly-common.sh"
-    # Extension system
-    - "docker/lib/extensions.d/**"
+    # Core extension system files only (not individual extensions)
     - "docker/lib/extension-manager.sh"
     - "docker/lib/common.sh"
     - "docker/lib/extensions-common.sh"
-    # Workflow itself
+    # Workflows and test infrastructure
     - ".github/workflows/extension-tests.yml"
-    # Test fixtures
-    - ".github/workflows/test-fixtures/**"
-
-# On pull requests
-pull_request:
-  branches: [main, develop]
-  paths: [same as above]
+    - ".github/workflows/per-extension.yml"
+    - ".github/workflows/api-compliance.yml"
+    # Test scripts
+    - ".github/scripts/extension-tests/**"
 ```
+
+**When It Runs:** Only when core extension infrastructure changes (not individual extension modifications)
+
+#### Scheduled Trigger
+
+```yaml
+schedule:
+  - cron: '0 2 * * 0'  # Weekly on Sunday at 2:00 AM UTC
+```
+
+**Rationale:** Regular validation ensures:
+
+- All extensions remain functional
+- Early detection of upstream dependency issues
+- Validation of extension interactions
 
 ### Manual Triggers
 
+For on-demand testing and debugging:
+
 ```bash
+# Test all extensions (full test suite)
+gh workflow run extension-tests.yml
+
 # Test specific extension
 gh workflow run extension-tests.yml \
   -f extension_name=rust \
@@ -495,7 +508,39 @@ gh workflow run extension-tests.yml \
 # Test all extensions with cleanup disabled (for debugging)
 gh workflow run extension-tests.yml \
   -f skip_cleanup=true
+
+# Test with idempotency checks disabled (faster)
+gh workflow run extension-tests.yml \
+  -f skip_idempotency=true
+
+# Test in specific region
+gh workflow run extension-tests.yml \
+  -f region=lhr
 ```
+
+**Available Parameters:**
+
+- `extension_name` (optional): Test specific extension (e.g., rust, golang, ai-tools)
+- `skip_cleanup` (boolean, default: false): Skip cleanup for debugging
+- `skip_idempotency` (boolean, default: false): Skip idempotency tests for faster runs
+- `test_app_prefix` (string, default: "ext-test"): Custom app name prefix
+- `region` (choice, default: "sjc"): Fly.io region for testing
+
+### Trigger Strategy
+
+**What Changed:**
+
+- ❌ **Removed:** Automatic `push` trigger (was running on every commit to main/develop)
+- ✅ **Kept:** `pull_request` trigger for core infrastructure changes
+- ✅ **Kept:** Weekly `schedule` trigger
+- ✅ **Kept:** Manual `workflow_dispatch` trigger
+
+**Rationale:**
+
+1. **Performance:** Full test suite takes 45-60 minutes (~20 VMs)
+2. **Cost:** Avoid redundant runs on main branch (PR already validated)
+3. **Feedback:** Pull requests still get validation before merge
+4. **Coverage:** Weekly runs catch regressions in all extensions
 
 ---
 

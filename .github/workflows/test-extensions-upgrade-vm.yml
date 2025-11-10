@@ -54,31 +54,51 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          flyctl ssh console -a "$APP_NAME" -C "extension-manager install-all"
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
+          # Execute with retry
+          ssh_command_retry "$APP_NAME" "extension-manager install-all"
 
       - name: Test upgrade-all dry-run
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-all --dry-run"
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
+          # Execute with retry
+          ssh_command_retry "$APP_NAME" "extension-manager upgrade-all --dry-run"
 
       - name: Test upgrade-all actual
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-all"
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
+          # Execute with retry
+          ssh_command_retry "$APP_NAME" "extension-manager upgrade-all"
 
       - name: Validate all extensions
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          flyctl ssh console -a "$APP_NAME" -C "extension-manager validate-all"
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
+          # Execute with retry
+          ssh_command_retry "$APP_NAME" "extension-manager validate-all"
 
       - name: Test upgrade history
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          flyctl ssh console -a "$APP_NAME" -C "extension-manager upgrade-history"
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
+          # Execute with retry
+          ssh_command_retry "$APP_NAME" "extension-manager upgrade-history"
 
       - name: Teardown test VM
         if: always()

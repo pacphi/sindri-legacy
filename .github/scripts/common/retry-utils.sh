@@ -30,14 +30,14 @@ retry_with_backoff() {
 
       if [ $attempt -lt $max_attempts ]; then
         local wait_time=$((initial_delay * attempt))
-        [ $wait_time -gt $max_delay ] && wait_time=$max_delay
+        [ "$wait_time" -gt "$max_delay" ] && wait_time=$max_delay
 
         echo "⚠️  Command failed (exit: $exit_code), retrying in ${wait_time}s..."
-        sleep $wait_time
+        sleep "$wait_time"
         attempt=$((attempt + 1))
       else
         echo "❌ Command failed after $max_attempts attempts (exit: $exit_code)"
-        return $exit_code
+        return "$exit_code"
       fi
     fi
   done
@@ -85,6 +85,8 @@ flyctl_deploy_retry() {
 }
 
 # SSH command with retry
+# Usage: ssh_command_retry <app_name> <command>
+# Example: ssh_command_retry my-app "/bin/bash -lc 'echo test'"
 ssh_command_retry() {
   local app_name=$1
   shift
@@ -109,6 +111,138 @@ ssh_command_retry() {
         attempt=$((attempt + 1))
       else
         echo "❌ SSH command failed after $max_attempts attempts"
+        return $exit_code
+      fi
+    fi
+  done
+}
+
+# SFTP file upload with retry
+# Usage: sftp_put_retry <app_name> <local_file> <remote_path>
+# Example: sftp_put_retry my-app ./script.sh /tmp/script.sh
+sftp_put_retry() {
+  local app_name=$1
+  local local_file=$2
+  local remote_path=$3
+  local max_attempts=5
+  local attempt=1
+
+  if [ ! -f "$local_file" ]; then
+    echo "❌ Local file not found: $local_file"
+    return 1
+  fi
+
+  while [ $attempt -le $max_attempts ]; do
+    echo "▶️  SFTP upload attempt $attempt of $max_attempts: $local_file -> $remote_path"
+
+    if timeout 30s flyctl ssh sftp put "$local_file" "$remote_path" --app "$app_name" 2>&1; then
+      echo "✅ SFTP upload succeeded"
+      return 0
+    else
+      local exit_code=$?
+
+      if [ $attempt -lt $max_attempts ]; then
+        local wait_time=$((3 * attempt))
+        echo "⚠️  SFTP upload failed (exit: $exit_code), retrying in ${wait_time}s..."
+        sleep $wait_time
+        attempt=$((attempt + 1))
+      else
+        echo "❌ SFTP upload failed after $max_attempts attempts"
+        return $exit_code
+      fi
+    fi
+  done
+}
+
+# SFTP shell session with retry (for heredoc uploads)
+# Usage: sftp_shell_retry <app_name> <sftp_commands>
+# Example: sftp_shell_retry my-app "put local.txt /tmp/remote.txt"
+sftp_shell_retry() {
+  local app_name=$1
+  local sftp_commands=$2
+  local max_attempts=5
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    echo "▶️  SFTP shell attempt $attempt of $max_attempts..."
+
+    if timeout 30s flyctl ssh sftp shell --app "$app_name" <<< "$sftp_commands" 2>&1; then
+      echo "✅ SFTP shell session succeeded"
+      return 0
+    else
+      local exit_code=$?
+
+      if [ $attempt -lt $max_attempts ]; then
+        local wait_time=$((3 * attempt))
+        echo "⚠️  SFTP shell failed (exit: $exit_code), retrying in ${wait_time}s..."
+        sleep $wait_time
+        attempt=$((attempt + 1))
+      else
+        echo "❌ SFTP shell failed after $max_attempts attempts"
+        return $exit_code
+      fi
+    fi
+  done
+}
+
+# SSH chmod with retry (common pattern after uploads)
+# Usage: ssh_chmod_retry <app_name> <permissions> <file1> [file2] [file3]...
+# Example: ssh_chmod_retry my-app 666 /tmp/script.sh /tmp/helper.sh
+ssh_chmod_retry() {
+  local app_name=$1
+  local permissions=$2
+  shift 2
+  local files="$*"
+  local max_attempts=5
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    echo "▶️  SSH chmod attempt $attempt of $max_attempts..."
+
+    if timeout 30s flyctl ssh console --app "$app_name" --command "chmod $permissions $files" 2>&1; then
+      echo "✅ SSH chmod succeeded"
+      return 0
+    else
+      local exit_code=$?
+
+      if [ $attempt -lt $max_attempts ]; then
+        local wait_time=$((2 * attempt))
+        echo "⚠️  SSH chmod failed (exit: $exit_code), retrying in ${wait_time}s..."
+        sleep $wait_time
+        attempt=$((attempt + 1))
+      else
+        echo "❌ SSH chmod failed after $max_attempts attempts"
+        return $exit_code
+      fi
+    fi
+  done
+}
+
+# SSH mkdir with retry (common pattern before uploads)
+# Usage: ssh_mkdir_retry <app_name> <directory>
+# Example: ssh_mkdir_retry my-app "/tmp/lib"
+ssh_mkdir_retry() {
+  local app_name=$1
+  local directory=$2
+  local max_attempts=5
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    echo "▶️  SSH mkdir attempt $attempt of $max_attempts..."
+
+    if timeout 30s flyctl ssh console --app "$app_name" --user developer --command "mkdir -p $directory" 2>&1; then
+      echo "✅ SSH mkdir succeeded"
+      return 0
+    else
+      local exit_code=$?
+
+      if [ $attempt -lt $max_attempts ]; then
+        local wait_time=$((2 * attempt))
+        echo "⚠️  SSH mkdir failed (exit: $exit_code), retrying in ${wait_time}s..."
+        sleep $wait_time
+        attempt=$((attempt + 1))
+      else
+        echo "❌ SSH mkdir failed after $max_attempts attempts"
         return $exit_code
       fi
     fi
@@ -161,4 +295,8 @@ wait_for_machine_ready() {
 export -f retry_with_backoff
 export -f flyctl_deploy_retry
 export -f ssh_command_retry
+export -f sftp_put_retry
+export -f sftp_shell_retry
+export -f ssh_chmod_retry
+export -f ssh_mkdir_retry
 export -f wait_for_machine_ready

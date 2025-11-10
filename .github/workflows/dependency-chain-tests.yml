@@ -83,16 +83,21 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Copying test fixture to VM via SFTP..."
-          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-only-top-level.conf /tmp/manifest-top-level.conf --app $app_name
-
-          echo "Setting permissions for developer user..."
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-top-level.conf"
+          # Upload with retry
+          sftp_upload_and_chmod "$app_name" \
+            .github/workflows/test-fixtures/manifest-only-top-level.conf \
+            /tmp/manifest-top-level.conf \
+            666
 
           echo "Verifying file access as developer user..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          # Verify with retry
+          ssh_command_retry "$app_name" "/bin/bash -c '
             ls -lh /tmp/manifest-top-level.conf &&
             wc -l /tmp/manifest-top-level.conf &&
             echo \"✓ Fixture verified and accessible\"
@@ -103,11 +108,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing transitive dependencies: nodejs-devtools -> nodejs..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -159,11 +168,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing playwright → nodejs dependency error handling..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -208,11 +221,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing monitoring → python dependency error handling..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 

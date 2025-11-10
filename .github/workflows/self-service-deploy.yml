@@ -113,6 +113,9 @@ jobs:
       - name: Configure deployment parameters
         id: config
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           # Basic configuration
           echo "app_name=${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
           echo "region=${{ github.event.inputs.region }}" >> $GITHUB_OUTPUT
@@ -250,13 +253,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extensions="${{ needs.setup-config.outputs.extensions }}"
 
           echo "Configuring extension manifest..."
           echo "Extensions to install: $extensions"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
@@ -291,11 +297,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Installing all extensions from manifest..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running extension-manager install-all...\"
@@ -311,11 +320,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Verifying deployment and extensions..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             # Source SSH environment
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
@@ -349,6 +361,9 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "## 🎉 Deployment Successful" >> $GITHUB_STEP_SUMMARY

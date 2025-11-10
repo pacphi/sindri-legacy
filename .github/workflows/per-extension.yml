@@ -137,30 +137,42 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          flyctl ssh sftp put .github/scripts/common/verify-manifest.sh /tmp/verify-manifest.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-manifest.sh"
+          # Upload and chmod with retry
+          sftp_upload_and_chmod "$app_name" \
+            .github/scripts/common/verify-manifest.sh \
+            /tmp/verify-manifest.sh \
+            666
 
-          flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 
       - name: Add extension to manifest
         if: steps.should-test.outputs.should_test == 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension_name="${{ matrix.extension.name }}"
           depends_on="${{ matrix.extension.depends_on }}"
 
           echo "Adding $extension_name to manifest"
 
-          flyctl ssh sftp put .github/scripts/extension-tests/add-extension.sh /tmp/add-extension.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/add-extension.sh"
+          # Upload and chmod with retry
+          sftp_upload_and_chmod "$app_name" \
+            .github/scripts/extension-tests/add-extension.sh \
+            /tmp/add-extension.sh \
+            666
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/add-extension.sh $extension_name $depends_on
-          '"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/add-extension.sh $extension_name $depends_on'"
 
       - name: Install extension using install-all
         timeout-minutes: 30
@@ -294,23 +306,25 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           commands="${{ matrix.extension.commands }}"
 
           echo "Verifying commands: $commands"
 
-          # Create lib directory first
-          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+          # Create lib directory with retry
+          ssh_mkdir_retry "$app_name" /tmp/lib
 
-          # Upload files and fix permissions for developer user
-          flyctl ssh sftp put .github/scripts/extension-tests/verify-commands.sh /tmp/verify-commands.sh --app $app_name
-          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
-          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-commands.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
+          # Upload multiple files with retry
+          sftp_upload_multiple "$app_name" 666 \
+            .github/scripts/extension-tests/verify-commands.sh:/tmp/verify-commands.sh \
+            .github/scripts/extension-tests/lib/test-helpers.sh:/tmp/lib/test-helpers.sh \
+            .github/scripts/extension-tests/lib/assertions.sh:/tmp/lib/assertions.sh
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/verify-commands.sh \"$commands\"
-          '"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/verify-commands.sh \"$commands\"'"
 
       # NEW: Using extracted script for key functionality testing
       - name: Test key functionality
@@ -319,21 +333,25 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           key_tool="${{ matrix.extension.key_tool }}"
 
           echo "Testing key functionality: $key_tool (timeout: ${{ matrix.extension.key_test_timeout || 2 }} minutes)..."
 
-          # Create lib directory first
-          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+          # Create lib directory with retry
+          ssh_mkdir_retry "$app_name" /tmp/lib
 
-          # Upload files and fix permissions for developer user
-          flyctl ssh sftp put .github/scripts/extension-tests/test-key-functionality.sh /tmp/test-key-functionality.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-key-functionality.sh"
+          # Upload and chmod with retry
+          sftp_upload_and_chmod "$app_name" \
+            .github/scripts/extension-tests/test-key-functionality.sh \
+            /tmp/test-key-functionality.sh \
+            666
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/test-key-functionality.sh $key_tool
-          '"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/test-key-functionality.sh $key_tool'"
 
       - name: Test enhanced status() output
         timeout-minutes: ${{ matrix.extension.status_timeout || 2 }}
@@ -341,33 +359,38 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension_name="${{ matrix.extension.name }}"
 
           echo "Testing enhanced status() output for $extension_name (timeout: ${{ matrix.extension.status_timeout || 2 }} minutes)..."
 
-          status_output=$(flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            bash extension-manager.sh status $extension_name
-          '")
+          # Use a temporary file to capture output with retry
+          if ssh_command_retry "$app_name" "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh status $extension_name'" > /tmp/status_output.txt; then
+            status_output=$(cat /tmp/status_output.txt)
+            echo "$status_output"
 
-          echo "$status_output"
+            if echo "$status_output" | grep -q "Extension:"; then
+              echo "✅ Status shows extension metadata"
+            else
+              echo "❌ Status missing extension metadata"
+              exit 1
+            fi
 
-          if echo "$status_output" | grep -q "Extension:"; then
-            echo "✅ Status shows extension metadata"
+            if echo "$status_output" | grep -q "Status:"; then
+              echo "✅ Status shows installation status"
+            else
+              echo "❌ Status missing installation status"
+              exit 1
+            fi
+
+            echo "✅ Enhanced status() output verified"
           else
-            echo "❌ Status missing extension metadata"
+            echo "❌ Failed to get status output"
             exit 1
           fi
-
-          if echo "$status_output" | grep -q "Status:"; then
-            echo "✅ Status shows installation status"
-          else
-            echo "❌ Status missing installation status"
-            exit 1
-          fi
-
-          echo "✅ Enhanced status() output verified"
 
       # NEW: Using extracted script for idempotency testing
       - name: Test idempotency
@@ -376,16 +399,21 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing idempotency..."
 
-          flyctl ssh sftp put .github/scripts/extension-tests/test-idempotency.sh /tmp/test-idempotency.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-idempotency.sh"
+          # Upload and chmod with retry
+          sftp_upload_and_chmod "$app_name" \
+            .github/scripts/extension-tests/test-idempotency.sh \
+            /tmp/test-idempotency.sh \
+            666
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/test-idempotency.sh
-          '"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/test-idempotency.sh'"
 
       # NEW: Using composite action for cleanup
       - name: Cleanup test resources

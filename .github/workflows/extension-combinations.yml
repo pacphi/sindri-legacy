@@ -117,12 +117,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extensions="${{ matrix.combination.extensions }}"
 
           echo "Adding extensions to manifest: $extensions"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
             failed_extensions=()
@@ -158,11 +162,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Installing all extensions for ${{ matrix.combination.name }} combination..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running install-all...\"
@@ -178,12 +186,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           combination_name="${{ matrix.combination.name }}"
 
           echo "Verifying $combination_name combination functionality..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             # Source SSH environment
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
