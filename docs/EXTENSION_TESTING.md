@@ -230,7 +230,8 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 
 #### Tested Extensions (21 Total)
 
-**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the Docker image and not tested as extensions.
+**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the
+Docker image and not tested as extensions.
 
 | Extension                    | Key Tools          | Dependencies        | Test Focus               |
 | ---------------------------- | ------------------ | ------------------- | ------------------------ |
