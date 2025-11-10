@@ -32,27 +32,32 @@ source .github/scripts/common/retry-utils.sh
 retry_with_backoff 3 5 30 some-flaky-command
 ```
 
-## Integration Test Scripts (`integration/`)
-
 ### verify-manifest.sh
 
-Verifies CI extension manifest was created successfully.
+Verifies CI extension manifest configuration with fallback support.
 
 **Checks**:
 
-- Manifest file exists at `/workspace/scripts/extensions.d/active-extensions.conf`
+- Manifest file exists at `/workspace/scripts/lib/extensions.d/active-extensions.conf`
+- Creates manifest from CI template if missing (fallback)
 - Displays active extensions for debugging
 
 **Usage**:
 
 ```bash
-# Copy to VM and execute
-flyctl ssh sftp shell --app $app <<'EOF'
-  put .github/scripts/integration/verify-manifest.sh /tmp/verify-manifest.sh
-  bye
-EOF
+# Via composite action (recommended)
+- uses: ./.github/actions/run-vm-script
+  with:
+    app-name: ${{ steps.setup.outputs.app-name }}
+    fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+    script-path: .github/scripts/common/verify-manifest.sh
+
+# Or directly via SSH
+flyctl ssh sftp put .github/scripts/common/verify-manifest.sh /tmp/verify-manifest.sh --app $app
 flyctl ssh console --app $app --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
 ```
+
+## Integration Test Scripts (`integration/`)
 
 ### setup-manifest.sh
 
@@ -95,14 +100,6 @@ Comprehensive extension system test including mise-managed extension installatio
 - mise diagnostics
 
 ## Extension Test Scripts (`extension-tests/`)
-
-### verify-manifest.sh
-
-Similar to integration/verify-manifest.sh but with fallback logic for test environments.
-
-**Additional Features**:
-
-- Creates manifest from CI template if missing
 
 ### add-extension.sh
 

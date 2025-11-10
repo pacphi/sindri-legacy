@@ -139,7 +139,7 @@ jobs:
         run: |
           app_name="${{ steps.setup.outputs.app-name }}"
 
-          flyctl ssh sftp put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh --app $app_name
+          flyctl ssh sftp put .github/scripts/common/verify-manifest.sh /tmp/verify-manifest.sh --app $app_name
           flyctl ssh console --app $app_name --command "chmod 666 /tmp/verify-manifest.sh"
 
           flyctl ssh console --app $app_name --user developer -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
