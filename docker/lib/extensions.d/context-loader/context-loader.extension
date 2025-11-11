@@ -69,13 +69,16 @@ configure() {
   local utilities_script="/workspace/scripts/lib/context-loader.sh"
   local template_file="/docker/lib/templates/context-loader.sh"
 
-  mkdir -p "/workspace/scripts/lib"
+  sudo mkdir -p "/workspace/scripts/lib"
 
   if [[ -f "$template_file" ]]; then
     print_status "Copying context loader utilities..."
-    cp "$template_file" "$utilities_script"
-    chmod +x "$utilities_script"
-    print_success "Context loading utilities installed"
+    if sudo cp "$template_file" "$utilities_script" && sudo chmod +x "$utilities_script"; then
+      print_success "Context loading utilities installed"
+    else
+      print_error "Failed to install context loader utilities"
+      return 1
+    fi
   else
     print_warning "Template not found at $template_file"
     print_status "You'll need to create context-loader.sh manually"
@@ -85,13 +88,16 @@ configure() {
   local wrapper_script="/workspace/scripts/cf-with-context.sh"
   local wrapper_template="/docker/lib/templates/cf-with-context.sh"
 
-  mkdir -p /workspace/scripts
+  sudo mkdir -p /workspace/scripts
 
   if [[ -f "$wrapper_template" ]]; then
     print_status "Copying Claude Flow context wrapper..."
-    cp "$wrapper_template" "$wrapper_script"
-    chmod +x "$wrapper_script"
-    print_success "Claude Flow context wrapper installed"
+    if sudo cp "$wrapper_template" "$wrapper_script" && sudo chmod +x "$wrapper_script"; then
+      print_success "Claude Flow context wrapper installed"
+    else
+      print_error "Failed to install Claude Flow context wrapper"
+      return 1
+    fi
   else
     print_warning "Template not found at $wrapper_template"
     print_status "You'll need to create cf-with-context.sh manually"
@@ -174,8 +180,8 @@ EOF
   fi
 
   # Create context directories if they don't exist
-  mkdir -p /workspace/context/global
-  mkdir -p /workspace/context/templates
+  sudo mkdir -p /workspace/context/global
+  sudo mkdir -p /workspace/context/templates
 
   # Add aliases to bashrc
   local alias_file="$(dirname "${BASH_SOURCE[0]}")/context-loader.aliases"
