@@ -70,18 +70,15 @@ is_extension_installed() {
         return 1
     fi
 
-    # Source the extension
-    source "$activated_file"
-
-    # Check if status function exists and succeeds
-    if declare -F status >/dev/null 2>&1; then
-        # Suppress output and just check exit code
-        if status >/dev/null 2>&1; then
-            return 0
-        fi
+    # Run status check in isolated subshell to avoid pollution
+    if (
+        source "$activated_file" 2>/dev/null
+        declare -F status >/dev/null 2>&1 && status >/dev/null 2>&1
+    ); then
+        return 0
+    else
+        return 1
     fi
-
-    return 1
 }
 
 # Function to extract extension name from filename
