@@ -269,7 +269,18 @@ remove() {
   if [[ -d "$HOME/go" ]]; then
     read -p "Remove $HOME/go directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      rm -rf "$HOME/go"
+      # Clean Go module cache properly (handles read-only permissions)
+      if command_exists go; then
+        print_status "Cleaning Go module cache..."
+        go clean -modcache 2>/dev/null || true
+      fi
+
+      # Make files writable before removing (in case go clean didn't run)
+      if [[ -d "$HOME/go" ]]; then
+        print_status "Making files writable..."
+        chmod -R +w "$HOME/go" 2>/dev/null || true
+        rm -rf "$HOME/go"
+      fi
       print_success "GOPATH directory removed"
     fi
   fi
