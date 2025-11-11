@@ -1,0 +1,514 @@
+#!/bin/bash
+# xfce-ubuntu.extension - XFCE Desktop Environment with RDP Access
+# Extension API v2.0
+#
+# This extension installs a lightweight desktop environment on Ubuntu with remote
+# desktop access via xRDP. Provides full GUI access to the Sindri development
+# environment for users who prefer graphical interfaces or need to run GUI applications.
+#
+# WARNING: This extension significantly increases resource requirements:
+# - RAM: +800MB minimum (2GB+ recommended)
+# - Disk: +2GB for desktop packages
+# - CPU: 2+ cores recommended for responsive UI
+# - Cost: Requires larger VM (shared-cpu-2x or higher)
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="xfce-ubuntu"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="XFCE desktop environment with xRDP remote access"
+EXT_CATEGORY="desktop"
+EXT_INSTALL_METHOD="apt"
+EXT_UPGRADE_STRATEGY="automatic"
+EXT_REQUIRED_DOMAINS="archive.ubuntu.com security.ubuntu.com"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  local all_met=true
+
+  # Check for apt-get (Ubuntu/Debian only)
+  if ! command_exists apt-get; then
+    print_error "apt-get is required but not found"
+    print_status "This extension requires a Debian/Ubuntu based system"
+    return 1
+  fi
+
+  # Check if running in CI mode - desktop not suitable for CI
+  if is_ci_mode; then
+    print_error "Desktop environment cannot be installed in CI mode"
+    print_status "CI mode is for automated testing, not interactive desktop use"
+    return 1
+  fi
+
+  # Check disk space (XFCE needs ~2GB)
+  if ! check_disk_space 2500; then
+    print_error "Insufficient disk space for XFCE desktop"
+    print_status "Minimum 2.5GB free space required"
+    all_met=false
+  fi
+
+  # Check RAM (warn if less than 2GB)
+  if command_exists free; then
+    local total_ram_mb=$(free -m | awk '/^Mem:/ {print $2}')
+    if [[ $total_ram_mb -lt 2048 ]]; then
+      print_warning "System has ${total_ram_mb}MB RAM - desktop performance may be poor"
+      print_warning "Recommended: 2GB+ RAM (shared-cpu-2x or larger VM)"
+    else
+      print_success "RAM check: ${total_ram_mb}MB (sufficient for desktop)"
+    fi
+  fi
+
+  # Check required tools
+  local missing_tools=()
+  for tool in curl wget sudo systemctl; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    all_met=false
+  fi
+
+  # Check DNS resolution for required domains
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
+  fi
+
+  # Warn about resource impact
+  print_warning "⚠ Resource Impact:"
+  print_warning "  • RAM usage: +800MB baseline"
+  print_warning "  • Disk usage: +2GB for packages"
+  print_warning "  • CPU: 2+ cores recommended"
+  print_warning "  • VM startup: +30-60s slower"
+  print_warning "  • Cost: Requires larger VM size"
+  echo ""
+
+  if [[ "$all_met" == "true" ]]; then
+    print_success "All prerequisites met"
+    print_status "Ready to install XFCE desktop environment"
+    return 0
+  else
+    print_error "Prerequisites not met"
+    return 1
+  fi
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing XFCE desktop environment..."
+  print_warning "This will take 5-10 minutes and download ~800MB of packages"
+  echo ""
+
+  # Update package lists
+  print_status "Updating package lists..."
+  if ! sudo apt-get update -qq; then
+    print_error "Failed to update package lists"
+    return 1
+  fi
+
+  # Install XFCE desktop (lightweight option)
+  print_status "Installing XFCE desktop (this may take 5-10 minutes)..."
+  if ! install_apt_packages xfce4 xfce4-goodies; then
+    print_error "Failed to install XFCE desktop"
+    return 1
+  fi
+  print_success "XFCE desktop installed"
+
+  # Install xRDP server
+  print_status "Installing xRDP server..."
+  if ! install_apt_packages xrdp; then
+    print_error "Failed to install xRDP"
+    return 1
+  fi
+  print_success "xRDP server installed"
+
+  # Install supporting packages
+  print_status "Installing desktop utilities..."
+  local desktop_packages=(
+    dbus-x11          # D-Bus X11 integration
+    xfonts-base       # Base X fonts
+    xauth             # X authentication
+    x11-xserver-utils # X server utilities
+    firefox           # Web browser
+    mousepad          # Text editor
+    thunar            # File manager (already in xfce4, but explicit)
+  )
+
+  if install_apt_packages "${desktop_packages[@]}"; then
+    print_success "Desktop utilities installed"
+  else
+    print_warning "Some desktop utilities failed to install"
+  fi
+
+  print_success "${EXT_NAME} installation complete"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring XFCE desktop environment..."
+
+  # Configure xRDP to use XFCE
+  print_status "Configuring xRDP for XFCE..."
+
+  # Create .xsession file for the developer user
+  local xsession_file="$HOME/.xsession"
+  if [[ ! -f "$xsession_file" ]]; then
+    echo "startxfce4" > "$xsession_file"
+    chmod +x "$xsession_file"
+    print_success "Created $xsession_file"
+  else
+    print_debug "xsession file already exists"
+  fi
+
+  # Add developer user to xrdp group
+  if ! groups | grep -q xrdp; then
+    print_status "Adding user to xrdp group..."
+    sudo usermod -aG xrdp "$USER"
+    print_success "User added to xrdp group"
+  else
+    print_debug "User already in xrdp group"
+  fi
+
+  # Enable xRDP service
+  print_status "Enabling xRDP service..."
+  if sudo systemctl enable xrdp 2>/dev/null; then
+    print_success "xRDP service enabled"
+  else
+    print_warning "Failed to enable xRDP service (may not be critical)"
+  fi
+
+  # Start xRDP service
+  print_status "Starting xRDP service..."
+  if sudo systemctl start xrdp 2>/dev/null; then
+    print_success "xRDP service started"
+  else
+    print_warning "Failed to start xRDP service (check logs)"
+  fi
+
+  # Configure firewall if ufw is installed
+  if command_exists ufw; then
+    print_status "Configuring firewall for RDP..."
+    if sudo ufw status | grep -q "Status: active"; then
+      sudo ufw allow 3389/tcp 2>/dev/null
+      print_success "Firewall configured for RDP (port 3389)"
+    else
+      print_debug "Firewall not active, skipping rule"
+    fi
+  fi
+
+  # Create desktop directories
+  print_status "Setting up user directories..."
+  mkdir -p "$HOME/Desktop" "$HOME/Documents" "$HOME/Downloads"
+  print_success "Desktop directories created"
+
+  # Configure XFCE for remote access optimization
+  local xfce_config_dir="$HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+  if [[ -d "$xfce_config_dir" ]] || mkdir -p "$xfce_config_dir"; then
+    print_status "Optimizing XFCE for remote desktop..."
+
+    # Disable compositing for better RDP performance
+    cat > "$xfce_config_dir/xfwm4.xml" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+    print_success "XFCE performance optimizations applied"
+  fi
+
+  print_success "${EXT_NAME} configuration complete"
+
+  # Print connection instructions
+  echo ""
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_status "RDP CONNECTION SETUP REQUIRED"
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "1. Add this to fly.toml:"
+  echo ""
+  echo "  [[services]]"
+  echo "    internal_port = 3389"
+  echo "    protocol = \"tcp\""
+  echo ""
+  echo "    [[services.ports]]"
+  echo "      port = 3389"
+  echo ""
+  echo "2. Redeploy your app:"
+  echo "   flyctl deploy -a <your-app-name>"
+  echo ""
+  echo "3. Connect with RDP client:"
+  echo "   Address: your-app.fly.dev:3389"
+  echo "   Username: $USER"
+  echo "   Password: <your-password>"
+  echo ""
+  print_status "See docs/extensions/XFCE_UBUNTU.md for detailed setup"
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating XFCE desktop installation..."
+
+  local all_valid=true
+
+  # Check XFCE installation
+  if command_exists startxfce4; then
+    print_success "XFCE desktop: installed"
+  else
+    print_error "XFCE desktop: not found"
+    all_valid=false
+  fi
+
+  # Check xRDP
+  if command_exists xrdp; then
+    print_success "xRDP server: installed"
+  else
+    print_error "xRDP server: not found"
+    all_valid=false
+  fi
+
+  # Check xRDP service status
+  if systemctl is-active --quiet xrdp 2>/dev/null; then
+    print_success "xRDP service: running"
+  else
+    print_warning "xRDP service: not running"
+    print_status "Start with: sudo systemctl start xrdp"
+  fi
+
+  # Check xRDP port
+  if command_exists ss && ss -tln | grep -q ":3389"; then
+    print_success "xRDP listening: port 3389"
+  elif command_exists netstat && netstat -tln | grep -q ":3389"; then
+    print_success "xRDP listening: port 3389"
+  else
+    print_warning "xRDP not listening on port 3389"
+  fi
+
+  # Check session file
+  if [[ -f "$HOME/.xsession" ]]; then
+    print_success "Session configuration: $HOME/.xsession"
+  else
+    print_warning "Session file not found"
+  fi
+
+  # Check group membership
+  if groups | grep -q xrdp; then
+    print_success "User in xrdp group: yes"
+  else
+    print_warning "User not in xrdp group (logout/login required)"
+  fi
+
+  # Check essential GUI apps
+  local gui_apps=(firefox mousepad thunar)
+  local apps_found=0
+  for app in "${gui_apps[@]}"; do
+    command_exists "$app" && ((apps_found++))
+  done
+  print_status "GUI applications: $apps_found/${#gui_apps[@]} installed"
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation status
+  if ! command_exists startxfce4 || ! command_exists xrdp; then
+    echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Desktop environment info
+  print_status "Desktop Environment:"
+  echo "  ✓ XFCE 4"
+
+  # xRDP status
+  print_status "Remote Access:"
+  if systemctl is-active --quiet xrdp 2>/dev/null; then
+    echo "  ✓ xRDP: running on port 3389"
+  else
+    echo "  ✗ xRDP: not running"
+    echo "    Start with: sudo systemctl start xrdp"
+  fi
+
+  # Check if port is exposed in fly.toml
+  if [[ -f "/app/fly.toml" ]]; then
+    if grep -q "3389" /app/fly.toml 2>/dev/null; then
+      echo "  ✓ fly.toml: port 3389 configured"
+    else
+      echo "  ⚠ fly.toml: port 3389 NOT configured"
+      echo "    Add RDP service configuration and redeploy"
+    fi
+  fi
+
+  # Installed applications
+  echo ""
+  print_status "GUI Applications:"
+  command_exists firefox && echo "  ✓ Firefox browser"
+  command_exists mousepad && echo "  ✓ Mousepad text editor"
+  command_exists thunar && echo "  ✓ Thunar file manager"
+
+  # Configuration
+  echo ""
+  print_status "Configuration:"
+  [[ -f "$HOME/.xsession" ]] && echo "  ✓ Session: $HOME/.xsession"
+  groups | grep -q xrdp && echo "  ✓ User in xrdp group"
+
+  # Resource usage
+  echo ""
+  print_status "Resource Usage:"
+  if command_exists free; then
+    local used_ram=$(free -m | awk '/^Mem:/ {printf "%.0f", $3}')
+    local total_ram=$(free -m | awk '/^Mem:/ {print $2}')
+    echo "  RAM: ${used_ram}MB / ${total_ram}MB used"
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling XFCE desktop environment..."
+  echo ""
+  print_warning "This will remove:"
+  print_warning "  • XFCE desktop environment (~800MB)"
+  print_warning "  • xRDP server"
+  print_warning "  • Desktop applications (Firefox, etc.)"
+  print_warning "  • Configuration files"
+  echo ""
+
+  if ! prompt_confirmation "Continue with desktop environment removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Stop xRDP service
+  print_status "Stopping xRDP service..."
+  sudo systemctl stop xrdp 2>/dev/null
+  sudo systemctl disable xrdp 2>/dev/null
+
+  # Remove packages
+  print_status "Removing desktop packages (this may take 2-3 minutes)..."
+  sudo apt-get remove -y xfce4 xfce4-goodies xrdp 2>/dev/null
+  sudo apt-get remove -y firefox mousepad 2>/dev/null
+  sudo apt-get autoremove -y 2>/dev/null
+
+  # Remove from xrdp group
+  if groups | grep -q xrdp; then
+    sudo deluser "$USER" xrdp 2>/dev/null
+  fi
+
+  # Clean up configuration
+  print_status "Cleaning up configuration files..."
+  read -p "Remove desktop configuration (~/.config/xfce4)? (y/N): " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    rm -rf "$HOME/.config/xfce4"
+    rm -f "$HOME/.xsession"
+    print_success "Desktop configuration removed"
+  else
+    print_status "Desktop configuration preserved"
+  fi
+
+  # Remove desktop directories (ask first)
+  if [[ -d "$HOME/Desktop" ]]; then
+    read -p "Remove Desktop, Documents, Downloads directories? (y/N): " -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      rm -rf "$HOME/Desktop" "$HOME/Documents" "$HOME/Downloads"
+      print_success "Desktop directories removed"
+    else
+      print_status "Desktop directories preserved"
+    fi
+  fi
+
+  print_success "${EXT_NAME} uninstalled"
+  print_warning "Remember to remove RDP service from fly.toml and redeploy"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  if ! command_exists xrdp; then
+    print_error "${EXT_NAME} is not installed"
+    return 1
+  fi
+
+  # Upgrade via APT
+  print_status "Upgrading desktop packages..."
+  if upgrade_apt_packages "xfce4" "xfce4-goodies" "xrdp" "firefox"; then
+    print_success "Desktop packages upgraded"
+
+    # Restart xRDP service
+    print_status "Restarting xRDP service..."
+    if sudo systemctl restart xrdp 2>/dev/null; then
+      print_success "xRDP service restarted"
+    else
+      print_warning "Failed to restart xRDP service"
+    fi
+
+    return 0
+  else
+    print_error "Upgrade failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"

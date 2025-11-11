@@ -1,0 +1,701 @@
+#!/bin/bash
+# guacamole.extension - Apache Guacamole Web-Based Remote Desktop Gateway
+# Extension API v2.0
+#
+# This extension installs Apache Guacamole, a clientless remote desktop gateway
+# that provides browser-based access to SSH, RDP, and VNC sessions. No client
+# software required - access your development environment through any modern web browser.
+#
+# Components:
+# - guacd (Guacamole proxy daemon)
+# - Tomcat 9 (web application server)
+# - Guacamole web application
+# - FreeRDP, libVNC, SSH support
+#
+# Resource Requirements:
+# - RAM: +512MB for Tomcat/Guacamole
+# - Disk: +300MB for packages
+# - Network: Inbound HTTPS/HTTP access
+
+# Source shared extension library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+EXT_NAME="guacamole"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="Apache Guacamole web-based remote desktop gateway"
+EXT_CATEGORY="desktop"
+EXT_INSTALL_METHOD="mixed"  # apt + binary downloads
+EXT_UPGRADE_STRATEGY="manual"  # Requires careful version coordination
+EXT_REQUIRED_DOMAINS="archive.apache.org downloads.apache.org archive.ubuntu.com"
+
+# Guacamole version
+GUACAMOLE_VERSION="1.5.4"
+
+# Initialize extension environment
+extension_init
+
+# ============================================================================
+# PREREQUISITES
+# ============================================================================
+
+prerequisites() {
+  print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  local all_met=true
+
+  # Check for apt-get (Ubuntu/Debian only)
+  if ! command_exists apt-get; then
+    print_error "apt-get is required but not found"
+    print_status "This extension requires a Debian/Ubuntu based system"
+    return 1
+  fi
+
+  # Check if running in CI mode - not suitable for CI
+  if is_ci_mode; then
+    print_error "Guacamole cannot be installed in CI mode"
+    print_status "CI mode is for automated testing, not interactive services"
+    return 1
+  fi
+
+  # Check disk space (Guacamole + Tomcat needs ~500MB)
+  if ! check_disk_space 1000; then
+    print_error "Insufficient disk space for Guacamole"
+    print_status "Minimum 1GB free space required"
+    all_met=false
+  fi
+
+  # Check RAM (warn if less than 1GB)
+  if command_exists free; then
+    local total_ram_mb=$(free -m | awk '/^Mem:/ {print $2}')
+    if [[ $total_ram_mb -lt 1024 ]]; then
+      print_warning "System has ${total_ram_mb}MB RAM - Tomcat may struggle"
+      print_warning "Recommended: 1GB+ RAM minimum"
+    else
+      print_success "RAM check: ${total_ram_mb}MB (sufficient)"
+    fi
+  fi
+
+  # Check required tools
+  local missing_tools=()
+  for tool in curl wget sudo systemctl; do
+    if ! command_exists "$tool"; then
+      missing_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_tools[@]} -gt 0 ]]; then
+    print_error "Missing required tools: ${missing_tools[*]}"
+    all_met=false
+  fi
+
+  # Check DNS resolution
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
+  fi
+
+  # Warn about complexity
+  print_warning "⚠ Apache Guacamole Setup:"
+  print_warning "  • Complex multi-component installation"
+  print_warning "  • RAM usage: +512MB for Java/Tomcat"
+  print_warning "  • Requires HTTPS configuration for production"
+  print_warning "  • Manual user management via web interface"
+  echo ""
+
+  if [[ "$all_met" == "true" ]]; then
+    print_success "All prerequisites met"
+    return 0
+  else
+    print_error "Prerequisites not met"
+    return 1
+  fi
+}
+
+# ============================================================================
+# INSTALL
+# ============================================================================
+
+install() {
+  print_status "Installing Apache Guacamole ${GUACAMOLE_VERSION}..."
+  print_warning "This will take 10-15 minutes and requires multiple downloads"
+  echo ""
+
+  # Update package lists
+  print_status "Updating package lists..."
+  if ! sudo apt-get update -qq; then
+    print_error "Failed to update package lists"
+    return 1
+  fi
+
+  # Install build dependencies for guacamole-server
+  print_status "Installing build dependencies..."
+  local build_deps=(
+    build-essential
+    libcairo2-dev
+    libjpeg-turbo8-dev
+    libpng-dev
+    libtool-bin
+    libossp-uuid-dev
+    libavcodec-dev
+    libavformat-dev
+    libavutil-dev
+    libswscale-dev
+    freerdp2-dev
+    libpango1.0-dev
+    libssh2-1-dev
+    libtelnet-dev
+    libvncserver-dev
+    libwebsockets-dev
+    libpulse-dev
+    libssl-dev
+    libvorbis-dev
+    libwebp-dev
+  )
+
+  if ! install_apt_packages "${build_deps[@]}"; then
+    print_error "Failed to install build dependencies"
+    return 1
+  fi
+  print_success "Build dependencies installed"
+
+  # Install Tomcat 9
+  print_status "Installing Tomcat 9..."
+  if ! install_apt_packages tomcat9 tomcat9-admin tomcat9-common tomcat9-user; then
+    print_error "Failed to install Tomcat"
+    return 1
+  fi
+  print_success "Tomcat 9 installed"
+
+  # Download and build guacamole-server
+  print_status "Downloading guacamole-server ${GUACAMOLE_VERSION}..."
+  local temp_dir="/tmp/guacamole-install-$$"
+  mkdir -p "$temp_dir"
+  cd "$temp_dir" || return 1
+
+  local server_url="https://downloads.apache.org/guacamole/${GUACAMOLE_VERSION}/source/guacamole-server-${GUACAMOLE_VERSION}.tar.gz"
+  if ! wget -q "$server_url" -O guacamole-server.tar.gz; then
+    print_error "Failed to download guacamole-server"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  print_status "Extracting guacamole-server..."
+  if ! tar -xzf guacamole-server.tar.gz; then
+    print_error "Failed to extract guacamole-server"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  print_status "Building guacamole-server (this may take 5-10 minutes)..."
+  cd "guacamole-server-${GUACAMOLE_VERSION}" || return 1
+
+  if ! ./configure --with-init-dir=/etc/init.d --enable-allow-freerdp-snapshots 2>&1 | tee /tmp/guac-configure.log; then
+    print_error "Failed to configure guacamole-server"
+    print_status "Check /tmp/guac-configure.log for details"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  if ! make 2>&1 | tee /tmp/guac-make.log; then
+    print_error "Failed to compile guacamole-server"
+    print_status "Check /tmp/guac-make.log for details"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  if ! sudo make install 2>&1 | tee /tmp/guac-install.log; then
+    print_error "Failed to install guacamole-server"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  sudo ldconfig
+  print_success "guacamole-server built and installed"
+
+  # Download guacamole-client WAR
+  print_status "Downloading guacamole-client ${GUACAMOLE_VERSION}..."
+  cd "$temp_dir" || return 1
+
+  local client_url="https://downloads.apache.org/guacamole/${GUACAMOLE_VERSION}/binary/guacamole-${GUACAMOLE_VERSION}.war"
+  if ! wget -q "$client_url" -O guacamole.war; then
+    print_error "Failed to download guacamole-client"
+    cd - > /dev/null || return 1
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  # Deploy to Tomcat
+  print_status "Deploying Guacamole web application..."
+  sudo mkdir -p /var/lib/tomcat9/webapps
+  sudo cp guacamole.war /var/lib/tomcat9/webapps/
+  sudo chown tomcat:tomcat /var/lib/tomcat9/webapps/guacamole.war
+  print_success "Guacamole web application deployed"
+
+  # Create guacamole configuration directory
+  print_status "Creating configuration directories..."
+  sudo mkdir -p /etc/guacamole
+  sudo mkdir -p /etc/guacamole/extensions
+  sudo mkdir -p /etc/guacamole/lib
+
+  # Cleanup
+  cd - > /dev/null || return 1
+  rm -rf "$temp_dir"
+
+  print_success "${EXT_NAME} installation complete"
+  return 0
+}
+
+# ============================================================================
+# CONFIGURE
+# ============================================================================
+
+configure() {
+  print_status "Configuring Apache Guacamole..."
+
+  # Create guacamole.properties
+  print_status "Creating Guacamole configuration..."
+  sudo tee /etc/guacamole/guacamole.properties > /dev/null << 'EOF'
+# Guacamole Configuration
+guacd-hostname: localhost
+guacd-port: 4822
+
+# Authentication provider (user-mapping for simple setup)
+auth-provider: net.sourceforge.guacamole.net.basic.BasicFileAuthenticationProvider
+
+# Basic authentication (user-mapping.xml)
+basic-user-mapping: /etc/guacamole/user-mapping.xml
+EOF
+
+  sudo chown root:root /etc/guacamole/guacamole.properties
+  sudo chmod 644 /etc/guacamole/guacamole.properties
+  print_success "Configuration file created"
+
+  # Create user-mapping.xml with default user
+  print_status "Creating default user configuration..."
+  local default_password="guacadmin"
+
+  sudo tee /etc/guacamole/user-mapping.xml > /dev/null << EOF
+<user-mapping>
+    <!-- Default admin user (CHANGE PASSWORD IN PRODUCTION) -->
+    <authorize username="guacadmin" password="$default_password">
+        <protocol>ssh</protocol>
+        <param name="hostname">localhost</param>
+        <param name="port">22</param>
+        <param name="username">$USER</param>
+    </authorize>
+
+    <!-- Template for RDP connections (uncomment and configure) -->
+    <!--
+    <authorize username="rdpuser" password="CHANGE_ME">
+        <protocol>rdp</protocol>
+        <param name="hostname">localhost</param>
+        <param name="port">3389</param>
+        <param name="username">$USER</param>
+        <param name="ignore-cert">true</param>
+    </authorize>
+    -->
+</user-mapping>
+EOF
+
+  sudo chown root:root /etc/guacamole/user-mapping.xml
+  sudo chmod 600 /etc/guacamole/user-mapping.xml
+  print_success "Default user configuration created"
+
+  # Link configuration to Tomcat
+  print_status "Linking Guacamole to Tomcat..."
+  sudo mkdir -p /usr/share/tomcat9/.guacamole
+  sudo ln -sf /etc/guacamole/guacamole.properties /usr/share/tomcat9/.guacamole/
+  sudo chown -R tomcat:tomcat /usr/share/tomcat9/.guacamole
+
+  # Set GUACAMOLE_HOME environment variable for Tomcat
+  if [[ ! -f /etc/default/tomcat9 ]] || ! grep -q "GUACAMOLE_HOME" /etc/default/tomcat9; then
+    echo 'GUACAMOLE_HOME=/etc/guacamole' | sudo tee -a /etc/default/tomcat9 > /dev/null
+    print_success "GUACAMOLE_HOME configured"
+  fi
+
+  # Create and enable guacd systemd service
+  print_status "Creating guacd service..."
+  sudo tee /etc/systemd/system/guacd.service > /dev/null << 'EOF'
+[Unit]
+Description=Guacamole proxy daemon (guacd)
+Documentation=man:guacd(8)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/guacd -f
+Restart=on-failure
+User=daemon
+Group=daemon
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo systemctl daemon-reload
+  print_success "guacd service created"
+
+  # Enable and start services
+  print_status "Enabling services..."
+  sudo systemctl enable guacd 2>/dev/null
+  sudo systemctl enable tomcat9 2>/dev/null
+
+  print_status "Starting guacd..."
+  if sudo systemctl start guacd 2>/dev/null; then
+    print_success "guacd started"
+  else
+    print_warning "Failed to start guacd (check logs)"
+  fi
+
+  print_status "Starting Tomcat..."
+  if sudo systemctl restart tomcat9 2>/dev/null; then
+    print_success "Tomcat restarted"
+    print_status "Waiting for Guacamole to deploy (30 seconds)..."
+    sleep 30
+  else
+    print_warning "Failed to start Tomcat (check logs)"
+  fi
+
+  print_success "${EXT_NAME} configuration complete"
+
+  # Print access instructions
+  echo ""
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  print_status "GUACAMOLE WEB ACCESS SETUP"
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "1. Add this to fly.toml:"
+  echo ""
+  echo "  [[services]]"
+  echo "    internal_port = 8080"
+  echo "    protocol = \"tcp\""
+  echo ""
+  echo "    [[services.ports]]"
+  echo "      port = 80"
+  echo "      handlers = [\"http\"]"
+  echo ""
+  echo "    [[services.ports]]"
+  echo "      port = 443"
+  echo "      handlers = [\"tls\", \"http\"]"
+  echo ""
+  echo "2. Redeploy your app:"
+  echo "   flyctl deploy -a <your-app-name>"
+  echo ""
+  echo "3. Access Guacamole:"
+  echo "   https://your-app.fly.dev/guacamole"
+  echo ""
+  echo "4. Login credentials:"
+  echo "   Username: guacadmin"
+  echo "   Password: $default_password"
+  echo ""
+  print_warning "⚠ SECURITY: Change the default password immediately!"
+  print_warning "Edit /etc/guacamole/user-mapping.xml and restart Tomcat"
+  echo ""
+  print_status "See docs/extensions/GUACAMOLE.md for detailed setup"
+  print_status "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  return 0
+}
+
+# ============================================================================
+# VALIDATE
+# ============================================================================
+
+validate() {
+  print_status "Validating Guacamole installation..."
+
+  local all_valid=true
+
+  # Check guacd daemon
+  if command_exists guacd; then
+    print_success "guacd daemon: installed"
+
+    # Check if running
+    if systemctl is-active --quiet guacd 2>/dev/null; then
+      print_success "guacd service: running"
+    else
+      print_error "guacd service: not running"
+      all_valid=false
+    fi
+
+    # Check port
+    if command_exists ss && ss -tln | grep -q ":4822"; then
+      print_success "guacd listening: port 4822"
+    elif command_exists netstat && netstat -tln | grep -q ":4822"; then
+      print_success "guacd listening: port 4822"
+    else
+      print_warning "guacd not listening on port 4822"
+    fi
+  else
+    print_error "guacd daemon: not found"
+    all_valid=false
+  fi
+
+  # Check Tomcat
+  if systemctl is-active --quiet tomcat9 2>/dev/null; then
+    print_success "Tomcat service: running"
+
+    # Check Tomcat port
+    if command_exists ss && ss -tln | grep -q ":8080"; then
+      print_success "Tomcat listening: port 8080"
+    elif command_exists netstat && netstat -tln | grep -q ":8080"; then
+      print_success "Tomcat listening: port 8080"
+    else
+      print_warning "Tomcat not listening on port 8080"
+    fi
+  else
+    print_error "Tomcat service: not running"
+    all_valid=false
+  fi
+
+  # Check Guacamole WAR deployment
+  if [[ -f "/var/lib/tomcat9/webapps/guacamole.war" ]]; then
+    print_success "Guacamole WAR: deployed"
+  else
+    print_error "Guacamole WAR: not found"
+    all_valid=false
+  fi
+
+  # Check configuration files
+  if [[ -f "/etc/guacamole/guacamole.properties" ]]; then
+    print_success "Configuration: /etc/guacamole/guacamole.properties"
+  else
+    print_error "Configuration file missing"
+    all_valid=false
+  fi
+
+  if [[ -f "/etc/guacamole/user-mapping.xml" ]]; then
+    print_success "User mapping: /etc/guacamole/user-mapping.xml"
+  else
+    print_error "User mapping file missing"
+    all_valid=false
+  fi
+
+  # Check web access (simple curl test)
+  print_status "Testing web access..."
+  if curl -sf http://localhost:8080/guacamole/ > /dev/null 2>&1; then
+    print_success "Web interface: accessible at http://localhost:8080/guacamole/"
+  else
+    print_warning "Web interface: not accessible (may need more time to deploy)"
+  fi
+
+  if [[ "$all_valid" == "true" ]]; then
+    print_success "Validation passed"
+    return 0
+  else
+    print_error "Validation failed"
+    return 1
+  fi
+}
+
+# ============================================================================
+# STATUS
+# ============================================================================
+
+status() {
+  print_extension_header
+
+  # Check installation
+  if ! command_exists guacd || ! systemctl is-active --quiet tomcat9; then
+    echo "Status: ✗ NOT INSTALLED or NOT RUNNING"
+    return 1
+  fi
+
+  echo "Status: ✓ INSTALLED"
+  echo ""
+
+  # Service status
+  print_status "Services:"
+  if systemctl is-active --quiet guacd 2>/dev/null; then
+    echo "  ✓ guacd: running on port 4822"
+  else
+    echo "  ✗ guacd: not running"
+  fi
+
+  if systemctl is-active --quiet tomcat9 2>/dev/null; then
+    echo "  ✓ Tomcat 9: running on port 8080"
+  else
+    echo "  ✗ Tomcat 9: not running"
+  fi
+
+  # Version info
+  echo ""
+  print_status "Version:"
+  if command_exists guacd; then
+    local version=$(guacd -v 2>&1 | head -n1)
+    echo "  $version"
+  fi
+
+  # Configuration
+  echo ""
+  print_status "Configuration:"
+  [[ -f "/etc/guacamole/guacamole.properties" ]] && echo "  ✓ /etc/guacamole/guacamole.properties"
+  [[ -f "/etc/guacamole/user-mapping.xml" ]] && echo "  ✓ /etc/guacamole/user-mapping.xml"
+
+  # Web access
+  echo ""
+  print_status "Web Interface:"
+  echo "  Local: http://localhost:8080/guacamole/"
+  if curl -sf http://localhost:8080/guacamole/ > /dev/null 2>&1; then
+    echo "  Status: ✓ Accessible"
+  else
+    echo "  Status: ✗ Not accessible"
+  fi
+
+  # Fly.io configuration check
+  if [[ -f "/app/fly.toml" ]]; then
+    if grep -q "8080" /app/fly.toml 2>/dev/null; then
+      echo "  ✓ fly.toml: HTTP service configured"
+    else
+      echo "  ⚠ fly.toml: HTTP service NOT configured"
+    fi
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# REMOVE
+# ============================================================================
+
+remove() {
+  print_warning "Uninstalling Apache Guacamole..."
+  echo ""
+  print_warning "This will remove:"
+  print_warning "  • Guacamole server and client"
+  print_warning "  • Tomcat 9 web server"
+  print_warning "  • All configuration and user data"
+  echo ""
+
+  if ! prompt_confirmation "Continue with Guacamole removal?"; then
+    print_status "Removal cancelled"
+    return 1
+  fi
+
+  # Stop services
+  print_status "Stopping services..."
+  sudo systemctl stop guacd 2>/dev/null
+  sudo systemctl stop tomcat9 2>/dev/null
+  sudo systemctl disable guacd 2>/dev/null
+  sudo systemctl disable tomcat9 2>/dev/null
+
+  # Remove Guacamole WAR
+  print_status "Removing Guacamole web application..."
+  sudo rm -rf /var/lib/tomcat9/webapps/guacamole*
+
+  # Uninstall guacamole-server
+  print_status "Uninstalling guacamole-server..."
+  if [[ -f "/usr/local/sbin/guacd" ]]; then
+    sudo rm -f /usr/local/sbin/guacd
+    sudo rm -f /usr/local/lib/libguac*.so*
+    sudo rm -rf /usr/local/lib/freerdp2
+    sudo ldconfig
+  fi
+
+  # Remove Tomcat
+  print_status "Removing Tomcat..."
+  sudo apt-get remove -y tomcat9 tomcat9-admin tomcat9-common tomcat9-user 2>/dev/null
+  sudo apt-get autoremove -y 2>/dev/null
+
+  # Remove systemd service
+  if [[ -f "/etc/systemd/system/guacd.service" ]]; then
+    sudo rm -f /etc/systemd/system/guacd.service
+    sudo systemctl daemon-reload
+  fi
+
+  # Clean up configuration
+  print_status "Cleaning up configuration..."
+  read -p "Remove Guacamole configuration (/etc/guacamole)? (y/N): " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    sudo rm -rf /etc/guacamole
+    print_success "Configuration removed"
+  else
+    print_status "Configuration preserved"
+  fi
+
+  # Remove Tomcat user home
+  sudo rm -rf /usr/share/tomcat9/.guacamole
+
+  # Remove build dependencies (optional)
+  print_status "Build dependencies are still installed (shared with other tools)"
+  read -p "Remove build dependencies? (y/N): " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    print_status "Removing build dependencies..."
+    sudo apt-get remove -y build-essential libcairo2-dev libjpeg-turbo8-dev \
+      libpng-dev libtool-bin libossp-uuid-dev 2>/dev/null
+    sudo apt-get autoremove -y 2>/dev/null
+  fi
+
+  print_success "${EXT_NAME} uninstalled"
+  print_warning "Remember to remove HTTP service from fly.toml and redeploy"
+  return 0
+}
+
+# ============================================================================
+# UPGRADE
+# ============================================================================
+
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+  print_warning "Guacamole upgrades are complex and require manual coordination"
+  print_warning "This operation will download and rebuild from source"
+  echo ""
+
+  if ! command_exists guacd; then
+    print_error "${EXT_NAME} is not installed"
+    return 1
+  fi
+
+  # Show current version
+  print_status "Current version:"
+  guacd -v 2>&1 | head -n1
+
+  # Prompt for confirmation
+  if ! prompt_confirmation "Upgrade to Guacamole ${GUACAMOLE_VERSION}?"; then
+    print_status "Upgrade cancelled"
+    return 1
+  fi
+
+  # Stop services
+  print_status "Stopping services..."
+  sudo systemctl stop guacd
+  sudo systemctl stop tomcat9
+
+  # Re-run install (will download latest version)
+  print_status "Rebuilding from source..."
+  if install; then
+    print_success "Guacamole upgraded successfully"
+
+    # Restart services
+    sudo systemctl start guacd
+    sudo systemctl start tomcat9
+
+    print_status "New version:"
+    guacd -v 2>&1 | head -n1
+
+    return 0
+  else
+    print_error "Upgrade failed"
+    print_warning "Services may be in inconsistent state"
+    return 1
+  fi
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+extension_main "$@"
