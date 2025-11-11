@@ -366,8 +366,8 @@ Shell aliases available:
 **Typical Setup**:
 
 ```bash
-# Edit manifest to uncomment desired extensions
-# docker/lib/extensions.d/active-extensions.conf.example
+# Edit manifest to activate desired extensions (auto-created on first boot)
+# /workspace/scripts/lib/extensions.d/active-extensions.conf
 
 # Then install all at once
 extension-manager install-all
