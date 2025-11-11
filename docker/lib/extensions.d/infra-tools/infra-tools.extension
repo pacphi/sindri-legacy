@@ -198,37 +198,39 @@ install() {
   local CARVEL_TOOLS=(kapp ytt kbld vendir imgpkg)
   local carvel_installed=0
 
-  # Download Carvel install script once
-  local carvel_script="/tmp/carvel-install.sh"
-  if wget --timeout=90 -q -O "$carvel_script" "https://carvel.dev/install.sh"; then
-    chmod +x "$carvel_script"
+  # Create temporary directory for downloads
+  local temp_bin_dir="/tmp/carvel-bin-$$"
+  mkdir -p "$temp_bin_dir"
 
-    for tool in "${CARVEL_TOOLS[@]}"; do
-      if command_exists "$tool"; then
-        print_debug "✓ $tool already installed"
-        ((carvel_installed++))
-      else
-        print_debug "Installing $tool..."
-        if timeout 120 bash "$carvel_script" "$tool" 2>&1 | grep -v "Installing linux-amd64 binaries"; then
-          if [[ -f "./$tool" ]]; then
-            sudo mv "./$tool" /usr/local/bin/ 2>/dev/null
-          fi
-          if command_exists "$tool"; then
+  for tool in "${CARVEL_TOOLS[@]}"; do
+    if command_exists "$tool"; then
+      print_debug "✓ $tool already installed"
+      ((carvel_installed++))
+    else
+      print_debug "Installing $tool..."
+      # Use K14SIO_INSTALL_BIN_DIR to control install location (user-accessible)
+      if timeout 120 wget -q -O- https://carvel.dev/install.sh 2>/dev/null | \
+         K14SIO_INSTALL_BIN_DIR="$temp_bin_dir" bash -s -- -b "$temp_bin_dir" "$tool" 2>&1 | \
+         grep -v "Installing linux-amd64 binaries" > /dev/null 2>&1; then
+        # Move binary to system location with sudo
+        if [[ -f "$temp_bin_dir/$tool" ]]; then
+          if sudo mv "$temp_bin_dir/$tool" /usr/local/bin/ 2>/dev/null; then
             print_debug "✓ $tool installed"
             ((carvel_installed++))
           else
-            print_warning "Failed to install $tool - binary not found after installation"
+            print_warning "Failed to install $tool - could not move to /usr/local/bin/"
           fi
         else
-          print_warning "Failed to install $tool - installation script failed"
+          print_warning "Failed to install $tool - binary not found after download"
         fi
+      else
+        print_warning "Failed to install $tool - installation script failed"
       fi
-    done
+    fi
+  done
 
-    rm -f "$carvel_script"
-  else
-    print_warning "Failed to download Carvel install script"
-  fi
+  # Cleanup
+  rm -rf "$temp_bin_dir"
 
   print_status "Carvel tools: $carvel_installed/${#CARVEL_TOOLS[@]}"
 

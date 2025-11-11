@@ -5,7 +5,7 @@
 # This extension installs AI CLI tools using a hybrid approach:
 # - Native installs: Ollama (binary), Fabric (git clone)
 # - mise npm backend: codex-cli, @google/gemini-cli (if Node.js available)
-# - mise go backend: plandex, hector (if Go available)
+# - mise go backend: hector (if Go available)
 # - Fallback: Direct npm/go install if mise unavailable
 
 # Source shared extension library
@@ -174,7 +174,6 @@ install() {
     # Add Go-based tools if Go is available
     if command_exists go; then
       toml_content+="# Go-based tools (requires golang extension)\n"
-      toml_content+='"go:github.com/plandex-ai/plandex" = "latest"\n'
       toml_content+='"go:github.com/kadirpekel/hector/cmd/hector" = "latest"\n'
       toml_content+="\n"
     fi
@@ -236,17 +235,6 @@ install() {
       export PATH=$PATH:$GOBIN
       mkdir -p "$GOBIN"
 
-      # Plandex
-      if command_exists plandex; then
-        print_warning "Plandex already installed"
-      else
-        if timeout 300 go install github.com/plandex-ai/plandex@latest 2>&1; then
-          command_exists plandex && print_success "Plandex installed"
-        else
-          print_warning "Failed to install Plandex"
-        fi
-      fi
-
       # Hector
       if command_exists hector; then
         print_warning "Hector already installed"
@@ -292,23 +280,24 @@ install() {
     print_status "Install cloud-tools extension for AWS CLI"
   fi
 
-  # Python-based tools (Grok CLI)
+  # Python-based tools (xAI Grok SDK)
   if command_exists pip || command_exists pip3; then
     local pip_cmd="pip"
     command_exists pip3 && pip_cmd="pip3"
 
-    print_status "Installing Grok CLI..."
-    if command_exists grok; then
-      print_warning "Grok CLI already installed"
+    print_status "Installing xAI Grok SDK..."
+    if $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+      print_warning "xAI Grok SDK already installed"
     else
-      if $pip_cmd install grok-cli 2>&1; then
-        command_exists grok && print_success "Grok CLI installed"
+      if $pip_cmd install xai-grok-sdk 2>&1; then
+        print_success "xAI Grok SDK installed"
+        print_status "Use in Python: from xai_grok_sdk import GrokClient"
       else
-        print_warning "Failed to install Grok CLI"
+        print_warning "Failed to install xAI Grok SDK"
       fi
     fi
   else
-    print_warning "pip not found - skipping Grok CLI"
+    print_warning "pip not found - skipping xAI Grok SDK"
     print_status "Install python extension for Python-based tools"
   fi
 
@@ -356,7 +345,7 @@ configure() {
 
   # Create SSH wrappers
   if command_exists create_tool_wrapper 2>/dev/null; then
-    local ai_tools=(codex gemini ollama fabric plandex hector grok)
+    local ai_tools=(codex gemini ollama fabric hector)
     for tool in "${ai_tools[@]}"; do
       if command_exists "$tool"; then
         create_tool_wrapper "$tool" "$(which $tool)"
@@ -428,12 +417,6 @@ validate() {
 
   # Go-based tools (mise or fallback)
   print_status "Checking Go-based tools..."
-  if command_exists plandex; then
-    local plandex_version=$(plandex version 2>/dev/null || echo "installed")
-    print_success "plandex: $plandex_version"
-    ((tools_found++))
-  fi
-
   if command_exists hector; then
     local hector_version=$(hector version 2>/dev/null || echo "installed")
     print_success "hector: $hector_version"
@@ -441,8 +424,11 @@ validate() {
   fi
 
   # Python-based tools
-  if command_exists grok; then
-    print_success "grok: installed"
+  print_status "Checking Python-based SDKs..."
+  local pip_cmd="pip"
+  command_exists pip3 && pip_cmd="pip3"
+  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+    print_success "xai-grok-sdk: installed"
     ((tools_found++))
   fi
 
@@ -500,7 +486,7 @@ status() {
 
   # Check installation status - at least one tool should be present
   local any_tool_found=false
-  local all_tools=(codex gemini ollama fabric plandex hector grok)
+  local all_tools=(codex gemini ollama fabric hector)
   for tool in "${all_tools[@]}"; do
     if command_exists "$tool"; then
       any_tool_found=true
@@ -570,7 +556,7 @@ status() {
   # Go-based tools
   if command_exists go; then
     echo "    Go-based:"
-    for tool in plandex hector; do
+    for tool in hector; do
       if command_exists "$tool"; then
         local version=$($tool version 2>/dev/null || echo "installed")
         echo "      ✓ $tool: $version"
@@ -584,11 +570,13 @@ status() {
 
   # Python-based tools
   echo ""
-  echo "  Python-based tools:"
-  if command_exists grok; then
-    echo "    ✓ grok: installed"
+  echo "  Python-based SDKs:"
+  local pip_cmd="pip"
+  command_exists pip3 && pip_cmd="pip3"
+  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+    echo "    ✓ xai-grok-sdk: installed"
   else
-    echo "    ✗ grok: not installed (requires pip)"
+    echo "    ✗ xai-grok-sdk: not installed (requires pip)"
   fi
 
   # Platform CLIs
@@ -614,7 +602,7 @@ status() {
   echo "  • Gemini: Requires GOOGLE_GEMINI_API_KEY"
   echo "  • GitHub Copilot: Requires GitHub subscription"
   echo "  • AWS Q: Requires AWS credentials"
-  echo "  • Grok: Requires GROK_API_KEY"
+  echo "  • xAI Grok SDK: Requires XAI_API_KEY"
 
   # Dependencies
   echo ""
@@ -753,7 +741,7 @@ upgrade() {
 remove() {
   print_warning "Uninstalling AI CLI tools (hybrid approach)..."
 
-  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "plandex"
+  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "hector"
 
   if ! prompt_confirmation "Continue with AI tools removal?"; then
     print_status "Removal cancelled"
@@ -806,7 +794,7 @@ remove() {
 
   # Remove Go-based tools (if installed via fallback)
   if [[ -d "$HOME/go/bin" ]]; then
-    for tool in plandex hector; do
+    for tool in hector; do
       [[ -f "$HOME/go/bin/$tool" ]] && rm -f "$HOME/go/bin/$tool"
     done
   fi
@@ -815,7 +803,7 @@ remove() {
   if command_exists pip || command_exists pip3; then
     local pip_cmd="pip"
     command_exists pip3 && pip_cmd="pip3"
-    $pip_cmd uninstall -y grok-cli 2>/dev/null
+    $pip_cmd uninstall -y xai-grok-sdk 2>/dev/null
   fi
 
   # Remove aliases

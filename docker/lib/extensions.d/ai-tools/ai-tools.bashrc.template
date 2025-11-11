@@ -23,13 +23,6 @@ alias fbex="fabric --pattern explain"
 alias fbsum="fabric --pattern summarize"
 alias fbimp="fabric --pattern improve_code"
 
-# Plandex
-alias px="plandex"
-alias pxi="plandex init"
-alias pxp="plandex plan"
-alias pxe="plandex execute"
-alias pxs="plandex status"
-
 # GitHub Copilot
 alias ghcp="gh copilot suggest"
 alias ghce="gh copilot explain"

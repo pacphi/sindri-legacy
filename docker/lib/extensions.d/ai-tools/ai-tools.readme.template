@@ -14,15 +14,6 @@
   codex run "create a REST API"
   ```
 
-#### Plandex
-- **Command**: `plandex`
-- **Prerequisites**: Requires Go
-- **Usage**:
-  ```bash
-  plandex init
-  plandex plan "add user authentication"
-  plandex execute
-  ```
 
 #### Hector
 - **Command**: `hector`
@@ -71,11 +62,16 @@
   ollama list
   ```
 
-#### Grok CLI
-- **Command**: `grok`
+#### xAI Grok SDK
+- **Package**: `xai-grok-sdk`
 - **Prerequisites**: Python/pip
-- **API Key**: Set `GROK_API_KEY`
-- **Usage**: `grok chat`
+- **API Key**: Set `XAI_API_KEY`
+- **Usage**:
+  ```python
+  from xai_grok_sdk import GrokClient
+  client = GrokClient(api_key="your_key")
+  response = client.chat("Hello")
+  ```
 
 ### Framework Tools
 
@@ -94,7 +90,7 @@
 - **Google Gemini**: `GOOGLE_GEMINI_API_KEY` - https://makersuite.google.com/app/apikey
 - **GitHub Copilot**: GitHub account with subscription
 - **AWS Q**: AWS credentials
-- **Grok**: `GROK_API_KEY` - xAI account
+- **xAI Grok**: `XAI_API_KEY` - xAI account
 - **Ollama**: No API key (local)
 
 ### Setting API Keys
@@ -102,11 +98,11 @@
 ```bash
 # Via Fly.io secrets (recommended)
 flyctl secrets set GOOGLE_GEMINI_API_KEY=key -a <app>
-flyctl secrets set GROK_API_KEY=key -a <app>
+flyctl secrets set XAI_API_KEY=key -a <app>
 
 # Or in ~/.bashrc
 export GOOGLE_GEMINI_API_KEY=your_key
-export GROK_API_KEY=your_key
+export XAI_API_KEY=your_key
 ```
 
 ## Directory Structure
@@ -135,8 +131,8 @@ gemini chat "help me debug this"
 
 **Development Tasks:**
 ```bash
-plandex init
-plandex plan "add JWT authentication"
+codex run "add JWT authentication"
+hector chat assistant
 ```
 
 ## Best Practices

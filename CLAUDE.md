@@ -793,11 +793,6 @@ codex suggest "optimize this function"
 codex edit file.js
 codex run "create REST API"
 
-# Plandex - Multi-step development tasks
-plandex init                         # Initialize in project
-plandex plan "add user auth"         # Plan task
-plandex execute                      # Execute plan
-
 # Hector - Declarative AI agent platform
 hector serve --config agent.yaml     # Start agent server
 hector chat assistant                # Interactive chat
@@ -841,17 +836,17 @@ fabric --list                               # List patterns
 ```bash
 # Via Fly.io secrets (recommended)
 flyctl secrets set GOOGLE_GEMINI_API_KEY=... -a <app-name>
-flyctl secrets set GROK_API_KEY=... -a <app-name>
+flyctl secrets set XAI_API_KEY=... -a <app-name>
 
 # Or in shell (temporary)
 export GOOGLE_GEMINI_API_KEY=your_key
-export GROK_API_KEY=your_key
+export XAI_API_KEY=your_key
 ```
 
 **Get API keys:**
 
 - Gemini: <https://makersuite.google.com/app/apikey>
-- Grok: xAI account required
+- xAI Grok: xAI account required
 
 **Enable the extension:**
 

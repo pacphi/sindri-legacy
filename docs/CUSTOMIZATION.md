@@ -89,7 +89,7 @@ While not protected, these are highly recommended:
 - **docker** - Docker Engine with compose, dive, ctop
 - **infra-tools** - Terraform, Ansible, kubectl, Helm
 - **cloud-tools** - AWS, Azure, GCP, Oracle, DigitalOcean, Alibaba, IBM CLIs
-- **ai-tools** - AI coding assistants (Gemini, Grok, Goalie, Plandex, Hector, Ollama, Fabric)
+- **ai-tools** - AI coding assistants (Gemini, xAI Grok SDK, Goalie, Hector, Ollama, Fabric, Codex)
 
 #### Development Utilities
 
@@ -1179,18 +1179,6 @@ gh copilot suggest "git command to undo"
 # Uses AWS credentials (see AWS CLI section above)
 aws q chat
 aws q explain "lambda function"
-```
-
-**Plandex:**
-
-```bash
-# Supports multiple providers via API keys
-flyctl secrets set OPENAI_API_KEY=sk-... -a <app-name>
-# Or ANTHROPIC_API_KEY, etc.
-
-# Usage
-plandex init
-plandex plan "add user authentication"
 ```
 
 **Hector:**
