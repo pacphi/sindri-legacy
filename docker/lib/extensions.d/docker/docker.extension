@@ -79,14 +79,6 @@ prerequisites() {
 install() {
   print_status "Installing Docker development tools..."
 
-  # PRE-FLIGHT: Test basic APT functionality
-  print_status "Testing package manager connectivity..."
-  if ! timeout 30s apt-cache policy > /dev/null 2>&1; then
-    print_error "APT package manager not responding"
-    print_error "Network connectivity or DNS resolution may be failing"
-    return 1
-  fi
-
   # Install Docker Engine if not already installed
   if command_exists docker; then
     print_warning "Docker Engine already installed: $(docker --version)"

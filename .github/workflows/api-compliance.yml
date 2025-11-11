@@ -45,7 +45,14 @@ jobs:
       max-parallel: 2
       matrix:
         # Test representative sample of extensions for API compliance
-        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring"]
+        # Coverage by install method:
+        # - mise: nodejs, python, rust, golang (language runtimes)
+        # - native: tmux-workspace (apt-based utility)
+        # - apt: monitoring (apt packages with dependencies)
+        # - mixed: docker (apt + binary downloads, complex multi-step)
+        # - npm: openskills (npm global install pattern)
+        # - git: agent-manager (GitHub release binary pattern)
+        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring", "docker", "openskills", "agent-manager"]
 
     steps:
       - name: Checkout repository
@@ -89,26 +96,38 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension="${{ matrix.extension }}"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute install with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
-            # Add dependencies if needed
+            # Add extension dependencies to manifest
+            # Note: mise is a core feature, already available
             case \"$extension\" in
-              nodejs|python|rust|golang)
-                echo \"mise-config\" > \$manifest
+              nodejs|python|rust|golang|tmux-workspace|docker|agent-manager)
+                # These extensions have no dependencies (mise is core)
                 ;;
               monitoring)
-                echo \"mise-config\" > \$manifest
-                echo \"nodejs\" >> \$manifest
+                # monitoring depends on nodejs and python extensions
+                echo \"nodejs\" > \$manifest
                 echo \"python\" >> \$manifest
+                ;;
+              openskills)
+                # openskills depends on nodejs extension
+                echo \"nodejs\" > \$manifest
                 ;;
             esac
 
+            # Add the test extension itself
             echo \"$extension\" >> \$manifest
+
+            # Install all extensions from manifest
             bash extension-manager.sh install-all
           '"
 
@@ -117,34 +136,40 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension="${{ matrix.extension }}"
 
           echo "Testing API compliance for $extension..."
 
-          # Create lib directory first
-          flyctl ssh console --app $app_name --user developer --command "mkdir -p /tmp/lib" || true
+          # Create lib directory with retry
+          ssh_mkdir_retry "$app_name" /tmp/lib
 
-          # Upload files and fix permissions for developer user
-          flyctl ssh sftp put .github/scripts/extension-tests/test-api-compliance.sh /tmp/test-api-compliance.sh --app $app_name
-          flyctl ssh sftp put .github/scripts/extension-tests/lib/test-helpers.sh /tmp/lib/test-helpers.sh --app $app_name
-          flyctl ssh sftp put .github/scripts/extension-tests/lib/assertions.sh /tmp/lib/assertions.sh --app $app_name
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/test-api-compliance.sh /tmp/lib/test-helpers.sh /tmp/lib/assertions.sh"
+          # Upload multiple files with retry
+          sftp_upload_multiple "$app_name" 666 \
+            .github/scripts/extension-tests/test-api-compliance.sh:/tmp/test-api-compliance.sh \
+            .github/scripts/extension-tests/lib/test-helpers.sh:/tmp/lib/test-helpers.sh \
+            .github/scripts/extension-tests/lib/assertions.sh:/tmp/lib/assertions.sh
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
-            bash /tmp/test-api-compliance.sh $extension
-          '"
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/test-api-compliance.sh $extension'"
 
       - name: Test uninstall() function
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension="${{ matrix.extension }}"
 
           echo "Testing uninstall() function for $extension..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running: extension-manager uninstall $extension\"
@@ -167,12 +192,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extension="${{ matrix.extension }}"
 
           echo "Testing deactivate() function for $extension..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 

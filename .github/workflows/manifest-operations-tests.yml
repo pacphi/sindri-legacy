@@ -83,17 +83,20 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Copying test fixtures to VM via SFTP..."
-          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-reorder-test.conf /tmp/manifest-reorder.conf --app $app_name
-          flyctl ssh sftp put .github/workflows/test-fixtures/manifest-with-comments.conf /tmp/manifest-comments.conf --app $app_name
-
-          echo "Setting permissions for developer user..."
-          flyctl ssh console --app $app_name --command "chmod 666 /tmp/manifest-reorder.conf /tmp/manifest-comments.conf"
+          # Upload multiple fixtures with retry
+          sftp_upload_multiple "$app_name" 666 \
+            .github/workflows/test-fixtures/manifest-reorder-test.conf:/tmp/manifest-reorder.conf \
+            .github/workflows/test-fixtures/manifest-with-comments.conf:/tmp/manifest-comments.conf
 
           echo "Verifying file access as developer user..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -c '
+          # Verify with retry
+          ssh_command_retry "$app_name" "/bin/bash -c '
             ls -lh /tmp/manifest-reorder.conf /tmp/manifest-comments.conf &&
             wc -l /tmp/manifest-reorder.conf /tmp/manifest-comments.conf &&
             echo \"✓ Fixtures verified and accessible\"
@@ -103,11 +106,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing extension reorder functionality..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 
@@ -151,11 +158,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing that comments are preserved in manifest operations..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest=\"extensions.d/active-extensions.conf\"
 

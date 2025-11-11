@@ -85,30 +85,22 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Adding mise-stack extensions to manifest..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest from CI template (already has protected extensions)
+            # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
               cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Verify protected extensions are present
-            echo \"Verifying protected extensions from CI config...\"
-            for ext in workspace-structure mise-config ssh-environment; do
-              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
-                echo \"✅ \$ext present\"
-              else
-                echo \"❌ \$ext missing from CI config\"
-                exit 1
-              fi
-            done
-
-            # Add additional mise-stack extensions (skip protected ones already in CI conf)
+            # Add mise-stack extensions
             echo \"\"
             echo \"Adding additional mise-stack extensions...\"
             for ext in nodejs python rust golang; do
@@ -129,10 +121,13 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Installing all mise-stack extensions..."
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running install-all for mise-stack...\"
@@ -148,11 +143,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Testing mise-stack cross-extension functionality..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             # Source SSH environment for non-interactive sessions
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh

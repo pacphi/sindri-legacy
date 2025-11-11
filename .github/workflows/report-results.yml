@@ -24,7 +24,7 @@ on:
         type: string
       syntax_validation_result:
         description: "Result of extension-syntax-validation job"
-        required: true
+        required: false
         type: string
     secrets:
       FLYIO_AUTH_TOKEN:

@@ -9,13 +9,6 @@ fi
 EXTENSIONS_COMMON_SH_LOADED="true"
 
 # ============================================================================
-# CONSTANTS
-# ============================================================================
-
-# Protected extensions that cannot be removed or reordered
-export PROTECTED_EXTENSIONS="workspace-structure mise-config ssh-environment"
-
-# ============================================================================
 # EXTENSION INITIALIZATION
 # ============================================================================
 
@@ -135,7 +128,7 @@ check_mise_prerequisite() {
     fi
 
     print_error "mise is required but not installed"
-    print_status "Install mise-config extension first: extension-manager install mise-config"
+    print_status "mise should be pre-installed in the base image. Check Docker image build."
     return 1
 }
 
@@ -232,6 +225,37 @@ check_dns_resolution() {
         print_success "DNS resolution verified ($successful/${#test_domains[@]} resolved)"
         return 0
     fi
+}
+
+# Check domains required by extension (via EXT_REQUIRED_DOMAINS metadata)
+# Usage: check_required_domains
+# Returns: 0 if all domains resolve, 1 if any fail
+check_required_domains() {
+    local domains="${EXT_REQUIRED_DOMAINS:-}"
+
+    if [[ -z "$domains" ]]; then
+        print_debug "No required domains specified"
+        return 0
+    fi
+
+    print_status "Checking DNS for required domains..."
+    local failed_domains=()
+
+    for domain in $domains; do
+        print_debug "Testing DNS: $domain"
+        if ! timeout 5s nslookup "$domain" >/dev/null 2>&1 && \
+           ! timeout 5s host "$domain" >/dev/null 2>&1; then
+            failed_domains+=("$domain")
+        fi
+    done
+
+    if [[ ${#failed_domains[@]} -gt 0 ]]; then
+        print_error "DNS resolution failed for: ${failed_domains[*]}"
+        return 1
+    fi
+
+    print_success "All required domains accessible"
+    return 0
 }
 
 # ============================================================================

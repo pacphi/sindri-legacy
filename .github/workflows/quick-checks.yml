@@ -87,8 +87,20 @@ jobs:
   # Fast Validation (Always Run Unless Docs-Only)
   # ============================================================================
 
-  fast-validation:
-    name: Fast Validation
+  shellcheck:
+    name: Shellcheck
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_only != 'true'
+    uses: ./.github/workflows/shellcheck-validation.yml
+
+  yaml-validation:
+    name: YAML Validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_only != 'true'
+    uses: ./.github/workflows/yaml-validation.yml
+
+  extension-manager:
+    name: Extension Manager
     needs: detect-changes
     if: needs.detect-changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
@@ -96,80 +108,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Install validation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Shellcheck validation
-        run: |
-          echo "Running shellcheck on shell scripts..."
-
-          # Find all shell scripts
-          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v '/.git/')
-
-          failed_scripts=()
-          for script in $scripts; do
-            # Skip non-shell template files
-            case "$script" in
-              */active-extensions.conf.example|*/active-extensions.ci.conf)
-                echo "Skipping template: $script"
-                continue
-                ;;
-            esac
-
-            echo "Checking $script..."
-            if ! shellcheck "$script"; then
-              failed_scripts+=("$script")
-            fi
-          done
-
-          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
-            echo "❌ Shellcheck failed for:"
-            printf '%s\n' "${failed_scripts[@]}"
-            exit 1
-          fi
-
-          echo "✅ All shell scripts pass shellcheck"
-
-      - name: YAML validation
-        run: |
-          echo "Validating YAML files..."
-
-          yaml_files=$(find .github -name "*.yml" -o -name "*.yaml" | grep -v '/.git/' | grep -v node_modules)
-
-          failed_files=()
-          for file in $yaml_files; do
-            echo "Validating $file..."
-            if ! yq eval '.' "$file" > /dev/null 2>&1; then
-              failed_files+=("$file")
-            fi
-          done
-
-          if [[ ${#failed_files[@]} -gt 0 ]]; then
-            echo "❌ Invalid YAML files:"
-            printf '%s\n' "${failed_files[@]}"
-            exit 1
-          fi
-
-          echo "✅ All YAML files are valid"
-
       - name: Extension manager validation
         run: |
           echo "Validating extension manager..."
 
-          # Check that extension manager script exists and is executable
           if [[ ! -x "docker/lib/extension-manager.sh" ]]; then
             echo "❌ Extension manager script not found or not executable"
             exit 1
           fi
 
-          # Validate extension file structure
           for ext in docker/lib/extensions.d/*.extension docker/lib/extensions.d/*/*.extension; do
             if [[ -f "$ext" ]]; then
-              # Check that extension implements required functions
               if ! grep -q "extension_init" "$ext"; then
                 echo "⚠️  Missing extension_init in $ext"
               fi
@@ -210,7 +159,7 @@ jobs:
   summary:
     name: Quick Checks Summary
     if: always()
-    needs: [detect-changes, fast-validation, test-changed-extensions]
+    needs: [detect-changes, shellcheck, yaml-validation, extension-manager, test-changed-extensions]
     runs-on: ubuntu-latest
     steps:
       - name: Generate summary
@@ -225,7 +174,9 @@ jobs:
           else
             echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Fast Validation**: ${{ needs.fast-validation.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Shellcheck**: ${{ needs.shellcheck.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **YAML Validation**: ${{ needs.yaml-validation.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Extension Manager**: ${{ needs.extension-manager.result }}" >> $GITHUB_STEP_SUMMARY
 
             if [ "${{ needs.detect-changes.outputs.extensions_changed }}" = "true" ]; then
               echo "- **Changed Extensions**: ${{ needs.test-changed-extensions.result }}" >> $GITHUB_STEP_SUMMARY

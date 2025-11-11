@@ -237,7 +237,7 @@ jobs:
 
       - name: Upload backup artifact
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backup-${{ github.event.inputs.app_name }}-${{ github.run_id }}
           path: backups/

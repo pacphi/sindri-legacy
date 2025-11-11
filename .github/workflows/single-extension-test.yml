@@ -41,7 +41,6 @@ on:
         type: choice
         options:
           # Claude AI Extensions
-          - claude
           - claude-marketplace
           - openskills
           # mise-powered Languages
@@ -146,6 +145,11 @@ jobs:
 
       - name: Setup test environment
         uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: ${{ inputs.extension_name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
 
       - name: Deploy test VM
         id: deploy
@@ -159,6 +163,9 @@ jobs:
       - name: Install extension dependencies
         if: steps.deploy.outputs.app-name != ''
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           echo "Checking for extension dependencies..."
 
           # Source the extension file to get dependencies
@@ -170,7 +177,7 @@ jobs:
             if [[ -n "$DEPS" ]]; then
               echo "Installing dependencies: $DEPS"
               for dep in $DEPS; do
-                flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C "extension-manager install $dep"
+                ssh_command_retry ${{ steps.deploy.outputs.app-name }} "extension-manager install $dep"
               done
             fi
           fi
@@ -180,12 +187,12 @@ jobs:
       - name: Test extension installation
         if: steps.deploy.outputs.app-name != ''
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           echo "Testing installation of: ${{ inputs.extension_name }}"
 
-          flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C \
-            "extension-manager install ${{ inputs.extension_name }}"
-
-          if [[ $? -eq 0 ]]; then
+          if ssh_command_retry ${{ steps.deploy.outputs.app-name }} "extension-manager install ${{ inputs.extension_name }}"; then
             echo "✅ Extension installed successfully"
           else
             echo "❌ Extension installation failed"
@@ -195,12 +202,12 @@ jobs:
       - name: Validate extension
         if: steps.deploy.outputs.app-name != ''
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           echo "Validating extension: ${{ inputs.extension_name }}"
 
-          flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C \
-            "extension-manager validate ${{ inputs.extension_name }}"
-
-          if [[ $? -eq 0 ]]; then
+          if ssh_command_retry ${{ steps.deploy.outputs.app-name }} "extension-manager validate ${{ inputs.extension_name }}"; then
             echo "✅ Extension validation passed"
           else
             echo "❌ Extension validation failed"
@@ -210,6 +217,9 @@ jobs:
       - name: Test API compliance
         if: steps.deploy.outputs.app-name != ''
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           echo "Testing Extension API compliance..."
 
           # Test required functions exist
@@ -217,10 +227,7 @@ jobs:
 
           for func in "${REQUIRED_FUNCTIONS[@]}"; do
             echo "Checking function: ${func}"
-            flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C \
-              "bash -c 'source docker/lib/extension-manager.sh && type ${func}_${{ inputs.extension_name }} > /dev/null 2>&1'"
-
-            if [[ $? -eq 0 ]]; then
+            if ssh_command_retry ${{ steps.deploy.outputs.app-name }} "bash -c 'source docker/lib/extension-manager.sh && type ${func}_${{ inputs.extension_name }} > /dev/null 2>&1'"; then
               echo "✅ Function ${func} exists"
             else
               echo "❌ Missing required function: ${func}"
@@ -233,13 +240,13 @@ jobs:
       - name: Test idempotency
         if: steps.deploy.outputs.app-name != ''
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           echo "Testing idempotent reinstallation..."
 
           # Install extension again
-          flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C \
-            "extension-manager install ${{ inputs.extension_name }}"
-
-          if [[ $? -eq 0 ]]; then
+          if ssh_command_retry ${{ steps.deploy.outputs.app-name }} "extension-manager install ${{ inputs.extension_name }}"; then
             echo "✅ Idempotent reinstallation successful"
           else
             echo "❌ Idempotent reinstallation failed"
@@ -247,10 +254,7 @@ jobs:
           fi
 
           # Validate again
-          flyctl ssh console -a ${{ steps.deploy.outputs.app-name }} -C \
-            "extension-manager validate ${{ inputs.extension_name }}"
-
-          if [[ $? -eq 0 ]]; then
+          if ssh_command_retry ${{ steps.deploy.outputs.app-name }} "extension-manager validate ${{ inputs.extension_name }}"; then
             echo "✅ Post-reinstallation validation passed"
           else
             echo "❌ Post-reinstallation validation failed"

@@ -9,7 +9,6 @@ extension-tests/
 ├── lib/
 │   ├── test-helpers.sh    # Shared utility functions
 │   └── assertions.sh      # Test assertion library
-├── verify-manifest.sh     # Verify manifest structure
 ├── add-extension.sh   # Install extension with dependencies
 ├── verify-commands.sh     # Verify commands are available
 ├── test-key-functionality.sh  # Test primary tool functionality
@@ -30,7 +29,7 @@ Shared utility functions for test scripts.
 - **Commands**: `command_exists()`, `check_command_with_version()`
 - **Utilities**: `wait_for_condition()`, `retry_command()`
 - **Extension Manager**: `get_extension_manager_path()`, `get_manifest_path()`, `run_extension_manager()`
-- **Validation**: `is_extension_in_manifest()`, `is_protected_extension()`, `verify_extension_installed()`
+- **Validation**: `is_extension_in_manifest()`, `verify_extension_installed()`
 - **Debugging**: `dump_environment()`, `dump_manifest()`
 
 **Usage:**
@@ -89,38 +88,6 @@ print_test_summary  # Shows: Tests run: 3, Passed: 3, Failed: 0
 ---
 
 ## Test Scripts
-
-### verify-manifest.sh
-
-Verifies CI extension manifest structure.
-
-**What it does:**
-
-1. Checks manifest file exists
-2. Verifies protected extensions are present
-3. Adds missing protected extensions if needed
-
-**Usage (on VM):**
-
-```bash
-bash /tmp/verify-manifest.sh
-```
-
-**From GitHub Actions:**
-
-```yaml
-- name: Verify CI extension manifest
-  run: |
-    flyctl ssh sftp shell --app $app_name <<'SFTP_EOF'
-      put .github/scripts/extension-tests/verify-manifest.sh /tmp/verify-manifest.sh
-      quit
-    SFTP_EOF
-
-    flyctl ssh console --app $app_name --user developer \
-      -C "/bin/bash -lc 'bash /tmp/verify-manifest.sh'"
-```
-
----
 
 ### add-extension.sh
 

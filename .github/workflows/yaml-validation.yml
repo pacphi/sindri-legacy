@@ -1,0 +1,42 @@
+name: YAML Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  yaml-validation:
+    name: YAML Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate YAML files
+        run: |
+          echo "Validating YAML files..."
+
+          yaml_files=$(find .github -name "*.yml" -o -name "*.yaml" | grep -v '/.git/' | grep -v node_modules)
+
+          failed_files=()
+          for file in $yaml_files; do
+            echo "Validating $file..."
+            if ! yq eval '.' "$file" > /dev/null 2>&1; then
+              failed_files+=("$file")
+            fi
+          done
+
+          if [[ ${#failed_files[@]} -gt 0 ]]; then
+            echo "❌ Invalid YAML files:"
+            printf '%s\n' "${failed_files[@]}"
+            exit 1
+          fi
+
+          echo "✅ All YAML files are valid"

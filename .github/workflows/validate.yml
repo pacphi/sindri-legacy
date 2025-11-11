@@ -1,15 +1,22 @@
 name: Project Validation
 
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  shellcheck:
+    name: Shellcheck Validation
+    uses: ./.github/workflows/shellcheck-validation.yml
+
+  yaml-validation:
+    name: YAML Validation
+    uses: ./.github/workflows/yaml-validation.yml
+
   setup-validation:
     name: Validate Setup Files
     runs-on: ubuntu-latest
@@ -111,42 +118,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Lint shell scripts
-        run: |
-          echo "Running shellcheck on all shell scripts..."
-
-          # Find all shell scripts (.sh and .extension files)
-          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v '/.git/')
-
-          failed_scripts=()
-          for script in $scripts; do
-            # Skip non-shell template files
-            case "$script" in
-              */active-extensions.conf.example)
-                echo "Skipping non-shell template: $script"
-                continue
-                ;;
-            esac
-
-            echo "Checking $script..."
-            if ! shellcheck "$script"; then
-              failed_scripts+=("$script")
-            fi
-          done
-
-          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
-            echo "❌ Shellcheck failed for:"
-            printf '%s\n' "${failed_scripts[@]}"
-            exit 1
-          fi
-
-          echo "✅ All shell scripts pass shellcheck"
 
       - name: Validate TOML syntax
         run: |
@@ -257,9 +228,14 @@ jobs:
             "docs/CONTRIBUTING.md"
             "docs/COST_MANAGEMENT.md"
             "docs/CUSTOMIZATION.md"
+            "docs/EXTENSION_TESTING.md"
+            "docs/EXTENSION_VERSIONING.md"
+            "docs/EXTENSIONS.md"
             "docs/IDE_SETUP.md"
             "docs/INTELLIJ.md"
+            "docs/PREBUILT_IMAGES_SETUP"
             "docs/QUICKSTART.md"
+            "docs/REGISTRY_RESILIENCE.md"
             "docs/REFERENCE.md"
             "docs/SECURITY.md"
             "docs/SETUP.md"
@@ -282,81 +258,6 @@ jobs:
             echo "✅ All referenced documentation files exist"
           fi
 
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: "trivy-results.sarif"
-
-      - name: Check for secrets with GitLeaks
-        run: |
-          echo "Scanning for potential secrets with GitLeaks..."
-
-          # Install GitLeaks
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
-          tar xzf gitleaks_8.28.0_linux_x64.tar.gz
-          sudo mv gitleaks /usr/local/bin/
-
-          # Create GitLeaks configuration to reduce false positives
-          cat > .gitleaks.toml << 'EOF'
-          [extend]
-          # Extend default ruleset
-          useDefault = true
-
-          [[rules]]
-          description = "Ignore test and example secrets"
-          id = "test-secrets"
-          regex = '''(?i)(test|example|sample|placeholder|dummy|fake|mock)'''
-          path = '''(test|spec|example|sample|docs?|readme)'''
-
-          [allowlist]
-          description = "Ignore false positives"
-          paths = [
-            '''docs/.*''',
-            '''README\.md''',
-            '''.*\.md''',
-            '''.*\.example$''',
-            '''.*\.template$''',
-            '''\.cache/.*'''
-          ]
-          regexes = [
-            '''ssh-rsa''',
-            '''ssh-ed25519''',
-            '''(?i)(test|example|sample|placeholder|dummy|fake|mock)'''
-          ]
-          EOF
-
-          # Scan for secrets
-          if gitleaks detect --config .gitleaks.toml --verbose --no-git --source . --report-format json --report-path gitleaks-report.json; then
-            echo "✅ No secrets detected by GitLeaks"
-          else
-            echo "❌ Potential secrets found in repository"
-            if [ -f gitleaks-report.json ]; then
-              echo "GitLeaks findings:"
-              cat gitleaks-report.json
-            fi
-            exit 1
-          fi
-
   configuration-validation:
     name: Validate Configuration Files
     runs-on: ubuntu-latest
@@ -366,31 +267,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Validate YAML files
+      - name: Install yq
         run: |
-          echo "Validating YAML configuration files..."
-
-          # Install yq for YAML validation
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
-
-          yaml_files=$(find . -name "*.yml" -o -name "*.yaml" | grep -v '/.git/' | grep -v node_modules)
-
-          failed_files=()
-          for file in $yaml_files; do
-            echo "Validating $file..."
-            if ! yq eval '.' "$file" > /dev/null 2>&1; then
-              failed_files+=("$file")
-            fi
-          done
-
-          if [[ ${#failed_files[@]} -gt 0 ]]; then
-            echo "❌ Invalid YAML files:"
-            printf '%s\n' "${failed_files[@]}"
-            exit 1
-          fi
-
-          echo "✅ All YAML files are valid"
 
       - name: Check agent configuration
         run: |

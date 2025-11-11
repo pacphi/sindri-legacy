@@ -24,6 +24,7 @@ EXT_DESCRIPTION="PHP 8.4.14 with Composer, Symfony CLI, and dev tools"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="apt"
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_REQUIRED_DOMAINS="composer.github.io getcomposer.org ppa.launchpadcontent.net get.symfony.com"
 
 # Initialize extension environment
 extension_init
@@ -59,14 +60,12 @@ prerequisites() {
   # Check disk space (PHP needs ~800MB)
   check_disk_space 1000
 
-  # Check network connectivity (non-blocking warning)
-  if command_exists check_network_connectivity; then
-    check_network_connectivity || print_warning "Continuing despite network issues..."
-  fi
-
-  # Check DNS resolution (non-blocking warning)
-  if command_exists check_dns_resolution; then
-    check_dns_resolution || print_warning "Continuing despite DNS issues..."
+  # Check extension-specific DNS requirements (non-blocking warning)
+  if command_exists check_required_domains; then
+    check_required_domains || {
+      print_warning "DNS issues detected for required domains"
+      print_warning "Installation may fail if domains are unreachable"
+    }
   fi
 
   print_success "All prerequisites met"
@@ -89,13 +88,6 @@ install() {
     fi
     # Wait for repository to be available
     sleep 3
-  fi
-
-  # PRE-FLIGHT: Verify repository accessibility
-  print_status "Verifying PHP repository accessibility..."
-  if ! timeout 30s apt-cache search php8.4 > /dev/null 2>&1; then
-    print_warning "PHP 8.4 packages not found in repositories"
-    print_warning "Repository may not be accessible from this network"
   fi
 
   # Update package lists with retry
@@ -147,17 +139,29 @@ install() {
   else
     print_status "Installing Composer..."
 
+    # Use /tmp for downloads to avoid permission issues
+    local COMPOSER_TMP="/tmp/composer-install-$$"
+    mkdir -p "$COMPOSER_TMP"
+    pushd "$COMPOSER_TMP" > /dev/null || {
+      print_error "Failed to create temporary directory for Composer installation"
+      return 1
+    }
+
     # Download signature with timeout
     local EXPECTED_CHECKSUM
     EXPECTED_CHECKSUM=$(timeout 30 php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");' 2>/dev/null)
 
     if [[ -z "$EXPECTED_CHECKSUM" ]]; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Failed to fetch Composer installer signature (timeout or network error)"
       return 1
     fi
 
     # Download installer with timeout using curl (more reliable than php copy)
     if ! curl --max-time 60 -fsSL https://getcomposer.org/installer -o composer-setup.php; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Failed to download Composer installer"
       return 1
     fi
@@ -165,16 +169,31 @@ install() {
     local ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
 
     if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+      popd > /dev/null || return
+      rm -rf "$COMPOSER_TMP"
       print_error "Composer installer checksum verification failed"
-      rm -f composer-setup.php
       return 1
     else
-      if sudo php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer; then
-        rm -f composer-setup.php
-        print_success "Composer installed: $(composer --version 2>&1 | head -n1)"
+      # Follow official Composer installation: https://getcomposer.org/doc/00-intro.md#globally
+      # Step 1: Run installer to create composer.phar
+      if php composer-setup.php; then
+        # Step 2: Move to global location (official recommended approach)
+        if sudo mv composer.phar /usr/local/bin/composer; then
+          # Ensure executable permissions
+          sudo chmod +x /usr/local/bin/composer
+          popd > /dev/null || return
+          rm -rf "$COMPOSER_TMP"
+          print_success "Composer installed: $(composer --version 2>&1 | head -n1)"
+        else
+          popd > /dev/null || return
+          rm -rf "$COMPOSER_TMP"
+          print_error "Failed to move Composer to /usr/local/bin"
+          return 1
+        fi
       else
-        rm -f composer-setup.php
-        print_error "Failed to install Composer"
+        popd > /dev/null || return
+        rm -rf "$COMPOSER_TMP"
+        print_error "Failed to run Composer installer"
         return 1
       fi
     fi
@@ -274,13 +293,19 @@ install() {
 configure() {
   print_status "Configuring PHP environment..."
 
-  # Add Composer global bin to PATH
+  # Add Composer global bin to PATH for interactive sessions
   if ! grep -q ".composer/vendor/bin" "$HOME/.bashrc" 2>/dev/null; then
     echo '' >> "$HOME/.bashrc"
     echo '# Composer global bin' >> "$HOME/.bashrc"
     echo 'export PATH="$HOME/.composer/vendor/bin:$PATH"' >> "$HOME/.bashrc"
     echo 'export PATH="$HOME/.config/composer/vendor/bin:$PATH"' >> "$HOME/.bashrc"
-    print_success "Added Composer bin to PATH"
+    print_success "Added Composer bin to PATH (.bashrc)"
+  fi
+
+  # Add Composer to PATH for non-interactive SSH sessions (CI/CD)
+  if ! grep -q "# PHP/Composer" /etc/profile.d/00-ssh-environment.sh 2>/dev/null; then
+    sudo sh -c "cat \"$(dirname "${BASH_SOURCE[0]}")/php.ssh-environment.template\" >> /etc/profile.d/00-ssh-environment.sh"
+    print_success "Added Composer bin to PATH (SSH environment)"
   fi
 
   # Configure PHP for development
@@ -385,6 +410,18 @@ status() {
   # Check installation status
   if ! command_exists php; then
     echo "Status: ✗ NOT INSTALLED"
+    return 1
+  fi
+
+  # Composer is a critical component - check for it too
+  if ! command_exists composer; then
+    echo "Status: ⚠ PARTIALLY INSTALLED (missing Composer)"
+    echo ""
+    print_status "PHP is installed but Composer is missing"
+    echo "  ✓ PHP $(php -v | head -n1 | awk '{print $2}')"
+    echo "  ✗ Composer not found"
+    echo ""
+    print_status "Run 'extension-manager install php' to complete installation"
     return 1
   fi
 

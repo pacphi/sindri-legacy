@@ -47,35 +47,30 @@ jobs:
       matrix:
         combination:
           - {
-              name: "core-stack",
-              extensions: "workspace-structure,mise-config,ssh-environment",
-              description: "Protected Core Extensions",
-            }
-          - {
               name: "mise-stack",
-              extensions: "workspace-structure,mise-config,nodejs,python,rust,golang,ssh-environment",
-              description: "mise-Powered Languages",
+              extensions: "nodejs,python,rust,golang",
+              description: "mise-Powered Languages (mise pre-installed in base image)",
             }
           - {
               name: "full-node",
-              extensions: "workspace-structure,nodejs,nodejs-devtools,claude",
+              extensions: "nodejs,nodejs-devtools",
               description: "Complete Node.js Development Stack",
             }
           - {
               name: "fullstack",
-              extensions: "workspace-structure,nodejs,python,docker,cloud-tools",
-              description: "Python + Docker + Cloud",
+              extensions: "nodejs,python,docker,cloud-tools",
+              description: "Node.js + Python + Docker + Cloud",
             }
-          - { name: "systems", extensions: "workspace-structure,rust,golang,docker", description: "Rust + Go + Docker" }
+          - { name: "systems", extensions: "rust,golang,docker", description: "Rust + Go + Docker" }
           - {
               name: "enterprise",
-              extensions: "workspace-structure,nodejs,jvm,docker,infra-tools",
+              extensions: "nodejs,jvm,docker,infra-tools",
               description: "JVM + Docker + Infrastructure",
             }
           - {
               name: "ai-dev",
-              extensions: "workspace-structure,nodejs,python,ai-tools,monitoring",
-              description: "Python + AI Tools + Monitoring",
+              extensions: "nodejs,python,ai-tools,monitoring",
+              description: "Node.js + Python + AI Tools + Monitoring",
             }
 
     steps:
@@ -122,48 +117,32 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extensions="${{ matrix.combination.extensions }}"
 
           echo "Adding extensions to manifest: $extensions"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
             failed_extensions=()
 
-            # Create manifest from CI template (already has protected extensions)
+            # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
               cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Protected extensions already in CI conf - no need to add
-            protected=\"workspace-structure mise-config ssh-environment\"
-
-            # Verify protected extensions are present
-            echo \"Verifying protected extensions from CI config...\"
-            for ext in workspace-structure mise-config ssh-environment; do
-              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
-                echo \"✅ \$ext present\"
-              else
-                echo \"❌ \$ext missing from CI config\"
-                exit 1
-              fi
-            done
-
-            # Split extensions and add non-protected ones
+            # Add combination extensions
             echo \"\"
-            echo \"Adding combination extensions (skipping protected)...\"
+            echo \"Adding combination extensions...\"
             IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
 
             for ext in \"\${EXT_ARRAY[@]}\"; do
               ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
-
-              # Skip if protected (already in CI conf)
-              if echo \"\$protected\" | grep -q \"\$ext\"; then
-                echo \"⏭️  Skipping \$ext (protected, already in CI conf)\"
-                continue
-              fi
 
               if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
                 echo \"\$ext\" >> \"\$manifest_file\"
@@ -183,11 +162,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Installing all extensions for ${{ matrix.combination.name }} combination..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running install-all...\"
@@ -203,12 +186,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           combination_name="${{ matrix.combination.name }}"
 
           echo "Verifying $combination_name combination functionality..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          # Execute with retry
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             # Source SSH environment
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh

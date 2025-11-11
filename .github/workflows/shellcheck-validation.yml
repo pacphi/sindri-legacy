@@ -1,0 +1,47 @@
+name: Shellcheck Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          echo "Running shellcheck on shell scripts..."
+
+          scripts=$(find . -name "*.sh" -o -name "*.extension" -type f | grep -v node_modules | grep -v '/.git/')
+
+          failed_scripts=()
+          for script in $scripts; do
+            case "$script" in
+              */active-extensions.conf.example|*/active-extensions.ci.conf)
+                echo "Skipping template: $script"
+                continue
+                ;;
+            esac
+
+            echo "Checking $script..."
+            if ! shellcheck "$script"; then
+              failed_scripts+=("$script")
+            fi
+          done
+
+          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
+            echo "❌ Shellcheck failed for:"
+            printf '%s\n' "${failed_scripts[@]}"
+            exit 1
+          fi
+
+          echo "✅ All shell scripts pass shellcheck"

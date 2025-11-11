@@ -50,13 +50,8 @@ else
     MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
 fi
 
-# Core extensions that cannot be removed/deactivated
-# These provide foundational system functionality and are installed first
-PROTECTED_EXTENSIONS=(
-    "workspace-structure"   # Must be first - creates directory structure
-    "mise-config"           # Must be second - enables mise for other extensions
-    "ssh-environment"       # Must be third - SSH config for CI/CD
-)
+# Base system (workspace-structure, mise-config, ssh-environment, claude)
+# is pre-installed in the Docker image
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -105,23 +100,6 @@ is_activated() {
     [[ -f "$activated_file" ]]
 }
 
-# Function to check if an extension is protected (core extensions that cannot be removed)
-is_protected_extension() {
-    local ext_name="$1"
-
-    # Remove file extension and path if present
-    ext_name=$(basename "$ext_name" .extension)
-    ext_name=$(basename "$ext_name" .sh)
-
-    # Check if extension is in the protected list
-    for protected in "${PROTECTED_EXTENSIONS[@]}"; do
-        if [[ "$ext_name" == "$protected" ]]; then
-            return 0  # Protected
-        fi
-    done
-
-    return 1  # Not protected
-}
 
 # Function to check if a file has been modified from its example
 file_has_been_modified() {
@@ -268,9 +246,16 @@ remove_from_manifest() {
         fi
     done < "$MANIFEST_FILE"
 
-    mv "$temp_file" "$MANIFEST_FILE"
-    print_success "Removed '$ext_name' from activation manifest"
-    return 0
+    # Use cat to copy instead of mv to handle cross-device operations
+    if cat "$temp_file" > "$MANIFEST_FILE" 2>/dev/null; then
+        rm -f "$temp_file"
+        print_success "Removed '$ext_name' from activation manifest"
+        return 0
+    else
+        rm -f "$temp_file"
+        print_error "Failed to update manifest file"
+        return 1
+    fi
 }
 
 # Get position of extension in manifest
@@ -298,76 +283,6 @@ get_manifest_position() {
     return 1
 }
 
-# Ensure protected extensions are in manifest and at the top
-ensure_protected_extensions() {
-    print_debug "Ensuring protected extensions are in manifest..."
-
-    # Create manifest if it doesn't exist
-    if [[ ! -f "$MANIFEST_FILE" ]]; then
-        mkdir -p "$(dirname "$MANIFEST_FILE")"
-        cat > "$MANIFEST_FILE" << 'EOF'
-# Active Extensions Configuration
-# Extensions are executed in the order listed below
-EOF
-    fi
-
-    # Read current manifest
-    local current_extensions=()
-    mapfile -t current_extensions < <(read_manifest)
-
-    # Build new manifest content with protected extensions first
-    local temp_file=$(mktemp)
-
-    # Write header
-    cat > "$temp_file" << 'EOF'
-# Active Extensions Configuration
-# Extensions are executed in the order listed below
-# Protected extensions (required for system functionality):
-EOF
-
-    # Add protected extensions first (if they exist as files)
-    local added_protected=()
-    for protected in "${PROTECTED_EXTENSIONS[@]}"; do
-        local ext_file=$(find_extension_file "$protected")
-        if [[ -n "$ext_file" ]]; then
-            echo "$protected" >> "$temp_file"
-            added_protected+=("$protected")
-            print_debug "  Protected extension: $protected"
-        else
-            print_warning "Protected extension file not found: $protected"
-        fi
-    done
-
-    # Add blank line after protected extensions if any were added
-    if [[ ${#added_protected[@]} -gt 0 ]]; then
-        echo "" >> "$temp_file"
-        echo "# Additional extensions:" >> "$temp_file"
-    fi
-
-    # Add remaining extensions (excluding protected ones)
-    for ext_name in "${current_extensions[@]}"; do
-        local is_protected=false
-        for protected in "${added_protected[@]}"; do
-            if [[ "$ext_name" == "$protected" ]]; then
-                is_protected=true
-                break
-            fi
-        done
-
-        if [[ "$is_protected" == "false" ]]; then
-            echo "$ext_name" >> "$temp_file"
-        fi
-    done
-
-    # Replace manifest with new version
-    mv "$temp_file" "$MANIFEST_FILE"
-
-    if [[ ${#added_protected[@]} -gt 0 ]]; then
-        print_success "Protected extensions ensured in manifest (${added_protected[*]})"
-    fi
-
-    return 0
-}
 
 # ============================================================================
 # EXTENSION DISCOVERY FUNCTIONS
@@ -443,9 +358,6 @@ call_extension_function() {
 
 # Function to list all extensions with manifest status
 list_extensions() {
-    # Ensure protected extensions are in manifest first
-    ensure_protected_extensions
-
     print_status "Available extensions in $EXTENSIONS_BASE:"
     print_status "Manifest: $MANIFEST_FILE"
     echo ""
@@ -467,11 +379,7 @@ list_extensions() {
             example_file=$(find_extension_file "$ext_name")
             if [[ -n "$example_file" ]]; then
                 local filename=$(basename "$example_file")
-                local protected_marker=""
-                if is_protected_extension "$ext_name"; then
-                    protected_marker=" ${YELLOW}[PROTECTED]${NC}"
-                fi
-                echo -e "  ${position}. ${GREEN}✓${NC} $ext_name ($filename)${protected_marker}"
+                echo -e "  ${position}. ${GREEN}✓${NC} $ext_name ($filename)"
                 found_any=true
                 ((position++))
             else
@@ -529,13 +437,6 @@ list_extensions() {
 deactivate_extension() {
     local extension_name="$1"
     local delete_file="${2:-no}"  # yes|no
-
-    # Check if extension is protected
-    if is_protected_extension "$extension_name"; then
-        print_error "Cannot deactivate protected extension: $extension_name"
-        print_status "Protected extensions are required for system functionality"
-        return 1
-    fi
 
     # Remove from manifest
     if ! remove_from_manifest "$extension_name"; then
@@ -727,13 +628,6 @@ uninstall_extension() {
     print_status "Uninstalling extension: $ext_name"
     echo ""
 
-    # Check if extension is protected
-    if is_protected_extension "$ext_name"; then
-        print_error "Cannot uninstall protected extension: $ext_name"
-        print_status "Protected extensions are required for system functionality"
-        return 1
-    fi
-
     # Check if extension exists and is activated
     local activated_file
     activated_file=$(get_activated_file "$ext_name")
@@ -899,13 +793,46 @@ interactive_install() {
     install_all_extensions
 }
 
+# Aggregate required domains from all extensions in manifest
+# Usage: aggregate_required_domains
+# Returns: Space-separated list of unique domains
+aggregate_required_domains() {
+    local -A all_domains  # Associative array for deduplication
+    local active_extensions=()
+    mapfile -t active_extensions < <(read_manifest)
+
+    if [[ ${#active_extensions[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    for ext_name in "${active_extensions[@]}"; do
+        local ext_file
+        ext_file=$(find_extension_file "$ext_name")
+
+        if [[ -z "$ext_file" ]] || [[ ! -f "$ext_file" ]]; then
+            continue
+        fi
+
+        # Extract EXT_REQUIRED_DOMAINS from extension file
+        local domains
+        domains=$(grep "^EXT_REQUIRED_DOMAINS=" "$ext_file" 2>/dev/null | cut -d'"' -f2)
+
+        if [[ -n "$domains" ]]; then
+            # Add each domain to associative array
+            for domain in $domains; do
+                all_domains["$domain"]=1
+            done
+        fi
+    done
+
+    # Output unique domains
+    printf '%s ' "${!all_domains[@]}"
+}
+
 # Function to install all active extensions
 install_all_extensions() {
     print_status "Installing all active extensions..."
     echo ""
-
-    # First, ensure protected extensions are in manifest and at the top
-    ensure_protected_extensions
 
     local active_extensions=()
     mapfile -t active_extensions < <(read_manifest)
@@ -916,53 +843,48 @@ install_all_extensions() {
         return 0
     fi
 
-    # Separate protected and non-protected extensions
-    local protected_exts=()
-    local other_exts=()
+    # Phase 2: Pre-flight DNS checks
+    print_status "Running pre-flight checks for ${#active_extensions[@]} extensions..."
+    local required_domains
+    required_domains=$(aggregate_required_domains)
 
-    for ext_name in "${active_extensions[@]}"; do
-        if is_protected_extension "$ext_name"; then
-            protected_exts+=("$ext_name")
+    if [[ -n "$required_domains" ]]; then
+        local -a domain_array
+        read -ra domain_array <<< "$required_domains"
+        print_status "Checking DNS for ${#domain_array[@]} unique domains..."
+
+        local dns_failures=()
+        for domain in "${domain_array[@]}"; do
+            print_debug "Testing DNS: $domain"
+            if ! timeout 5s nslookup "$domain" >/dev/null 2>&1 && \
+               ! timeout 5s host "$domain" >/dev/null 2>&1; then
+                dns_failures+=("$domain")
+            fi
+        done
+
+        if [[ ${#dns_failures[@]} -gt 0 ]]; then
+            print_warning "DNS issues detected for: ${dns_failures[*]}"
+            print_warning "Installations may fail if these domains are needed"
         else
-            other_exts+=("$ext_name")
+            print_success "All DNS checks passed"
         fi
-    done
+        echo ""
+    fi
 
     local installed_count=0
     local failed_count=0
 
-    # Install protected extensions first
-    if [[ ${#protected_exts[@]} -gt 0 ]]; then
-        print_status "Installing protected extensions first..."
+    # Install all extensions in manifest order
+    for ext_name in "${active_extensions[@]}"; do
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        if install_extension "$ext_name"; then
+            ((installed_count++))
+        else
+            ((failed_count++))
+            print_error "Failed to install: $ext_name"
+        fi
         echo ""
-        for ext_name in "${protected_exts[@]}"; do
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if install_extension "$ext_name"; then
-                ((installed_count++))
-            else
-                ((failed_count++))
-                print_error "Failed to install protected extension: $ext_name"
-                print_error "System may not function correctly without this extension!"
-            fi
-            echo ""
-        done
-    fi
-
-    # Install remaining extensions
-    if [[ ${#other_exts[@]} -gt 0 ]]; then
-        print_status "Installing additional extensions..."
-        echo ""
-        for ext_name in "${other_exts[@]}"; do
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if install_extension "$ext_name"; then
-                ((installed_count++))
-            else
-                ((failed_count++))
-                print_error "Failed to install: $ext_name"
-            fi
-            echo ""
-        done
-    fi
+    done
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_status "Installation Summary:"
@@ -1033,11 +955,17 @@ reorder_extension() {
     local result=()
     local inserted=false
     for i in "${!filtered[@]}"; do
-        if [[ $((i + 1)) -eq $new_position ]]; then
+        # Add current element from filtered array
+        result+=("${filtered[$i]}")
+
+        # Check if we should insert after this element
+        # new_position is 1-indexed, i is 0-indexed
+        # After adding element at index i, we have (i+1) elements
+        # To place extension at position N, insert after adding (N-1) elements
+        if [[ $((i + 1)) -eq $((new_position - 1)) ]]; then
             result+=("$ext_name")
             inserted=true
         fi
-        result+=("${filtered[$i]}")
     done
 
     # If position is after end, append
@@ -1058,9 +986,16 @@ reorder_extension() {
         echo "$ext" >> "$temp_file"
     done
 
-    mv "$temp_file" "$MANIFEST_FILE"
-    print_success "Moved '$ext_name' to position $new_position"
-    return 0
+    # Use cat to copy instead of mv to handle cross-device operations
+    if cat "$temp_file" > "$MANIFEST_FILE" 2>/dev/null; then
+        rm -f "$temp_file"
+        print_success "Moved '$ext_name' to position $new_position"
+        return 0
+    else
+        rm -f "$temp_file"
+        print_error "Failed to update manifest file"
+        return 1
+    fi
 }
 
 # Function to show status of all active extensions

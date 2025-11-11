@@ -96,7 +96,7 @@ jobs:
         with:
           app-name: ${{ steps.setup.outputs.app-name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
-          script-path: .github/scripts/integration/verify-manifest.sh
+          script-path: .github/scripts/common/verify-manifest.sh
 
       - name: Verify volume mount
         uses: ./.github/actions/test-volume-mount

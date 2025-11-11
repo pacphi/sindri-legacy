@@ -52,7 +52,7 @@ Check CLAUDE.md against `docker/lib/extensions.d/active-extensions.conf`:
 
 Verify organization matches actual structure:
 
-- Protected extensions (workspace-structure, mise-config, ssh-environment)
+- Baked-in base system (workspace-structure, mise-config, ssh-environment, claude)
 - Foundational languages (nodejs, python)
 - Additional languages (golang, rust, ruby, php, jvm, dotnet)
 - Development tools (github-cli, tmux-workspace, playwright)
@@ -176,7 +176,7 @@ Verify file paths in documentation:
 **Consistent Phrasing**:
 
 - "Install extension" (not "activate" unless specifically about manifest)
-- "Protected extension" (not "required" or "core")
+- "Baked-in base system" (for workspace-structure, mise-config, ssh-environment, claude)
 - "Prerequisites" (not "dependencies" in extension context)
 - "Idempotent" (not "safe to rerun")
 

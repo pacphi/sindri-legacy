@@ -68,9 +68,9 @@ jobs:
           test_manifest="extensions.d/test-active-extensions.conf"
           cat > "$test_manifest" << 'EOF'
           # Test manifest
-          workspace-structure
+          python
           nodejs
-          # python
+          # golang (commented out)
           rust
           EOF
 
@@ -81,7 +81,7 @@ jobs:
           echo "Active extensions in test manifest: $active_count"
 
           if [[ "$active_count" -eq 3 ]]; then
-            echo "✅ Manifest parsing correct (workspace-structure, nodejs, rust = 3)"
+            echo "✅ Manifest parsing correct (python, nodejs, rust = 3)"
           else
             echo "❌ Manifest parsing failed: expected 3, got $active_count"
             exit 1

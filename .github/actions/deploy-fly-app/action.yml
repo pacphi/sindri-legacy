@@ -65,18 +65,66 @@ runs:
         echo "Creating Fly.io app: ${{ inputs.app-name }}"
         flyctl apps create ${{ inputs.app-name }} --org ${{ inputs.org }} || echo "App may already exist"
 
+    - name: Wait for app readiness (Fly.io eventual consistency)
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        echo "Waiting for app to propagate across Fly.io API endpoints..."
+        max_attempts=10
+        attempt=1
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "Checking app availability (attempt $attempt/$max_attempts)..."
+
+          if flyctl status --app ${{ inputs.app-name }} &>/dev/null; then
+            echo "✅ App is ready and propagated"
+            break
+          else
+            if [ $attempt -lt $max_attempts ]; then
+              wait_time=$((2 * attempt))  # Linear backoff: 2, 4, 6, 8... seconds
+              echo "⚠️  App not yet available, waiting ${wait_time}s..."
+              sleep $wait_time
+              attempt=$((attempt + 1))
+            else
+              echo "❌ App not available after $max_attempts attempts"
+              exit 1
+            fi
+          fi
+        done
+
     - name: Create volume
       shell: bash
       env:
         FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
         echo "Creating volume: ${{ inputs.volume-name }}"
-        flyctl volumes create ${{ inputs.volume-name }} \
-          --app ${{ inputs.app-name }} \
-          --region ${{ inputs.region }} \
-          --size ${{ inputs.volume-size }} \
-          --no-encryption \
-          --yes
+        max_attempts=5
+        attempt=1
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "Volume creation attempt $attempt/$max_attempts..."
+
+          if flyctl volumes create ${{ inputs.volume-name }} \
+            --app ${{ inputs.app-name }} \
+            --region ${{ inputs.region }} \
+            --size ${{ inputs.volume-size }} \
+            --no-encryption \
+            --yes; then
+            echo "✅ Volume created successfully"
+            break
+          else
+            if [ $attempt -lt $max_attempts ]; then
+              wait_time=$((2 * attempt))
+              echo "⚠️  Volume creation failed, retrying in ${wait_time}s..."
+              sleep $wait_time
+              attempt=$((attempt + 1))
+            else
+              echo "❌ Volume creation failed after $max_attempts attempts"
+              exit 1
+            fi
+          fi
+        done
 
     - name: Set secrets
       shell: bash
@@ -84,15 +132,42 @@ runs:
         FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
         echo "Setting secrets for app: ${{ inputs.app-name }}"
+
+        # Helper function to set secrets with retry logic
+        set_secret_with_retry() {
+          local secret_name=$1
+          local secret_value=$2
+          local max_attempts=5
+          local attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Setting ${secret_name} (attempt $attempt/$max_attempts)..."
+
+            if flyctl secrets set "${secret_name}=${secret_value}" --app ${{ inputs.app-name }}; then
+              echo "✅ ${secret_name} set successfully"
+              return 0
+            else
+              if [ $attempt -lt $max_attempts ]; then
+                wait_time=$((2 * attempt))
+                echo "⚠️  Failed to set ${secret_name}, retrying in ${wait_time}s..."
+                sleep $wait_time
+                attempt=$((attempt + 1))
+              else
+                echo "❌ Failed to set ${secret_name} after $max_attempts attempts"
+                return 1
+              fi
+            fi
+          done
+        }
+
+        # Set SSH authorized keys
         ssh_key_content=$(cat ${{ inputs.ssh-pubkey-path }})
-        flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" \
-          --app ${{ inputs.app-name }}
+        set_secret_with_retry "AUTHORIZED_KEYS" "$ssh_key_content" || exit 1
 
         # Set CI_MODE if explicitly enabled (default: false for production safety)
         if [ "${{ inputs.ci-mode }}" = "true" ]; then
           echo "Setting CI_MODE=true for test environment..."
-          flyctl secrets set CI_MODE="true" \
-            --app ${{ inputs.app-name }}
+          set_secret_with_retry "CI_MODE" "true" || exit 1
           echo "✓ CI mode enabled"
         else
           echo "Note: CI mode disabled (production mode) - full installations will be used"
@@ -101,8 +176,7 @@ runs:
         # Set ANTHROPIC_API_KEY if provided (required for claude-marketplace plugin installation)
         if [ -n "${{ inputs.anthropic-api-key }}" ]; then
           echo "Setting ANTHROPIC_API_KEY for Claude authentication..."
-          flyctl secrets set ANTHROPIC_API_KEY="${{ inputs.anthropic-api-key }}" \
-            --app ${{ inputs.app-name }}
+          set_secret_with_retry "ANTHROPIC_API_KEY" "${{ inputs.anthropic-api-key }}" || exit 1
           echo "✓ Claude authentication enabled"
         else
           echo "Note: ANTHROPIC_API_KEY not provided - claude/claude-marketplace will have limited functionality"

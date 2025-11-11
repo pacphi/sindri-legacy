@@ -62,8 +62,8 @@ on:
         default: "full-node"
         type: choice
         options:
-          - minimal # Core only (workspace-structure, mise-config, ssh-environment)
-          - full-node # Complete Node.js stack (nodejs, nodejs-devtools, claude)
+          - minimal # Base system only (workspace, mise, ssh, claude pre-installed)
+          - full-node # Complete Node.js stack (nodejs, nodejs-devtools)
           - mise-stack # All mise-powered languages (nodejs, python, rust, golang)
           - fullstack # Web development (nodejs, python, docker, cloud-tools)
           - systems # Systems programming (rust, golang, docker)
@@ -113,6 +113,9 @@ jobs:
       - name: Configure deployment parameters
         id: config
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           # Basic configuration
           echo "app_name=${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
           echo "region=${{ github.event.inputs.region }}" >> $GITHUB_OUTPUT
@@ -147,40 +150,28 @@ jobs:
           # Map extension profile to extension list
           case "${{ github.event.inputs.extension_profile }}" in
             minimal)
-              # Protected extensions only (auto-included, but explicit for clarity)
-              extensions="workspace-structure,mise-config,ssh-environment"
+              extensions=""
               ;;
             full-node)
-              extensions="workspace-structure,mise-config,ssh-environment,nodejs,nodejs-devtools,claude"
+              extensions="nodejs,nodejs-devtools"
               ;;
             mise-stack)
-              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,rust,golang"
+              extensions="nodejs,python,rust,golang"
               ;;
             fullstack)
-              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,docker,cloud-tools"
+              extensions="nodejs,python,docker,cloud-tools"
               ;;
             systems)
-              extensions="workspace-structure,mise-config,ssh-environment,rust,golang,docker"
+              extensions="rust,golang,docker"
               ;;
             enterprise)
-              extensions="workspace-structure,mise-config,ssh-environment,nodejs,jvm,docker,infra-tools"
+              extensions="nodejs,jvm,docker,infra-tools"
               ;;
             ai-dev)
-              extensions="workspace-structure,mise-config,ssh-environment,nodejs,python,ai-tools,monitoring"
+              extensions="nodejs,python,ai-tools,monitoring"
               ;;
             custom)
-              # Use custom_extensions input, but always ensure protected extensions are included
               extensions="${{ github.event.inputs.custom_extensions }}"
-              # Prepend protected extensions if not already present
-              if [[ ! "$extensions" =~ workspace-structure ]]; then
-                extensions="workspace-structure,$extensions"
-              fi
-              if [[ ! "$extensions" =~ mise-config ]]; then
-                extensions="mise-config,$extensions"
-              fi
-              if [[ ! "$extensions" =~ ssh-environment ]]; then
-                extensions="ssh-environment,$extensions"
-              fi
               ;;
           esac
 
@@ -262,46 +253,31 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
           extensions="${{ needs.setup-config.outputs.extensions }}"
 
           echo "Configuring extension manifest..."
           echo "Extensions to install: $extensions"
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
             manifest_file=\"extensions.d/active-extensions.conf\"
 
-            # Create manifest from CI template (already has protected extensions)
+            # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
               cp extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
             fi
 
-            # Verify protected extensions are present
-            echo \"Verifying protected extensions...\"
-            for ext in workspace-structure mise-config ssh-environment; do
-              if grep -q \"^\$ext\$\" \"\$manifest_file\"; then
-                echo \"✅ \$ext present in manifest\"
-              else
-                echo \"❌ \$ext missing - adding it\"
-                echo \"\$ext\" >> \"\$manifest_file\"
-              fi
-            done
-
-            # Add non-protected extensions from profile
+            # Add selected extensions
             echo \"\"
             echo \"Adding selected extensions...\"
-            protected=\"workspace-structure mise-config ssh-environment\"
             IFS=\",\" read -ra EXT_ARRAY <<< \"$extensions\"
 
             for ext in \"\${EXT_ARRAY[@]}\"; do
               ext=\$(echo \"\$ext\" | xargs)  # Trim whitespace
-
-              # Skip if protected (already verified above)
-              if echo \"\$protected\" | grep -q \"\$ext\"; then
-                echo \"⏭️  Skipping \$ext (protected, already in manifest)\"
-                continue
-              fi
 
               if ! grep -q \"^\$ext\$\" \"\$manifest_file\" 2>/dev/null; then
                 echo \"\$ext\" >> \"\$manifest_file\"
@@ -321,11 +297,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Installing all extensions from manifest..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             cd /workspace/scripts/lib
 
             echo \"Running extension-manager install-all...\"
@@ -341,11 +320,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "Verifying deployment and extensions..."
 
-          flyctl ssh console --app $app_name --user developer --command "/bin/bash -lc '
+          ssh_command_retry "$app_name" "/bin/bash -lc '
             # Source SSH environment
             if [ -f /etc/profile.d/00-ssh-environment.sh ]; then
               source /etc/profile.d/00-ssh-environment.sh
@@ -379,6 +361,9 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
+          # Source retry utilities
+          source .github/scripts/common/ssh-helpers.sh
+
           app_name="${{ steps.setup.outputs.app-name }}"
 
           echo "## 🎉 Deployment Successful" >> $GITHUB_STEP_SUMMARY
