@@ -1,0 +1,321 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sindri.dev/schemas/project-templates.json",
+  "title": "Sindri Project Templates Schema",
+  "description": "JSON Schema for validating Sindri project template definitions",
+  "type": "object",
+  "required": ["version", "templates"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Schema version number (e.g., '2.0')",
+      "examples": ["2.0", "1.0"]
+    },
+    "templates": {
+      "type": "object",
+      "description": "Map of template definitions keyed by template type name",
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]*$": {
+          "$ref": "#/definitions/template"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "detection_rules": {
+      "$ref": "#/definitions/detectionRules",
+      "description": "Rules for automatic project type detection based on project name"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "template": {
+      "type": "object",
+      "required": ["description", "extensions"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this template creates",
+          "minLength": 10,
+          "maxLength": 100,
+          "examples": ["Node.js application with modern tooling"]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["language", "framework", "infrastructure", "application"],
+          "description": "Template category for organization and filtering",
+          "examples": ["language", "framework"]
+        },
+        "extensions": {
+          "type": "array",
+          "description": "Logical extension names (not filenames) to activate via extension-manager",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "examples": ["nodejs", "python", "rust", "golang"]
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "detection_patterns": {
+          "type": "array",
+          "description": "Keywords used for automatic project type detection from project name",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]+$",
+            "examples": ["node", "npm", "express", "api"]
+          },
+          "uniqueItems": true
+        },
+        "setup_commands": {
+          "type": "array",
+          "description": "Shell commands to execute during project setup (supports variable substitution)",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "examples": [
+              "npm init -y",
+              "python3 -m venv venv",
+              "go mod init {project_name}"
+            ]
+          }
+        },
+        "files": {
+          "type": "object",
+          "description": "Files to create with their content (supports variable substitution)",
+          "patternProperties": {
+            ".*": {
+              "type": "string",
+              "description": "File content with variable placeholders like {project_name}"
+            }
+          },
+          "examples": [
+            {
+              "package.json": "{\n  \"name\": \"{project_name}\",\n  \"version\": \"1.0.0\"\n}"
+            }
+          ]
+        },
+        "claude_md_template": {
+          "type": "string",
+          "description": "Template content for CLAUDE.md file (supports variable substitution)",
+          "minLength": 50,
+          "examples": [
+            "# {project_name}\n\n## Project Overview\n{description}\n"
+          ]
+        },
+        "wizard_prompts": {
+          "$ref": "#/definitions/wizardPrompts",
+          "description": "Interactive prompts for wizard mode customization"
+        }
+      },
+      "additionalProperties": false
+    },
+    "wizardPrompts": {
+      "type": "object",
+      "description": "Configuration for interactive wizard prompts",
+      "properties": {
+        "author": {
+          "$ref": "#/definitions/textPrompt",
+          "description": "Prompt for project author name"
+        },
+        "description": {
+          "$ref": "#/definitions/textPrompt",
+          "description": "Prompt for project description"
+        },
+        "license": {
+          "$ref": "#/definitions/selectPrompt",
+          "description": "Prompt for license selection"
+        },
+        "custom": {
+          "type": "array",
+          "description": "Custom wizard prompts specific to this template",
+          "items": {
+            "$ref": "#/definitions/customPrompt"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "textPrompt": {
+      "type": "object",
+      "description": "Text input prompt configuration",
+      "required": ["prompt"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Question to display to user",
+          "minLength": 3,
+          "examples": ["Author name", "Project description"]
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value (supports variables like {git_user_name})",
+          "examples": ["{git_user_name}", "A sample project"]
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this field is required",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "selectPrompt": {
+      "type": "object",
+      "description": "Selection prompt configuration",
+      "required": ["prompt", "options"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Question to display to user",
+          "minLength": 3,
+          "examples": ["Choose a license"]
+        },
+        "options": {
+          "type": "array",
+          "description": "Available choices",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "uniqueItems": true,
+          "examples": [["MIT", "Apache-2.0", "GPL-3.0"]]
+        },
+        "default": {
+          "type": "string",
+          "description": "Default selection",
+          "examples": ["MIT"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "customPrompt": {
+      "type": "object",
+      "description": "Custom prompt configuration",
+      "required": ["name", "prompt", "type"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Variable name for template substitution",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "examples": ["use_typescript", "test_framework"]
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Question to display to user",
+          "minLength": 3,
+          "examples": ["Use TypeScript?", "Choose test framework"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["text", "boolean", "select"],
+          "description": "Type of prompt"
+        },
+        "options": {
+          "type": "array",
+          "description": "Available choices (required for 'select' type)",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "default": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "boolean"}
+          ],
+          "description": "Default value"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this field is required",
+          "default": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "select"}}
+          },
+          "then": {
+            "required": ["options"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "detectionRules": {
+      "type": "object",
+      "description": "Rules for automatic project type detection",
+      "properties": {
+        "name_patterns": {
+          "type": "array",
+          "description": "Regex patterns to match against project names",
+          "items": {
+            "$ref": "#/definitions/namePattern"
+          }
+        },
+        "framework_keywords": {
+          "type": "object",
+          "description": "Framework-specific keywords for detection",
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]*$": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              "uniqueItems": true
+            }
+          },
+          "examples": [
+            {
+              "rails": ["rails", "ruby", "ror"],
+              "django": ["django", "python"]
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "namePattern": {
+      "type": "object",
+      "description": "Name pattern matching rule",
+      "required": ["pattern"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression to match project name",
+          "minLength": 1,
+          "examples": [".*-?rails-?.*", ".*-?api.*"]
+        },
+        "type": {
+          "type": "string",
+          "description": "Single template type to return if pattern matches",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "examples": ["rails", "node"]
+        },
+        "types": {
+          "type": "array",
+          "description": "Multiple template types for interactive selection",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "minItems": 2,
+          "uniqueItems": true,
+          "examples": [["node", "go", "python"]]
+        }
+      },
+      "oneOf": [
+        {"required": ["type"]},
+        {"required": ["types"]}
+      ],
+      "additionalProperties": false
+    }
+  }
+}

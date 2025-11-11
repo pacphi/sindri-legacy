@@ -1,0 +1,41 @@
+#!/bin/bash
+# agentic-flow.aliases - Multi-model AI integration aliases
+# Auto-loaded by direnv when in project directories with .sindri-enhanced marker
+
+# ============================================================================
+# AGENT-FLOW (MULTI-MODEL AI)
+# ============================================================================
+
+# Core Commands
+alias af="npx agentic-flow"
+alias af-help="npx agentic-flow --help"
+alias af-coder="npx agentic-flow --agent coder --task"
+alias af-reviewer="npx agentic-flow --agent reviewer --task"
+alias af-researcher="npx agentic-flow --agent researcher --task"
+
+# Provider Integration
+alias af-claude="npx agentic-flow claude-code"
+alias af-openrouter="npx agentic-flow claude-code --provider openrouter"
+alias af-gemini="npx agentic-flow claude-code --provider gemini"
+
+# Model-Specific Shortcuts (Cost-Optimized)
+alias af-llama="npx agentic-flow --model meta-llama/llama-3.1-8b-instruct"
+alias af-cost="npx agentic-flow --optimize cost"
+alias af-speed="npx agentic-flow --optimize speed"
+alias af-quality="npx agentic-flow --optimize quality"
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+# Execute task with specific agent and balanced optimization
+af-task() {
+    npx agentic-flow --agent "${1:-coder}" --task "$2" --optimize balanced
+}
+
+# Execute command with specific provider
+af-provider() {
+    local provider="${1:-openrouter}"
+    shift
+    npx agentic-flow claude-code --provider "$provider" "$@"
+}

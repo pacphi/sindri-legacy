@@ -27,6 +27,11 @@ PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
 # Change to workspace by default
 cd /workspace
 
+# Enable direnv hook for project-specific environment management
+if command -v direnv >/dev/null 2>&1; then
+    eval "$(direnv hook bash)"
+fi
+
 # Source agent discovery utilities if available
 if [ -f /workspace/scripts/lib/agent-discovery.sh ]; then
     source /workspace/scripts/lib/agent-discovery.sh

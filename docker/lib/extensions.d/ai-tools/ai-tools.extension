@@ -556,14 +556,12 @@ status() {
   # Go-based tools
   if command_exists go; then
     echo "    Go-based:"
-    for tool in hector; do
-      if command_exists "$tool"; then
-        local version=$($tool version 2>/dev/null || echo "installed")
-        echo "      ✓ $tool: $version"
-      else
-        echo "      ✗ $tool: not installed"
-      fi
-    done
+    if command_exists hector; then
+      local version=$(hector version 2>/dev/null || echo "installed")
+      echo "      ✓ hector: $version"
+    else
+      echo "      ✗ hector: not installed"
+    fi
   else
     echo "    Go-based: (Go not available)"
   fi
@@ -794,9 +792,7 @@ remove() {
 
   # Remove Go-based tools (if installed via fallback)
   if [[ -d "$HOME/go/bin" ]]; then
-    for tool in hector; do
-      [[ -f "$HOME/go/bin/$tool" ]] && rm -f "$HOME/go/bin/$tool"
-    done
+    [[ -f "$HOME/go/bin/hector" ]] && rm -f "$HOME/go/bin/hector"
   fi
 
   # Remove Python-based tools

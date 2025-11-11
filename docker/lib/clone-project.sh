@@ -1,12 +1,17 @@
 #!/bin/bash
-# Clone or fork an existing project with Claude enhancements
+#
+# clone-project.sh - Clone or fork repository with Claude enhancements
+#
+# Clones or forks an existing repository and applies Claude AI enhancements
+# including Git hooks, dependency installation, CLAUDE.md creation, and
+# Claude tool initialization.
+#
 
-# Source common utilities and git functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 source "${SCRIPT_DIR}/git.sh"
+source "${SCRIPT_DIR}/project-core.sh"
 
-# Parse command line arguments
 REPO_URL=""
 FORK_MODE=false
 BRANCH_NAME=""
@@ -18,7 +23,6 @@ SKIP_DEPS=false
 SKIP_ENHANCE=false
 PROJECT_NAME=""
 
-# Function to show usage
 show_usage() {
     echo "Usage: $0 <repository-url> [options]"
     echo ""
@@ -39,16 +43,14 @@ show_usage() {
     echo "  $0 https://github.com/user/my-app"
     echo "  $0 https://github.com/original/project --fork"
     echo "  $0 https://github.com/original/project --fork --feature add-new-feature"
-    echo "  $0 https://github.com/company/app --git-name \"John Doe\" --git-email \"john@company.com\""
+    echo "  $0 https://github.com/company/app --git-name \"John Doe\""
     exit 1
 }
 
-# Parse arguments
 if [ $# -eq 0 ]; then
     show_usage
 fi
 
-# Check for help flag first
 if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     show_usage
 fi
@@ -56,58 +58,65 @@ fi
 REPO_URL="$1"
 shift
 
-# Validate repository URL
 if [[ ! "$REPO_URL" =~ ^(https?://|git@) ]]; then
     print_error "Invalid repository URL: $REPO_URL"
     exit 1
 fi
 
-# Extract project name from URL
 PROJECT_NAME=$(basename "$REPO_URL" .git)
 if [[ -z "$PROJECT_NAME" ]]; then
     print_error "Could not determine project name from URL"
     exit 1
 fi
 
-# Parse optional arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --fork)
+            # Fork repository before cloning (requires gh CLI)
             FORK_MODE=true
             shift
             ;;
         --branch)
+            # Checkout specific branch after clone
             BRANCH_NAME="$2"
             shift 2
             ;;
         --depth)
+            # Perform shallow clone with specified commit depth
             CLONE_DEPTH="$2"
             shift 2
             ;;
         --git-name)
+            # Override git user.name for this project
             GIT_NAME="$2"
             shift 2
             ;;
         --git-email)
+            # Override git user.email for this project
             GIT_EMAIL="$2"
             shift 2
             ;;
         --feature)
+            # Create and checkout feature branch after clone
             FEATURE_BRANCH="$2"
             shift 2
             ;;
         --no-deps)
+            # Skip automatic dependency installation
             SKIP_DEPS=true
             shift
             ;;
         --no-enhance)
+            # Skip all Claude enhancements (just clone/fork)
             SKIP_ENHANCE=true
             shift
             ;;
         -h|--help)
+            # Display usage information and exit
             show_usage
             ;;
         *)
+            # Unknown option provided
             print_error "Unknown option: $1"
             show_usage
             ;;
@@ -116,21 +125,17 @@ done
 
 PROJECT_DIR="$PROJECTS_DIR/active/$PROJECT_NAME"
 
-# Check if project already exists
 if [ -d "$PROJECT_DIR" ]; then
     print_error "Project $PROJECT_NAME already exists at $PROJECT_DIR"
     exit 1
 fi
 
-# Fork mode handling
 if [[ "$FORK_MODE" == true ]]; then
-    # Check for gh CLI
     if ! command_exists gh; then
         print_error "GitHub CLI (gh) is required for forking. Please install it first."
         exit 1
     fi
 
-    # Check gh authentication
     if ! gh auth status >/dev/null 2>&1; then
         print_error "GitHub CLI is not authenticated. Please run: gh auth login"
         exit 1
@@ -138,7 +143,6 @@ if [[ "$FORK_MODE" == true ]]; then
 
     print_status "Forking repository: $REPO_URL"
 
-    # Fork and clone in one command
     cd "$PROJECTS_DIR/active" || exit 1
     if ! gh repo fork "$REPO_URL" --clone; then
         print_error "Failed to fork repository"
@@ -147,17 +151,14 @@ if [[ "$FORK_MODE" == true ]]; then
 
     cd "$PROJECT_NAME" || exit 1
 
-    # Setup fork-specific configurations
     if [[ "$SKIP_ENHANCE" != true ]]; then
         print_status "Setting up fork remotes and aliases..."
         setup_fork_remotes
         setup_fork_aliases
     fi
 else
-    # Regular clone mode
     print_status "Cloning repository: $REPO_URL"
 
-    # Build clone command
     CLONE_CMD="git clone"
     if [[ -n "$CLONE_DEPTH" ]]; then
         CLONE_CMD="$CLONE_CMD --depth $CLONE_DEPTH"
@@ -167,9 +168,7 @@ else
     fi
     CLONE_CMD="$CLONE_CMD \"$REPO_URL\" \"$PROJECT_DIR\""
 
-    # Execute clone
-    eval $CLONE_CMD
-    if [ $? -ne 0 ]; then
+    if ! eval "$CLONE_CMD"; then
         print_error "Failed to clone repository"
         exit 1
     fi
@@ -177,7 +176,6 @@ else
     cd "$PROJECT_DIR" || exit 1
 fi
 
-# Checkout specific branch if requested (and not already done during clone)
 if [[ -n "$BRANCH_NAME" ]] && [[ "$FORK_MODE" == true ]]; then
     print_status "Checking out branch: $BRANCH_NAME"
     git checkout "$BRANCH_NAME" 2>/dev/null || {
@@ -188,106 +186,29 @@ if [[ -n "$BRANCH_NAME" ]] && [[ "$FORK_MODE" == true ]]; then
     }
 fi
 
-# Configure Git user for this project if provided
 if [[ -n "$GIT_NAME" ]] || [[ -n "$GIT_EMAIL" ]]; then
-    print_status "Configuring Git for this project..."
-    if [[ -n "$GIT_NAME" ]]; then
-        git config user.name "$GIT_NAME"
-        print_success "Git user name set to: $GIT_NAME"
-    fi
-    if [[ -n "$GIT_EMAIL" ]]; then
-        git config user.email "$GIT_EMAIL"
-        print_success "Git user email set to: $GIT_EMAIL"
-    fi
+    apply_git_config_overrides ${GIT_NAME:+--name "$GIT_NAME"} ${GIT_EMAIL:+--email "$GIT_EMAIL"} || exit 1
 fi
 
-# Apply enhancements unless skipped
 if [[ "$SKIP_ENHANCE" != true ]]; then
     print_status "Applying Claude enhancements..."
 
-    # Setup Git hooks
     setup_git_hooks "$PROJECT_DIR"
 
-    # Install dependencies unless skipped
-    if [[ "$SKIP_DEPS" != true ]]; then
-        print_status "Installing project dependencies..."
+    create_project_claude_md --from-cli || exit 1
 
-        # Use existing dependency installation logic from git.sh
-        if [[ -f "package.json" ]] && command_exists npm; then
-            print_status "Installing Node.js dependencies..."
-            npm install
-        fi
-
-        if [[ -f "requirements.txt" ]] && command_exists pip3; then
-            print_status "Installing Python dependencies..."
-            pip3 install -r requirements.txt
-        fi
-
-        if [[ -f "go.mod" ]] && command_exists go; then
-            print_status "Installing Go dependencies..."
-            go mod download
-        fi
-
-        if [[ -f "Cargo.toml" ]] && command_exists cargo; then
-            print_status "Installing Rust dependencies..."
-            cargo build
-        fi
-    fi
-
-    # Check for CLAUDE.md and create if missing
-    if [[ ! -f "CLAUDE.md" ]]; then
-        print_status "No CLAUDE.md found. Running claude /init to create one..."
-        if command_exists claude; then
-            claude /init
-        else
-            print_warning "Claude CLI not found. Creating basic CLAUDE.md template..."
-            cat > CLAUDE.md << CLAUDE_EOF
-# $PROJECT_NAME
-
-## Project Overview
-This project was cloned from: $REPO_URL
-
-## Setup Instructions
-[Add setup instructions here]
-
-## Development Commands
-[Add common commands here]
-
-## Architecture Notes
-[Add architectural decisions and patterns]
-
-## Important Files
-[List key files and their purposes]
-CLAUDE_EOF
-            print_success "Basic CLAUDE.md template created. Please update with project details."
-        fi
-    else
-        print_success "CLAUDE.md already exists"
-    fi
-
-    # Initialize Claude Flow if available
-    if command_exists npx; then
-        print_status "Initializing Claude Flow..."
-        npx claude-flow@alpha init --force 2>/dev/null || true
-    else
-        print_debug "Skipping Claude Flow initialization (npx not available)"
-    fi
-
-    # Initialize agent-flow if available
-    if command_exists npx; then
-        print_status "Initializing agent-flow..."
-        npx --yes agentic-flow --help >/dev/null 2>&1 || true
-    fi
+    setup_project_enhancements \
+        ${SKIP_DEPS:+--skip-deps} \
+        ${GIT_NAME:+--git-name "$GIT_NAME"} \
+        ${GIT_EMAIL:+--git-email "$GIT_EMAIL"} || exit 1
 fi
 
-# Create feature branch if requested
 if [[ -n "$FEATURE_BRANCH" ]]; then
     print_status "Creating feature branch: $FEATURE_BRANCH"
     git checkout -b "$FEATURE_BRANCH"
     print_success "Switched to new branch: $FEATURE_BRANCH"
 fi
 
-# Final success message
 print_success "Project $PROJECT_NAME cloned successfully"
 echo "📁 Location: $PROJECT_DIR"
 echo "📝 Next steps:"
@@ -297,7 +218,6 @@ if [[ ! -f "CLAUDE.md" ]] || [[ "$SKIP_ENHANCE" == true ]]; then
 fi
 echo "   3. Start coding with: claude"
 
-# Show Git configuration for this project
 echo ""
 echo "Git Configuration:"
 echo "   User: $(git config user.name) <$(git config user.email)>"

@@ -1,11 +1,12 @@
-# Project Templates Configuration
-# Defines templates for different project types, frameworks, and tech stacks
+version: "2.0"
 
 templates:
   # Language-based templates
   node:
     description: "Node.js application"
-    extensions: []
+    extensions:
+      - nodejs
+      - nodejs-devtools
     detection_patterns: ["node", "npm", "express", "js", "typescript", "ts"]
     setup_commands:
       - "npm init -y"
@@ -43,7 +44,8 @@ templates:
 
   python:
     description: "Python application"
-    extensions: ["05-python.sh"]
+    extensions:
+      - python
     detection_patterns: ["python", "py", "django", "flask", "fastapi", "ml", "data"]
     setup_commands:
       - "python3 -m venv venv"
@@ -83,7 +85,8 @@ templates:
 
   go:
     description: "Go application"
-    extensions: ["20-golang.sh"]
+    extensions:
+      - golang
     detection_patterns: ["go", "golang", "api", "service", "microservice"]
     setup_commands:
       - "go mod init {project_name}"
@@ -115,7 +118,8 @@ templates:
 
   rust:
     description: "Rust application"
-    extensions: ["10-rust.sh"]
+    extensions:
+      - rust
     detection_patterns: ["rust", "rs", "cargo", "cli", "system"]
     setup_commands:
       - "cargo init --name {project_name}"
@@ -139,7 +143,8 @@ templates:
   # Framework-based templates
   rails:
     description: "Ruby on Rails application"
-    extensions: ["60-ruby.sh"]
+    extensions:
+      - ruby
     detection_patterns: ["rails", "ruby", "web", "mvc"]
     setup_commands:
       - "rails new . --skip-git --force"
@@ -164,7 +169,8 @@ templates:
 
   django:
     description: "Django web application"
-    extensions: ["05-python.sh"]
+    extensions:
+      - python
     detection_patterns: ["django", "web", "python"]
     setup_commands:
       - "python3 -m venv venv"
@@ -193,7 +199,8 @@ templates:
 
   spring:
     description: "Spring Boot application"
-    extensions: ["40-jvm.sh"]
+    extensions:
+      - jvm
     detection_patterns: ["spring", "java", "boot", "api", "microservice"]
     setup_commands:
       - "spring init --dependencies=web,data-jpa {project_name}"
@@ -215,7 +222,8 @@ templates:
 
   dotnet:
     description: ".NET application"
-    extensions: ["70-dotnet.sh"]
+    extensions:
+      - dotnet
     detection_patterns: ["dotnet", "csharp", "c#", "api", "web", "blazor"]
     setup_commands:
       - "dotnet new web"
@@ -239,7 +247,8 @@ templates:
   # Infrastructure templates
   terraform:
     description: "Terraform infrastructure project"
-    extensions: ["80-infra-tools.sh"]
+    extensions:
+      - infra-tools
     detection_patterns: ["terraform", "tf", "infrastructure", "infra", "iac"]
     setup_commands: []
     files:
@@ -294,7 +303,8 @@ templates:
 
   docker:
     description: "Dockerized application"
-    extensions: ["30-docker.sh"]
+    extensions:
+      - docker
     detection_patterns: ["docker", "container", "microservice"]
     setup_commands: []
     files:
