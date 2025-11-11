@@ -1,7 +1,38 @@
 # Changelog
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0-rc.5] - 2025-11-11
+
+### ✨ Features
+
+* feat(ci): handle orphaned runs from deleted workflows (05ab732)
+* feat(ci): enhance workflow cleanup with branch-aware policies (6dea0d1)
+
+### 📚 Documentation
+
+* docs: update CHANGELOG.md for v1.0.0-rc.4 (9c5e2ea)
+
+### 🔧 Other Changes
+
+* refactor: bake protected extensions into Docker base image (#15) (75876db)
+
+
+### 📦 Installation
+
+To use this version:
+
+```bash
+git clone https://github.com/pacphi/sindri.git
+cd sindri
+git checkout v1.0.0-rc.5
+./scripts/vm-setup.sh --app-name my-sindri-dev
+```
+
+**Full Changelog**: https://github.com/pacphi/sindri/compare/v1.0.0-rc.4...v1.0.0-rc.5
 
 ## [1.0.0-rc.4] - 2025-11-08
 
