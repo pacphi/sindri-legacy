@@ -271,7 +271,7 @@ status() {
     print_status "Missing files:"
     echo "  ✗ /workspace/scripts/lib/context-loader.sh"
     echo "  ✗ /workspace/scripts/cf-with-context.sh"
-    return 0
+    return 1
   fi
 
   if ! command_exists context-load; then
@@ -283,7 +283,7 @@ status() {
     echo "  ✗ context-load command not found"
     echo ""
     print_status "Run 'extension-manager install context-loader' to complete installation"
-    return 0
+    return 1
   fi
 
   echo "Status: ✓ INSTALLED"
