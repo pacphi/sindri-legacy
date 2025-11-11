@@ -168,12 +168,27 @@ setup_workspace_bin() {
         chown "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR"
     fi
 
-    # Create symlink for extension-manager if script exists and symlink doesn't
-    if [ -f "$WORKSPACE_LIB_DIR/extension-manager.sh" ] && \
-       [ ! -L "$WORKSPACE_BIN_DIR/extension-manager" ]; then
-        ln -sf "$WORKSPACE_LIB_DIR/extension-manager.sh" "$WORKSPACE_BIN_DIR/extension-manager"
-        chown -h "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR/extension-manager"
-    fi
+    # List of scripts to symlink (script name without .sh extension)
+    local scripts=(
+        "extension-manager"
+        "backup"
+        "clone-project"
+        "new-project"
+        "restore"
+        "system-status"
+        "upgrade-history"
+    )
+
+    # Create symlinks for all scripts
+    for script in "${scripts[@]}"; do
+        local source_file="$WORKSPACE_LIB_DIR/${script}.sh"
+        local target_link="$WORKSPACE_BIN_DIR/$script"
+
+        if [ -f "$source_file" ] && [ ! -L "$target_link" ]; then
+            ln -sf "$source_file" "$target_link"
+            chown -h "$DEVELOPER_USER:$DEVELOPER_USER" "$target_link"
+        fi
+    done
 
     echo "✅ Workspace bin directory configured"
 }

@@ -260,7 +260,7 @@ Extensions are organized by category in the activation manifest.
 - **docker** - Docker Engine with compose, dive, ctop
 - **infra-tools** - Terraform, Ansible, kubectl, Helm, Carvel, Pulumi
 - **cloud-tools** - AWS, Azure, GCP, Oracle, DigitalOcean CLIs
-- **ai-tools** - AI coding assistants (Codex, Gemini, Ollama, Fabric, Plandex)
+- **ai-tools** - AI coding assistants (Codex, Gemini, Ollama, Fabric)
 
 ## Activation Manifest
 

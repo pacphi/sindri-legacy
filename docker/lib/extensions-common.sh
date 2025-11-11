@@ -564,6 +564,70 @@ extension_main() {
 }
 
 # ============================================================================
+# GIT HELPERS
+# ============================================================================
+
+# Setup git aliases for extension-specific commands
+# Usage: setup_git_aliases "alias1:command1" "alias2:command2" ...
+# Example: setup_git_aliases "gotest:!go test ./..." "gofmt:!go fmt ./..."
+# Returns: 0 on success
+setup_git_aliases() {
+    local aliases=("$@")
+
+    if [[ ${#aliases[@]} -eq 0 ]]; then
+        print_debug "No git aliases to setup"
+        return 0
+    fi
+
+    print_status "Setting up git aliases..."
+
+    for alias_def in "${aliases[@]}"; do
+        # Parse "alias:command" format
+        local alias_name="${alias_def%%:*}"
+        local alias_cmd="${alias_def#*:}"
+
+        if [[ -z "$alias_name" ]] || [[ -z "$alias_cmd" ]]; then
+            print_warning "Invalid alias format: $alias_def (expected 'name:command')"
+            continue
+        fi
+
+        # Set git alias
+        if git config --global alias."$alias_name" "$alias_cmd" 2>/dev/null; then
+            print_debug "✓ git ${alias_name}"
+        else
+            print_warning "Failed to set git alias: ${alias_name}"
+        fi
+    done
+
+    print_success "Git aliases configured"
+    return 0
+}
+
+# Cleanup git aliases for extension
+# Usage: cleanup_git_aliases "alias1" "alias2" ...
+# Example: cleanup_git_aliases "gotest" "gofmt"
+# Returns: 0 on success
+cleanup_git_aliases() {
+    local aliases=("$@")
+
+    if [[ ${#aliases[@]} -eq 0 ]]; then
+        print_debug "No git aliases to cleanup"
+        return 0
+    fi
+
+    print_status "Removing git aliases..."
+
+    for alias_name in "${aliases[@]}"; do
+        if git config --global --unset alias."$alias_name" 2>/dev/null; then
+            print_debug "✗ git ${alias_name}"
+        fi
+    done
+
+    print_success "Git aliases removed"
+    return 0
+}
+
+# ============================================================================
 # CLEANUP HELPERS
 # ============================================================================
 
@@ -988,6 +1052,10 @@ export -f remove_mise_config
 # Dependency checking
 export -f check_dependent_extensions
 export -f show_dependent_extensions_warning
+
+# Git helpers
+export -f setup_git_aliases
+export -f cleanup_git_aliases
 
 # Cleanup helpers
 export -f cleanup_bashrc

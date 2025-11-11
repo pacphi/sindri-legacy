@@ -92,8 +92,8 @@ ssh developer@my-claude-env.fly.dev -p 10022
 # Run the enhanced configuration
 /workspace/scripts/vm-configure.sh
 
-# Validate the installation
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 ### 3. Start Development
@@ -274,8 +274,8 @@ tmux-resume-workspace # Smart workspace resumption
 #### Running Quality Checks
 
 ```bash
-# Basic setup validation
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 
 # Context system validation
 validate-context
@@ -325,8 +325,8 @@ npm run lint               # Check code standards
 npm run typecheck          # Validate types
 npm run build              # Ensure compilation
 
-# Use basic validation script
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 ### 4. Visual Testing (Frontend)
@@ -394,7 +394,7 @@ t0, t1, t2, t3            # Quick window switching
 ```bash
 claude                     # Start Claude Code
 dsp                       # Claude with skip permissions
-/workspace/scripts/validate-setup.sh # Validate installation
+extension-manager validate-all # Validate extension installations
 monitor-claude            # Start usage monitoring
 ```
 
@@ -451,16 +451,16 @@ tail -20 /workspace/logs/system.log
 # Show current status
 /workspace/scripts/lib/system-status.sh
 
-# Run setup validation
-/workspace/scripts/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 ### Getting Help
 
-1. **Run Setup Validation**
+1. **Validate Extension Installations**
 
    ```bash
-   /workspace/scripts/lib/validate-setup.sh
+   extension-manager validate-all
    ```
 
 2. **Check System Status**
@@ -548,8 +548,8 @@ nano /workspace/context/CLAUDE.md
 # Run the integration setup
 /workspace/scripts/vm-configure.sh
 
-# Validate migration
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 ### From Local Turbo-Flow-Claude
@@ -571,7 +571,7 @@ nano /workspace/config/agents-config.yaml
 - **Examples**: `/workspace/projects/templates/`
 - **Logs**: `/workspace/logs/`
 - **Configuration**: `/workspace/config/`
-- **Validation**: `/workspace/scripts/lib/validate-setup.sh`
+- **Validation**: `extension-manager validate-all`
 
 For issues and contributions, see the project repository.
 

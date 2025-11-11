@@ -336,8 +336,8 @@ npx claude-flow@alpha agent run <name>    # Run specific agent
 # On the VM
 /workspace/scripts/lib/system-status.sh
 
-# Check specific components
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 **Git configuration:**
