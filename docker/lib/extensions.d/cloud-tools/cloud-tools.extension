@@ -243,7 +243,7 @@ configure() {
   fi
 
   # Create cloud workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh (/workspace/developer/extensions)
   print_status "Setting up cloud workspace..."
   mkdir -p "$WORKSPACE_DIR/cloud"/{aws,azure,gcp,oracle,alibaba,digitalocean,ibm}
 
@@ -286,7 +286,7 @@ validate() {
   print_status "Optional CLIs: $optional_found/${#optional_clis[@]}"
 
   # Check workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
     print_success "Cloud workspace: exists"
   else
@@ -361,7 +361,7 @@ status() {
   done
 
   # Workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
     echo ""
     print_status "Cloud workspace:"
@@ -521,7 +521,7 @@ remove() {
   cleanup_bashrc "# ${EXT_NAME}"
 
   # Remove workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/cloud" ]]; then
     read -p "Remove cloud workspace directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then

@@ -363,7 +363,7 @@ configure() {
   fi
 
   # Create AI tools workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh (/workspace/developer/extensions)
   print_status "Setting up AI tools workspace..."
   mkdir -p "$WORKSPACE_DIR/ai-tools"/{ollama-models,fabric-patterns,projects}
 
@@ -453,7 +453,7 @@ validate() {
   fi
 
   # Check workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     print_success "AI tools workspace: exists"
   else
@@ -633,7 +633,7 @@ status() {
 
   # Workspace
   echo ""
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     print_status "AI tools workspace:"
     echo "  $WORKSPACE_DIR/ai-tools/"
@@ -812,7 +812,7 @@ remove() {
   cleanup_bashrc "# ${EXT_NAME} - Local bin"
 
   # Remove workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     read -p "Remove AI tools workspace directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then

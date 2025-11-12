@@ -343,7 +343,7 @@ configure() {
   fi
 
   # Create infrastructure workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh (/workspace/developer/extensions)
   print_status "Setting up infrastructure workspace..."
   mkdir -p "$WORKSPACE_DIR/infrastructure"/{terraform,kubernetes,helm-charts,crossplane,pulumi}
 
@@ -423,7 +423,7 @@ validate() {
   print_status "Carvel tools: $carvel_found/${#carvel_tools[@]}"
 
   # Check workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
     print_success "Infrastructure workspace: exists"
   else
@@ -531,7 +531,7 @@ status() {
   fi
 
   # Workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
     echo ""
     print_status "Infrastructure workspace:"
@@ -682,7 +682,7 @@ remove() {
   cleanup_bashrc "# ${EXT_NAME}"
 
   # Remove workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/infrastructure" ]]; then
     read -p "Remove infrastructure workspace directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then

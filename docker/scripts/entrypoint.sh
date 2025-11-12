@@ -61,9 +61,39 @@ setup_developer_home() {
             cp -r "$DEVELOPER_HOME_BUILD/.claude" "$DEVELOPER_HOME_RUNTIME/"
             echo "    ✓ Copied Claude configuration"
         fi
+    else
+        echo "  Developer home already exists on persistent volume"
+    fi
 
-        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME"
-        chmod 755 "$DEVELOPER_HOME_RUNTIME"
+    # CRITICAL: Always ensure proper ownership and permissions
+    # This must run every time, not just on first creation
+    # Without this, extensions fail with "Permission denied" on .bashrc writes
+    echo "  🔒 Ensuring correct ownership and permissions..."
+
+    # Ensure .bashrc exists (may be missing if directory was created externally)
+    if [ ! -f "$DEVELOPER_HOME_RUNTIME/.bashrc" ] && [ -f "$SKEL_DIR/.bashrc" ]; then
+        cp "$SKEL_DIR/.bashrc" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .bashrc from skeleton"
+    fi
+
+    # Ensure .bash_profile exists
+    if [ ! -f "$DEVELOPER_HOME_RUNTIME/.bash_profile" ] && [ -f "$SKEL_DIR/.bash_profile" ]; then
+        cp "$SKEL_DIR/.bash_profile" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .bash_profile from skeleton"
+    fi
+
+    # Create extensions directory for extension artifacts
+    # This is where extensions install/configure (see WORKSPACE_DIR in common.sh)
+    mkdir -p "$DEVELOPER_HOME_RUNTIME/extensions"
+    echo "    ✓ Created extensions directory"
+
+    # Always set ownership - critical for extension installation
+    chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME"
+    chmod 755 "$DEVELOPER_HOME_RUNTIME"
+
+    # Ensure .bashrc is writable by developer user
+    if [ -f "$DEVELOPER_HOME_RUNTIME/.bashrc" ]; then
+        chmod 644 "$DEVELOPER_HOME_RUNTIME/.bashrc"
     fi
 
     # Update the user's home directory to point to persistent volume

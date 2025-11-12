@@ -18,7 +18,11 @@ export CYAN='\033[0;36m'
 export NC='\033[0m' # No Color
 
 # Common directories
-export WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+# WORKSPACE_DIR is where extensions install and configure their artifacts
+# - Avoids permission issues (developer user owns /workspace/developer)
+# - Compartmentalizes extension artifacts (cleaner organization)
+# - Maintains security (/workspace/.system remains root-owned and protected)
+export WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace/developer/extensions}"
 export SCRIPTS_DIR="${SCRIPTS_DIR:-$WORKSPACE_DIR/scripts}"
 export PROJECTS_DIR="${PROJECTS_DIR:-$WORKSPACE_DIR/projects}"
 export BACKUPS_DIR="${BACKUPS_DIR:-$WORKSPACE_DIR/backups}"
