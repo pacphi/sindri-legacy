@@ -3,7 +3,7 @@
 # Extension API v2.0
 #
 # This extension installs .NET development environment with:
-# - .NET SDK (9.0, 8.0 LTS)
+# - .NET SDK (10.0, 8.0 LTS)
 # - ASP.NET Core Runtime
 # - 19 global tools (EF Core, formatters, diagnostics)
 # - NuGet CLI with Mono wrapper
@@ -145,7 +145,7 @@ install() {
   # Install .NET SDK versions
   print_status "Installing .NET SDKs (this may take 2-5 minutes)..."
   local dotnet_sdks=(
-    "dotnet-sdk-9.0"    # Current LTS
+    "dotnet-sdk-10.0"   # Current LTS
     "dotnet-sdk-8.0"    # Previous version
   )
 
@@ -471,7 +471,7 @@ remove() {
 
   # Remove .NET packages
   print_status "Removing .NET packages..."
-  sudo apt-get remove -y dotnet-sdk-9.0 dotnet-sdk-8.0 aspnetcore-runtime-8.0 2>/dev/null
+  sudo apt-get remove -y dotnet-sdk-10.0 dotnet-sdk-8.0 aspnetcore-runtime-8.0 2>/dev/null
   sudo apt-get autoremove -y 2>/dev/null
 
   # Remove Microsoft package repository
@@ -534,7 +534,7 @@ upgrade() {
     print_status "Upgrading ${EXT_NAME}..."
 
     # Upgrade .NET packages via APT
-    if upgrade_apt_packages "dotnet-sdk-9.0" "dotnet-sdk-8.0" "aspnetcore-runtime-9.0" "aspnetcore-runtime-8.0"; then
+    if upgrade_apt_packages "dotnet-sdk-10.0" "dotnet-sdk-8.0" "aspnetcore-runtime-10.0" "aspnetcore-runtime-8.0"; then
         print_success ".NET SDK upgraded successfully"
         return 0
     else
