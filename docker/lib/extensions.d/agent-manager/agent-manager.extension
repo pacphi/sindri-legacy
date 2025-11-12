@@ -1,6 +1,6 @@
 #!/bin/bash
 # agent-manager.sh.example - Claude Code agent manager
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs the agent-manager binary for managing Claude Code agents.
 # It downloads the latest release from GitHub and sets up agent configuration.

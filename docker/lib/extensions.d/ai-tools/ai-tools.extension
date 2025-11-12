@@ -1,6 +1,6 @@
 #!/bin/bash
 # ai-tools.extension - AI CLI tools and coding assistants
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs AI CLI tools using a hybrid approach:
 # - Native installs: Ollama (binary), Fabric (git clone)

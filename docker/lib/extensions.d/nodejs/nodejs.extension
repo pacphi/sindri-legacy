@@ -1,6 +1,6 @@
 #!/bin/bash
 # nodejs.extension - Node.js and npm installation via mise
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Node.js LTS and npm using mise.
 # It provides the JavaScript runtime needed by Playwright, monitoring tools, and other extensions.

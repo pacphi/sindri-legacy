@@ -1,6 +1,6 @@
 #!/bin/bash
 # ruby.extension - Ruby development environment via mise
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Ruby 3.4.7 with Rails, Bundler, and development gems using mise.
 # mise provides unified version management with declarative configuration.

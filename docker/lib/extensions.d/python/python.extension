@@ -1,6 +1,6 @@
 #!/bin/bash
 # python.extension - Python development environment via mise
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Python 3.13 with development tools using mise.
 # mise manages Python and pipx-based CLI tools declaratively via TOML config.

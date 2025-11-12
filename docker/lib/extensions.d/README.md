@@ -37,7 +37,7 @@ extension-manager status nodejs
 extension-manager validate nodejs
 ```
 
-## Extension API v1.0
+## Extension API v2.0
 
 All extensions must implement these 6 functions:
 
@@ -376,7 +376,7 @@ cp ../../../docs/templates/template.extension my-extension.extension
 ```bash
 #!/bin/bash
 # my-extension.extension - Brief description
-# Extension API v1.0
+# Extension API v2.0
 
 EXT_NAME="my-extension"
 EXT_VERSION="1.0.0"

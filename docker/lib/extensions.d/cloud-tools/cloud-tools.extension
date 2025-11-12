@@ -1,6 +1,6 @@
 #!/bin/bash
 # cloud-tools.sh.example - Cloud provider CLI tools
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs cloud provider CLIs with:
 # - AWS CLI

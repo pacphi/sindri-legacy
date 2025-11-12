@@ -1,6 +1,6 @@
 #!/bin/bash
 # infra-tools.sh.example - Infrastructure and DevOps tooling
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs infrastructure tools with:
 # - IaC tools (Terraform, Pulumi, Crossplane)

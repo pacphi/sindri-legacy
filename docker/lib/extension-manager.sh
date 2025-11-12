@@ -1,6 +1,6 @@
 #!/bin/bash
 # extension-manager.sh - Manage extension scripts activation and deactivation
-# Extension API v1.0 - Manifest-based activation with install/uninstall support
+# Extension API v2.0 - Manifest-based activation with install/uninstall support
 # This script provides comprehensive management of extension scripts in the extensions.d directory
 
 # Determine script location

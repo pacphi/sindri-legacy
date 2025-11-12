@@ -1,6 +1,6 @@
 #!/bin/bash
 # php.sh.example - PHP and Symfony development environment
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs PHP with:
 # - PHP 8.4.14 with essential extensions

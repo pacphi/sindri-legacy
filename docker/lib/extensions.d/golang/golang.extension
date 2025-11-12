@@ -1,6 +1,6 @@
 #!/bin/bash
 # golang.extension - Go toolchain and development tools via mise
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Go with:
 # - Go 1.24 via mise

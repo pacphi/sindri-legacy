@@ -1,6 +1,6 @@
 #!/bin/bash
 # github-cli.sh.example - GitHub CLI configuration
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension configures GitHub CLI (gh) with authentication and aliases:
 # - Configures authentication using GITHUB_TOKEN environment variable

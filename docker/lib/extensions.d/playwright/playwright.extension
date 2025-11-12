@@ -1,6 +1,6 @@
 #!/bin/bash
 # playwright.sh.example - Playwright browser automation framework
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Playwright for browser automation and visual verification.
 # It includes Chromium browser, TypeScript support, and test configuration.
