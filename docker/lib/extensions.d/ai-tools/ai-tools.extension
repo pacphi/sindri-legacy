@@ -4,7 +4,7 @@
 #
 # This extension installs AI CLI tools using a hybrid approach:
 # - Native installs: Ollama (binary), Fabric (git clone)
-# - mise npm backend: codex-cli, @google/gemini-cli (if Node.js available)
+# - mise npm backend: @openai/codex, @google/gemini-cli (if Node.js available)
 # - mise go backend: hector (if Go available)
 # - Fallback: Direct npm/go install if mise unavailable
 
@@ -166,7 +166,7 @@ install() {
     # Add npm-based tools if Node.js is available
     if command_exists npm || command_exists node; then
       toml_content+="# npm-based tools (requires nodejs extension)\n"
-      toml_content+='"npm:codex-cli" = "latest"\n'
+      toml_content+='"npm:@openai/codex" = "latest"\n'
       toml_content+='"npm:@google/gemini-cli" = "latest"\n'
       toml_content+="\n"
     fi
@@ -203,7 +203,7 @@ install() {
       if command_exists codex; then
         print_warning "Codex CLI already installed"
       else
-        if npm install -g codex-cli 2>&1; then
+        if npm install -g @openai/codex 2>&1; then
           command_exists codex && print_success "Codex CLI installed"
         else
           print_warning "Failed to install Codex CLI"
@@ -719,6 +719,46 @@ upgrade() {
     fi
   fi
 
+  # Upgrade fallback installations (when mise is not available or not used)
+  if ! command_exists mise || [[ ! -f "$HOME/.config/mise/conf.d/ai-tools.toml" ]]; then
+    # Upgrade npm-based tools (fallback)
+    if command_exists npm; then
+      for tool_pkg in "@openai/codex" "@google/gemini-cli"; do
+        local tool_name="${tool_pkg##*:}"
+        tool_name="${tool_name##*/}"  # Extract binary name
+        [[ "$tool_name" == "@google" ]] && tool_name="gemini"
+        [[ "$tool_pkg" == "@openai/codex" ]] && tool_name="codex"
+
+        if command_exists "$tool_name"; then
+          print_status "Upgrading $tool_name (npm fallback)..."
+          if npm update -g "$tool_pkg" 2>&1; then
+            print_success "$tool_name upgraded"
+            ((upgraded_count++))
+          else
+            print_warning "Failed to upgrade $tool_name"
+            ((failed_count++))
+          fi
+        fi
+      done
+    fi
+
+    # Upgrade Go-based tools (fallback)
+    if command_exists go && command_exists hector; then
+      print_status "Upgrading Hector (Go fallback)..."
+      export GOPATH=$HOME/go
+      export GOBIN=$GOPATH/bin
+      export PATH=$PATH:$GOBIN
+
+      if timeout 300 go install github.com/kadirpekel/hector/cmd/hector@latest 2>&1; then
+        print_success "Hector upgraded"
+        ((upgraded_count++))
+      else
+        print_warning "Failed to upgrade Hector"
+        ((failed_count++))
+      fi
+    fi
+  fi
+
   # Summary
   echo ""
   print_status "Upgrade summary: $upgraded_count upgraded, $failed_count failed"
@@ -746,10 +786,26 @@ remove() {
     return 1
   fi
 
-  # Remove mise config
+  # Remove mise-managed tools
   if command_exists mise; then
     local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
     if [[ -f "$TOML_FILE" ]]; then
+      print_status "Removing mise-managed AI tools..."
+
+      # Uninstall npm-based tools
+      if command_exists codex; then
+        mise uninstall npm:@openai/codex 2>/dev/null && print_success "Codex removed (mise)"
+      fi
+      if command_exists gemini; then
+        mise uninstall npm:@google/gemini-cli 2>/dev/null && print_success "Gemini removed (mise)"
+      fi
+
+      # Uninstall Go-based tools
+      if command_exists hector; then
+        mise uninstall go:github.com/kadirpekel/hector/cmd/hector 2>/dev/null && print_success "Hector removed (mise)"
+      fi
+
+      # Remove mise config
       print_status "Removing mise configuration..."
       rm -f "$TOML_FILE"
       print_success "mise config removed"
@@ -759,7 +815,7 @@ remove() {
   # Remove npm-based tools (if installed via fallback)
   if command_exists npm; then
     print_status "Removing npm-based tools..."
-    local npm_tools=(codex-cli @google/gemini-cli)
+    local npm_tools=(@openai/codex @google/gemini-cli)
     for tool in "${npm_tools[@]}"; do
       if npm list -g "$tool" 2>/dev/null | grep -q "$tool"; then
         npm uninstall -g "$tool" 2>/dev/null
