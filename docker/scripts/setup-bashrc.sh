@@ -8,8 +8,8 @@ set -e
 # to the developer home when created
 cat >> /etc/skel/.bashrc << 'EOF'
 
-# Add /workspace/bin to PATH for custom utilities
-export PATH="/workspace/bin:$PATH"
+# Add /workspace/bin and /workspace/.system/bin to PATH for custom utilities
+export PATH="/workspace/bin:/workspace/.system/bin:$PATH"
 
 # Custom aliases and functions
 alias ll="ls -alF"

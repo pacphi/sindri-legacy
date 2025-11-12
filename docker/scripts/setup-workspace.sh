@@ -144,7 +144,8 @@ set_permissions() {
             "$WORKSPACE_DIR/context" \
             "$WORKSPACE_DIR/docs" \
             "$WORKSPACE_DIR/backups" \
-            "$WORKSPACE_DIR/bin" 2>/dev/null || true
+            "$WORKSPACE_DIR/bin" \
+            "$WORKSPACE_DIR/.system/manifest" 2>/dev/null || true
 
         chmod 775 \
             "$WORKSPACE_DIR/scripts" \
@@ -154,16 +155,16 @@ set_permissions() {
             "$WORKSPACE_DIR/context" \
             "$WORKSPACE_DIR/docs" \
             "$WORKSPACE_DIR/backups" \
-            "$WORKSPACE_DIR/bin" 2>/dev/null || true
+            "$WORKSPACE_DIR/bin" \
+            "$WORKSPACE_DIR/.system/manifest" 2>/dev/null || true
 
         echo "  ✓ User workspace permissions set"
     fi
 
-    # System directory remains root-owned
+    # System directory remains root-owned (except manifest which is developer-owned)
     chmod 755 "$WORKSPACE_DIR/.system" 2>/dev/null || true
     chmod 755 "$WORKSPACE_DIR/.system/bin" 2>/dev/null || true
     chmod 755 "$WORKSPACE_DIR/.system/lib" 2>/dev/null || true
-    chmod 755 "$WORKSPACE_DIR/.system/manifest" 2>/dev/null || true
 
     echo "  ✓ System directory permissions set"
 }
