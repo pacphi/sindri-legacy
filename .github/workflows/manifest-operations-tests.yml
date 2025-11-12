@@ -115,8 +115,8 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest=\"manifest/active-extensions.conf\"
 
             echo \"Using test fixture for reorder test...\"
             cp /tmp/manifest-reorder.conf \$manifest
@@ -127,7 +127,7 @@ jobs:
 
             echo \"\"
             echo \"Running: extension-manager reorder python 5\"
-            if bash extension-manager.sh reorder python 5 2>&1; then
+            if extension-manager reorder python 5 2>&1; then
               echo \"\"
               echo \"=== Manifest after reorder ===\"
               cat -n \$manifest
@@ -167,8 +167,8 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest=\"manifest/active-extensions.conf\"
 
             echo \"Using test fixture with comments...\"
             cp /tmp/manifest-comments.conf \$manifest
@@ -179,7 +179,7 @@ jobs:
 
             echo \"\"
             echo \"Running: extension-manager deactivate python\"
-            bash extension-manager.sh deactivate python
+            extension-manager deactivate python
 
             echo \"\"
             echo \"=== Manifest after deactivate ===\"

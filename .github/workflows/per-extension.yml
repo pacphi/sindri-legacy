@@ -198,7 +198,7 @@ jobs:
               echo \"Timeout: $timeout\"
               echo \"\"
 
-              if timeout --kill-after=60s $timeout bash -c \"cd /workspace/scripts/lib && bash extension-manager.sh install-all\" 2>&1 | tee /tmp/configure.log; then
+              if timeout --kill-after=60s $timeout bash -c \"cd /workspace/.system cd /workspace/scripts/lib &&cd /workspace/scripts/lib && extension-manager install-all\" 2>&1 | tee /tmp/configure.log; then
                 config_exit_code=\${PIPESTATUS[0]}
 
                 if [ \$config_exit_code -eq 0 ]; then
@@ -368,7 +368,7 @@ jobs:
           echo "Testing enhanced status() output for $extension_name (timeout: ${{ matrix.extension.status_timeout || 2 }} minutes)..."
 
           # Use a temporary file to capture output with retry
-          if ssh_command_retry "$app_name" "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh status $extension_name'" > /tmp/status_output.txt; then
+          if ssh_command_retry "$app_name" "/bin/bash -lc 'cd /workspace/.system cd /workspace/scripts/lib &&cd /workspace/scripts/lib && extension-manager status $extension_name'" > /tmp/status_output.txt; then
             status_output=$(cat /tmp/status_output.txt)
             echo "$status_output"
 

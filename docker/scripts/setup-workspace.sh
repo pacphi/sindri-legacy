@@ -1,7 +1,7 @@
 #!/bin/bash
-# setup-workspace.sh - Initialize and sync /workspace directory structure
+# setup-workspace.sh - Initialize /workspace directory structure
 # This runs at container startup and must be idempotent
-# Handles both fresh volumes (empty) and existing volumes (with content)
+# Creates user workspace directories - system files stay in /docker
 
 set -e
 
@@ -38,15 +38,14 @@ create_directory_structure() {
         echo "  ✓ Created workspace root: $WORKSPACE_DIR"
     fi
 
-    # Create main directories
-    local main_dirs=(
-        "projects"
-        "projects/active"
+    # Create user directories (developer-owned, writable)
+    local user_dirs=(
+        "developer"
         "scripts"
-        "scripts/lib"
-        "scripts/lib/extensions.d"
         "config"
         "config/templates"
+        "projects"
+        "projects/active"
         "agents"
         "context"
         "context/global"
@@ -56,184 +55,117 @@ create_directory_structure() {
         "docs"
     )
 
-    for dir in "${main_dirs[@]}"; do
+    for dir in "${user_dirs[@]}"; do
+        create_dir_if_needed "$WORKSPACE_DIR/$dir"
+    done
+
+    # Create system directory (root-owned, read-only to users)
+    local system_dirs=(
+        ".system"
+        ".system/bin"
+        ".system/lib"
+        ".system/manifest"
+    )
+
+    for dir in "${system_dirs[@]}"; do
         create_dir_if_needed "$WORKSPACE_DIR/$dir"
     done
 }
 
 # ------------------------------------------------------------------------------
-# sync_extension_manager - Sync extension-manager.sh from Docker image
+# create_system_symlinks - Create symlinks to Docker image files
 # ------------------------------------------------------------------------------
-sync_extension_manager() {
-    if [ ! -d "/docker/lib" ]; then
+create_system_symlinks() {
+    echo "🔗 Creating system symlinks..."
+
+    # Symlink extension-manager for PATH access
+    if [ ! -L "$WORKSPACE_DIR/.system/bin/extension-manager" ]; then
+        ln -sf /docker/lib/extension-manager.sh "$WORKSPACE_DIR/.system/bin/extension-manager"
+        echo "  ✓ Linked extension-manager"
+    fi
+
+    # Symlink common libraries
+    if [ ! -L "$WORKSPACE_DIR/.system/lib/common.sh" ]; then
+        ln -sf /docker/lib/common.sh "$WORKSPACE_DIR/.system/lib/common.sh"
+        echo "  ✓ Linked common.sh"
+    fi
+
+    if [ ! -L "$WORKSPACE_DIR/.system/lib/extensions-common.sh" ]; then
+        ln -sf /docker/lib/extensions-common.sh "$WORKSPACE_DIR/.system/lib/extensions-common.sh"
+        echo "  ✓ Linked extensions-common.sh"
+    fi
+
+    # Symlink extensions directory
+    if [ ! -L "$WORKSPACE_DIR/.system/lib/extensions.d" ]; then
+        ln -sf /docker/lib/extensions.d "$WORKSPACE_DIR/.system/lib/extensions.d"
+        echo "  ✓ Linked extensions.d"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# initialize_manifest - Initialize extension activation manifest
+# ------------------------------------------------------------------------------
+initialize_manifest() {
+    if [ -f "$WORKSPACE_DIR/.system/manifest/active-extensions.conf" ]; then
         return
     fi
 
-    # Ensure extension-manager.sh exists and is current
-    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ] || \
-       [ "/docker/lib/extension-manager.sh" -nt "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ]; then
-        cp /docker/lib/extension-manager.sh "$WORKSPACE_DIR/scripts/lib/"
-        chmod +x "$WORKSPACE_DIR/scripts/lib/extension-manager.sh"
-        echo "  ✓ Synced extension-manager.sh"
+    echo "📋 Initializing extension manifest..."
+
+    # Use CI manifest in CI mode, otherwise use example
+    if [ "$CI_MODE" = "true" ]; then
+        cp /docker/lib/extensions.d/active-extensions.ci.conf \
+           "$WORKSPACE_DIR/.system/manifest/active-extensions.conf"
+        echo "  ✓ Copied CI manifest"
+    else
+        cp /docker/lib/extensions.d/active-extensions.conf.example \
+           "$WORKSPACE_DIR/.system/manifest/active-extensions.conf"
+        echo "  ✓ Copied manifest example"
     fi
+
+    chmod 644 "$WORKSPACE_DIR/.system/manifest/active-extensions.conf"
 }
 
 # ------------------------------------------------------------------------------
-# sync_common_scripts - Sync common utility scripts from Docker image
-# ------------------------------------------------------------------------------
-sync_common_scripts() {
-    if [ ! -d "/docker/lib" ]; then
-        return
-    fi
-
-    # Sync common.sh
-    if [ -f "/docker/lib/common.sh" ]; then
-        if [ ! -f "$WORKSPACE_DIR/scripts/lib/common.sh" ] || \
-           [ "/docker/lib/common.sh" -nt "$WORKSPACE_DIR/scripts/lib/common.sh" ]; then
-            cp /docker/lib/common.sh "$WORKSPACE_DIR/scripts/lib/"
-            chmod +x "$WORKSPACE_DIR/scripts/lib/common.sh"
-            echo "  ✓ Synced common.sh"
-        fi
-    fi
-
-    # Sync extensions-common.sh
-    if [ -f "/docker/lib/extensions-common.sh" ]; then
-        if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions-common.sh" ] || \
-           [ "/docker/lib/extensions-common.sh" -nt "$WORKSPACE_DIR/scripts/lib/extensions-common.sh" ]; then
-            cp /docker/lib/extensions-common.sh "$WORKSPACE_DIR/scripts/lib/"
-            chmod +x "$WORKSPACE_DIR/scripts/lib/extensions-common.sh"
-            echo "  ✓ Synced extensions-common.sh"
-        fi
-    fi
-
-    # Sync registry-retry.sh if it exists
-    if [ -f "/docker/lib/registry-retry.sh" ]; then
-        if [ ! -f "$WORKSPACE_DIR/scripts/lib/registry-retry.sh" ] || \
-           [ "/docker/lib/registry-retry.sh" -nt "$WORKSPACE_DIR/scripts/lib/registry-retry.sh" ]; then
-            cp /docker/lib/registry-retry.sh "$WORKSPACE_DIR/scripts/lib/"
-            chmod +x "$WORKSPACE_DIR/scripts/lib/registry-retry.sh"
-            echo "  ✓ Synced registry-retry.sh"
-        fi
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# sync_extension_scripts - Sync top-level extension scripts
-# ------------------------------------------------------------------------------
-sync_extension_scripts() {
-    if [ ! -d "/docker/lib" ]; then
-        return
-    fi
-
-    # Sync top-level extension scripts
-    if [ "$(ls -A /docker/lib/extensions.d/*.extension 2>/dev/null)" ]; then
-        for ext in /docker/lib/extensions.d/*.extension; do
-            local ext_name
-            ext_name=$(basename "$ext")
-            if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_name" ] || \
-               [ "$ext" -nt "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_name" ]; then
-                cp "$ext" "$WORKSPACE_DIR/scripts/lib/extensions.d/"
-                echo "  ✓ Synced $ext_name"
-            fi
-        done
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# sync_extension_subdirectories - Sync nested extension directories
-# ------------------------------------------------------------------------------
-sync_extension_subdirectories() {
-    if [ ! -d "/docker/lib" ]; then
-        return
-    fi
-
-    # Sync nested extension directories (e.g., claude/, nodejs/, etc.)
-    for ext_dir in /docker/lib/extensions.d/*/; do
-        [ ! -d "$ext_dir" ] && continue
-        local ext_dir_name
-        ext_dir_name=$(basename "$ext_dir")
-
-        # Create extension subdirectory if needed
-        create_dir_if_needed "$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_dir_name"
-
-        # Sync extension files from subdirectory
-        for ext_file in "$ext_dir"/*; do
-            [ ! -f "$ext_file" ] && continue
-            local ext_file_name
-            ext_file_name=$(basename "$ext_file")
-            local dest_file="$WORKSPACE_DIR/scripts/lib/extensions.d/$ext_dir_name/$ext_file_name"
-
-            if [ ! -f "$dest_file" ] || [ "$ext_file" -nt "$dest_file" ]; then
-                cp "$ext_file" "$dest_file"
-                [ -x "$ext_file" ] && chmod +x "$dest_file"
-                echo "  ✓ Synced $ext_dir_name/$ext_file_name"
-            fi
-        done
-    done
-}
-
-# ------------------------------------------------------------------------------
-# sync_manifest_templates - Sync manifest configuration templates
-# ------------------------------------------------------------------------------
-sync_manifest_templates() {
-    if [ ! -d "/docker/lib" ]; then
-        return
-    fi
-
-    # Sync CI manifest template
-    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/active-extensions.ci.conf" ] && \
-       [ -f "/docker/lib/extensions.d/active-extensions.ci.conf" ]; then
-        cp /docker/lib/extensions.d/active-extensions.ci.conf "$WORKSPACE_DIR/scripts/lib/extensions.d/"
-        echo "  ✓ Synced CI manifest template"
-    fi
-
-    # Sync manifest example
-    if [ ! -f "$WORKSPACE_DIR/scripts/lib/extensions.d/active-extensions.conf.example" ] && \
-       [ -f "/docker/lib/extensions.d/active-extensions.conf.example" ]; then
-        cp /docker/lib/extensions.d/active-extensions.conf.example "$WORKSPACE_DIR/scripts/lib/extensions.d/"
-        echo "  ✓ Synced manifest example"
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# sync_extension_system - Sync all extension components from Docker image
-# ------------------------------------------------------------------------------
-sync_extension_system() {
-    echo "🔧 Syncing extension system..."
-
-    sync_extension_manager
-    sync_common_scripts
-    sync_extension_scripts
-    sync_extension_subdirectories
-    sync_manifest_templates
-}
-
-# ------------------------------------------------------------------------------
-# create_symlinks - Create symlinks for workspace tools
-# ------------------------------------------------------------------------------
-create_symlinks() {
-    echo "🔗 Creating symlinks..."
-
-    # Create symlink for extension-manager
-    if [ -f "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" ] && \
-       [ ! -L "$WORKSPACE_DIR/bin/extension-manager" ]; then
-        ln -sf "$WORKSPACE_DIR/scripts/lib/extension-manager.sh" "$WORKSPACE_DIR/bin/extension-manager"
-        echo "  ✓ Created extension-manager symlink"
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# set_permissions - Set proper permissions on workspace directories
+# set_permissions - Set proper ownership and permissions
 # ------------------------------------------------------------------------------
 set_permissions() {
     echo "🔒 Setting permissions..."
 
-    chmod 755 "$WORKSPACE_DIR" 2>/dev/null || true
-    chmod 755 "$WORKSPACE_DIR/bin" 2>/dev/null || true
-    chmod 755 "$WORKSPACE_DIR/scripts" 2>/dev/null || true
-    chmod 755 "$WORKSPACE_DIR/scripts/lib" 2>/dev/null || true
+    # Set ownership on user workspace directories
+    # Only set if developer user exists (may not during Docker build)
+    if id "developer" >/dev/null 2>&1; then
+        chown -R developer:developer \
+            "$WORKSPACE_DIR/developer" \
+            "$WORKSPACE_DIR/scripts" \
+            "$WORKSPACE_DIR/config" \
+            "$WORKSPACE_DIR/projects" \
+            "$WORKSPACE_DIR/agents" \
+            "$WORKSPACE_DIR/context" \
+            "$WORKSPACE_DIR/docs" \
+            "$WORKSPACE_DIR/backups" \
+            "$WORKSPACE_DIR/bin" 2>/dev/null || true
 
-    echo "  ✓ Permissions set"
+        chmod 775 \
+            "$WORKSPACE_DIR/scripts" \
+            "$WORKSPACE_DIR/config" \
+            "$WORKSPACE_DIR/projects" \
+            "$WORKSPACE_DIR/agents" \
+            "$WORKSPACE_DIR/context" \
+            "$WORKSPACE_DIR/docs" \
+            "$WORKSPACE_DIR/backups" \
+            "$WORKSPACE_DIR/bin" 2>/dev/null || true
+
+        echo "  ✓ User workspace permissions set"
+    fi
+
+    # System directory remains root-owned
+    chmod 755 "$WORKSPACE_DIR/.system" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/.system/bin" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/.system/lib" 2>/dev/null || true
+    chmod 755 "$WORKSPACE_DIR/.system/manifest" 2>/dev/null || true
+
+    echo "  ✓ System directory permissions set"
 }
 
 # ------------------------------------------------------------------------------
@@ -253,11 +185,12 @@ This is your persistent development workspace.
 
 ## Directory Structure
 
+### User Workspace (developer-owned, writable)
+- `developer/` - Developer home directory (persistent)
+- `scripts/` - User scripts and extension-generated helpers
+- `config/` - Configuration files and templates
 - `projects/` - Active development projects
   - `active/` - Currently active projects
-- `scripts/` - Management and utility scripts
-  - `lib/` - Shared library scripts and extensions
-- `config/` - Configuration files and templates
 - `agents/` - AI agent configurations
 - `context/` - Context management for AI tools
   - `global/` - Global context files
@@ -266,9 +199,25 @@ This is your persistent development workspace.
 - `backups/` - Backup files
 - `docs/` - Workspace-wide documentation
 
+### System (read-only, managed by Sindri)
+- `.system/` - System runtime files (do not modify)
+  - `bin/` - System binaries (symlinked to /docker)
+  - `lib/` - System libraries (symlinked to /docker)
+  - `manifest/` - Extension activation configuration
+
+## Extension System
+
+Extensions are defined in the Docker image (`/docker/lib/extensions.d/`) and referenced
+via symlinks. Your active extensions are configured in:
+
+`.system/manifest/active-extensions.conf`
+
+Use `extension-manager` to install, configure, and manage extensions.
+
 ## Persistence
 
-All data in `/workspace` persists across VM restarts and is stored on a Fly.io volume.
+All user data in `/workspace` persists across VM restarts on a Fly.io volume.
+System files in `.system/` are symlinked to the Docker image for efficiency.
 
 ## Getting Started
 
@@ -293,8 +242,8 @@ main() {
     echo "🚀 Initializing workspace..."
 
     create_directory_structure
-    sync_extension_system
-    create_symlinks
+    create_system_symlinks
+    initialize_manifest
     set_permissions
     create_readme
 

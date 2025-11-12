@@ -231,7 +231,7 @@ sindri/
 set -euo pipefail
 
 # Source common utilities
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Use descriptive function names
 function install_development_tool() {
@@ -427,7 +427,7 @@ docker/lib/extensions.d/
 # Usage: How to enable and use this extension
 
 # Load common utilities
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 print_status "Installing [Extension Name]..."
 
@@ -502,7 +502,7 @@ consider using mise for simplified tool management.
 # Prerequisites: mise-config extension
 # Uses: mise for version management
 
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Prerequisites check
 function prerequisites() {

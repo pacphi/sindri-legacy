@@ -79,7 +79,7 @@ When the container starts, entrypoint.sh copies the extension library to the per
 1. **Copy Library to Persistent Volume**
 
    ```bash
-   if [ ! -d "/workspace/scripts/lib" ]; then
+   if [ ! -d "/workspace/.system/lib" ]; then
        cp -r /docker/lib /workspace/scripts/
    ```
 
@@ -91,7 +91,7 @@ When the container starts, entrypoint.sh copies the extension library to the per
    ```bash
    if [ "$CI_MODE" = "true" ]; then
        cp /docker/lib/extensions.d/active-extensions.ci.conf \
-          /workspace/scripts/extensions.d/active-extensions.conf
+          /workspace/scripts/.system/manifest/active-extensions.conf
    ```
 
    - CI mode: Uses CI template
@@ -129,7 +129,7 @@ Container Startup (entrypoint.sh)
     │
     ├─→ Base system: ✓ Already available (mise, workspace, SSH, Claude)
     │
-    ├─→ Check: First boot? (/workspace/scripts/lib missing?)
+    ├─→ Check: First boot? (/workspace/.system/lib missing?)
     │   │
     │   ├─→ YES: Copy lib/ to /workspace/scripts/
     │   │         Copy active-extensions.ci.conf → active-extensions.conf
@@ -157,7 +157,7 @@ which ssh
 claude --version
 
 # Verify extension library copied to volume
-ls /workspace/scripts/lib/extension-manager.sh
+ls /workspace/.system/bin/extension-manager
 ```
 
 **Key Differences:**
@@ -446,7 +446,7 @@ Located in `.github/workflows/test-fixtures/`:
 - name: Test with fixture
   run: |
     flyctl ssh console --app $app_name --command "/bin/bash -lc '
-      cp /tmp/manifest-reorder.conf extensions.d/active-extensions.conf
+      cp /tmp/manifest-reorder.conf .system/manifest/active-extensions.conf
       # Run tests...
     '"
 ```
@@ -726,10 +726,10 @@ esac
 
 ```bash
 # On test VM
-cd /workspace/scripts/lib
+cd /workspace/.system/lib
 
 # Add to manifest
-echo "r" >> extensions.d/active-extensions.conf
+echo "r" >> .system/manifest/active-extensions.conf
 
 # Install
 bash extension-manager.sh install-all

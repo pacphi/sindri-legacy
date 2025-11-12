@@ -1279,7 +1279,7 @@ disable_tools = []
 
 ## Extension Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
+Extensions are executed in the order listed in `/workspace/scripts/.system/manifest/active-extensions.conf`.
 
 ### Example Manifest
 

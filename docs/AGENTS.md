@@ -87,11 +87,11 @@ nano docker/lib/agent-discovery.sh       # Add discovery functions
 # Edit deployed configurations
 nano /workspace/config/agents-config.yaml          # Agent sources
 nano /workspace/.agent-aliases                     # Agent aliases
-nano /workspace/scripts/lib/agent-discovery.sh     # Discovery functions
+nano /workspace/.system/lib/agent-discovery.sh     # Discovery functions
 
 # Reload the configurations
 source /workspace/.agent-aliases                   # Reload agent aliases
-source /workspace/scripts/lib/agent-discovery.sh   # Reload discovery functions
+source /workspace/.system/lib/agent-discovery.sh   # Reload discovery functions
 agent-install                                      # Reinstall agents if config changed
 ```
 

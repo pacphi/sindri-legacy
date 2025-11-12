@@ -6,15 +6,18 @@
 # Determine script location
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Check if we're in the repository or on the VM
+
+# Extension definitions are always in Docker image (immutable)
+EXTENSIONS_BASE="/docker/lib/extensions.d"
+
+# Manifest is on persistent volume (user's active extension choices)
+MANIFEST_FILE="/workspace/.system/manifest/active-extensions.conf"
+
+# Source common utilities
 if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
-    # In repository
     source "$SCRIPT_DIR/common.sh"
-    EXTENSIONS_BASE="$SCRIPT_DIR/extensions.d"
-elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-    # On VM
-    source "/workspace/scripts/lib/common.sh"
-    EXTENSIONS_BASE="/workspace/scripts/lib/extensions.d"
+elif [[ -f "/docker/lib/common.sh" ]]; then
+    source "/docker/lib/common.sh"
 else
     # Fallback - define minimal needed functions
     RED='\033[0;31m'
@@ -29,25 +32,13 @@ else
     print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
     print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
     print_debug() { [[ "${DEBUG:-}" == "true" ]] && echo -e "[DEBUG] $1"; }
-
-    EXTENSIONS_BASE="./extensions.d"
 fi
 
 # Source upgrade history tracking
 if [[ -f "$SCRIPT_DIR/upgrade-history.sh" ]]; then
     source "$SCRIPT_DIR/upgrade-history.sh"
-elif [[ -f "/workspace/scripts/lib/upgrade-history.sh" ]]; then
-    source "/workspace/scripts/lib/upgrade-history.sh"
-fi
-
-# Activation manifest file location (colocated with extensions)
-if [[ -f "$EXTENSIONS_BASE/active-extensions.conf" ]]; then
-    MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
-elif [[ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]]; then
-    MANIFEST_FILE="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-else
-    # Default location
-    MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
+elif [[ -f "/docker/lib/upgrade-history.sh" ]]; then
+    source "/docker/lib/upgrade-history.sh"
 fi
 
 # Base system (workspace-structure, mise-config, ssh-environment, claude)

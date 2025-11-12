@@ -281,7 +281,7 @@ extension-manager validate-all
 validate-context
 
 # System status check
-/workspace/scripts/lib/system-status.sh
+/workspace/.system/lib/system-status.sh
 ```
 
 ## Project Development Workflow
@@ -425,7 +425,7 @@ find /workspace/context -type f -exec ls -la {} \;
 validate-context
 
 # Test context loading
-source /workspace/scripts/lib/context-loader.sh
+source /workspace/.system/lib/context-loader.sh
 load_all_context
 ```
 
@@ -449,7 +449,7 @@ tmux-workspace --new
 tail -20 /workspace/logs/system.log
 
 # Show current status
-/workspace/scripts/lib/system-status.sh
+/workspace/.system/lib/system-status.sh
 
 # Validate extension installations
 extension-manager validate-all
@@ -466,7 +466,7 @@ extension-manager validate-all
 2. **Check System Status**
 
    ```bash
-   /workspace/scripts/lib/system-status.sh
+   /workspace/.system/lib/system-status.sh
    ```
 
 3. **Review Logs**

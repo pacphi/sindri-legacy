@@ -19,11 +19,6 @@ cd sindri
 # Make sure shell scripts are executable
 chmod +x scripts/*.sh
 
-# Configure extensions (optional - defaults are fine for getting started)
-# Copy example file, then edit to activate/deactivate extensions
-cp docker/lib/extensions.d/active-extensions.conf.example \
-   docker/lib/extensions.d/active-extensions.conf
-
 # Deploy (takes ~3 minutes)
 ./scripts/vm-setup.sh --app-name my-sindri-dev --region sjc
 ```

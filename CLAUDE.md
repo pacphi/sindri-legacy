@@ -40,12 +40,26 @@ clone-project <url> [options]                    # Clone and enhance repository
 
 ## Key Directories
 
-- `/workspace/` - Persistent volume root (survives VM restarts)
+### User Workspace (developer-owned, writable)
+
 - `/workspace/developer/` - Developer home directory (persistent)
+- `/workspace/scripts/` - User scripts and extension-generated helpers
 - `/workspace/projects/active/` - Active development projects
-- `/workspace/scripts/` - Utility and management scripts
+- `/workspace/config/` - User configuration files
+- `/workspace/bin/` - User binaries (in PATH)
 - `/workspace/docs/` - Workspace-wide documentation
-- All user data (npm cache, configs, SSH keys) persists between VM restarts
+
+### System Directories (managed by Sindri)
+
+- `/docker/lib/` - System libraries and extension definitions (immutable, from Docker image)
+- `/docker/lib/extensions.d/` - Extension definitions and templates
+- `/workspace/.system/` - System runtime files (do not modify directly)
+  - `bin/` - System binaries (symlinked to /docker)
+  - `lib/` - System libraries (symlinked to /docker)
+  - `manifest/` - Extension activation configuration
+
+All user data in `/workspace` persists between VM restarts. System files in `/docker` are immutable
+and updated only via Docker image rebuilds. The `.system/` directory uses symlinks for efficiency.
 
 ## Development Workflow
 
@@ -168,8 +182,9 @@ These are baked into the Docker image for faster startup (~10s vs ~90-120s) and 
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development)
-or `active-extensions.ci.conf` (CI mode).
+Extensions are defined in the Docker image at `/docker/lib/extensions.d/`. Your active extensions are
+configured in `/workspace/.system/manifest/active-extensions.conf`, which is initialized from
+`docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
 
@@ -367,7 +382,7 @@ Shell aliases available:
 
 ```bash
 # Edit manifest to activate desired extensions (auto-created on first boot)
-# /workspace/scripts/lib/extensions.d/active-extensions.conf
+# /workspace/.system/manifest/active-extensions.conf
 
 # Then install all at once
 extension-manager install-all

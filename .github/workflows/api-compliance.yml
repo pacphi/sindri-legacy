@@ -104,8 +104,8 @@ jobs:
 
           # Execute install with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest=\"manifest/active-extensions.conf\"
 
             # Add extension dependencies to manifest
             # Note: mise is a core feature, already available
@@ -128,7 +128,7 @@ jobs:
             echo \"$extension\" >> \$manifest
 
             # Install all extensions from manifest
-            bash extension-manager.sh install-all
+            extension-manager install-all
           '"
 
       # NEW: Using extracted test-api-compliance.sh script
@@ -170,10 +170,10 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
+            cd /workspace/.system
 
             echo \"Running: extension-manager uninstall $extension\"
-            if bash extension-manager.sh uninstall $extension 2>&1 | tee /tmp/uninstall.log; then
+            if extension-manager uninstall $extension 2>&1 | tee /tmp/uninstall.log; then
               echo \"✅ uninstall() completed\"
 
               # Verify remove() function was called
@@ -202,14 +202,14 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest=\"manifest/active-extensions.conf\"
 
             # Re-add extension to manifest (was removed by uninstall)
             echo \"$extension\" >> \$manifest
 
             echo \"Running: extension-manager deactivate $extension\"
-            if bash extension-manager.sh deactivate $extension 2>&1; then
+            if extension-manager deactivate $extension 2>&1; then
               echo \"✅ deactivate() completed\"
 
               # Verify extension removed from manifest

@@ -93,8 +93,8 @@ jobs:
           echo "Verifying base system components..."
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest_file=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest_file=\"manifest/active-extensions.conf\"
 
             # Create manifest from CI template if needed
             if [ ! -f \"\$manifest_file\" ]; then
@@ -143,10 +143,10 @@ jobs:
           echo "Installing all activated extensions..."
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
+            cd /workspace/.system
 
             echo \"Running install-all...\"
-            if bash extension-manager.sh install-all; then
+            if extension-manager install-all; then
               echo \"✅ All extensions installed\"
             else
               echo \"❌ Extension installation failed\"
@@ -213,11 +213,11 @@ jobs:
           echo "Testing extension status command..."
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
+            cd /workspace/.system
 
             echo \"\"
             echo \"Checking status of nodejs...\"
-            if bash extension-manager.sh status nodejs; then
+            if extension-manager status nodejs; then
               echo \"✅ Status command works for nodejs\"
             else
               echo \"⚠️  Status command failed for nodejs\"
