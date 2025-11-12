@@ -24,12 +24,11 @@ shift
 depends_on="$*"
 depends_on="${depends_on//,/ }"  # Replace commas with spaces
 
-cd /workspace/scripts/lib
-manifest_file="extensions.d/active-extensions.conf"
+manifest_file="/workspace/.system/manifest/active-extensions.conf"
 
 # Create manifest from CI template if it doesn't exist
 if [ ! -f "$manifest_file" ]; then
-  cp extensions.d/active-extensions.ci.conf "$manifest_file" 2>/dev/null || touch "$manifest_file"
+  cp /docker/lib/extensions.d/active-extensions.ci.conf "$manifest_file" 2>/dev/null || touch "$manifest_file"
 fi
 
 # Add dependencies first if specified

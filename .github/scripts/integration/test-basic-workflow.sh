@@ -2,8 +2,6 @@
 # Test core system features and basic extension workflow
 set -e
 
-cd /workspace/scripts/lib
-
 echo "=== Testing Core System Features ==="
 
 # Verify core directories exist (from baked workspace-structure)
@@ -41,7 +39,7 @@ echo "=== Testing Extension Manager Workflow ==="
 # Test listing extensions (should NOT include workspace-structure, mise-config, etc.)
 echo ""
 echo "Available installable extensions:"
-bash extension-manager.sh list
+extension-manager list
 
 # Test installing an actual optional extension that installs new tools
 echo ""
@@ -53,8 +51,8 @@ if command -v node &> /dev/null; then
   echo "   This means nodejs may already be installed, making this test less meaningful"
 fi
 
-echo "nodejs" > extensions.d/active-extensions.conf
-if bash extension-manager.sh install-all; then
+echo "nodejs" > /workspace/.system/manifest/active-extensions.conf
+if extension-manager install-all; then
   echo "✅ Extension installation completed"
 
   # Verify actual installation occurred (node command should now be available)
@@ -74,7 +72,7 @@ if bash extension-manager.sh install-all; then
   fi
 
   # Verify extension status
-  if bash extension-manager.sh status nodejs; then
+  if extension-manager status nodejs; then
     echo "✅ Extension status verified"
   else
     echo "❌ Extension status check failed"

@@ -134,8 +134,10 @@ setup_git_hooks() {
 # Pre-commit hook for code quality checks
 
 # Source common utilities if available
-if [ -f "/workspace/scripts/lib/common.sh" ]; then
-    source "/workspace/scripts/lib/common.sh"
+if [ -f "/workspace/.system/lib/common.sh" ]; then
+    source "/workspace/.system/lib/common.sh"
+elif [ -f "/docker/lib/common.sh" ]; then
+    source "/docker/lib/common.sh"
 else
     print_status() { echo "[INFO] $1"; }
     print_error() { echo "[ERROR] $1"; }

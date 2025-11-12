@@ -2,7 +2,7 @@
 # Claude Flow wrapper that auto-loads context files
 
 # Source context loading utilities
-source /workspace/scripts/lib/context-loader.sh
+source /workspace/scripts/context-loader.sh
 
 # Function to load and prepare context
 load_context_for_claude_flow() {

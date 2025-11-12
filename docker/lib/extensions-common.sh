@@ -16,20 +16,20 @@ EXTENSIONS_COMMON_SH_LOADED="true"
 # This function replaces the COMMON UTILITIES section in each extension
 extension_init() {
     # Calculate script and library directories
-    # Extension file is at: /workspace/scripts/lib/extensions.d/<name>/<name>.extension
-    # SCRIPT_DIR will be: /workspace/scripts/lib/extensions.d/<name>
+    # Extension file is at: /workspace/.system/lib/extensions.d/<name>/<name>.extension (symlinked from /docker/lib/extensions.d)
+    # SCRIPT_DIR will be: /workspace/.system/lib/extensions.d/<name>
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
 
-    # Go up TWO levels to get to /workspace/scripts/lib
-    # From: /workspace/scripts/lib/extensions.d/<name>
-    # To:   /workspace/scripts/lib
+    # Go up TWO levels to get to /workspace/.system/lib
+    # From: /workspace/.system/lib/extensions.d/<name>
+    # To:   /workspace/.system/lib
     LIB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
     # Try to source common.sh from known locations
     if [[ -f "$LIB_DIR/common.sh" ]]; then
         source "$LIB_DIR/common.sh"
-    elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-        source "/workspace/scripts/lib/common.sh"
+    elif [[ -f "/workspace/.system/lib/common.sh" ]]; then
+        source "/workspace/.system/lib/common.sh"
     else
         # Fallback: define minimal required functions (invoked indirectly by extension scripts)
         # shellcheck disable=SC2329
@@ -69,7 +69,7 @@ check_dependent_extensions() {
 
     # Get manifest file location
     local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-    [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
+    [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/.system/manifest/active-extensions.conf"
 
     if [[ ! -f "$manifest_file" ]]; then
         return 0

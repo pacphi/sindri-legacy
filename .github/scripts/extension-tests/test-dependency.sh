@@ -2,8 +2,7 @@
 # Test dependency chain resolution and error handling
 set -e
 
-cd /workspace/scripts/lib
-manifest="extensions.d/active-extensions.conf"
+manifest="/workspace/.system/manifest/active-extensions.conf"
 
 echo "=== Testing Dependency Chain Error Handling ==="
 
@@ -20,7 +19,7 @@ fi
 echo ""
 echo "Running: extension-manager install nodejs (should fail - mise missing)"
 # Capture exit code before piping to tee
-bash extension-manager.sh install nodejs 2>&1 | tee /tmp/prereq_fail.log
+extension-manager install nodejs 2>&1 | tee /tmp/prereq_fail.log
 install_exit=${PIPESTATUS[0]}
 
 if [ $install_exit -eq 0 ]; then

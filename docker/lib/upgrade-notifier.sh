@@ -50,10 +50,8 @@ add_to_bashrc() {
         cat >> "$bashrc" << 'EOF'
 
 # Extension upgrade notifier
-if [[ -f /workspace/scripts/lib/upgrade-notifier.sh ]]; then
-    source /workspace/scripts/lib/upgrade-notifier.sh
-    check_and_notify_upgrades
-fi
+# Note: This file is sourced from ~/.bashrc, so it refers to itself
+# No action needed - the sourcing happens in bashrc which should reference this file at /docker/lib/upgrade-notifier.sh
 EOF
     fi
 }

@@ -125,10 +125,10 @@ configure() {
   fi
 
   # Set up helper functions
-  local helpers_script="/workspace/scripts/lib/tmux-helpers.sh"
+  local helpers_script="/workspace/scripts/tmux-helpers.sh"
   local helpers_template="/docker/lib/tmux-helpers.sh"
 
-  mkdir -p /workspace/scripts/lib
+  mkdir -p /workspace/scripts
 
   if [[ -f "$helpers_template" ]]; then
     print_status "Copying tmux helper functions..."
@@ -221,7 +221,7 @@ validate() {
   # Check workspace scripts
   local scripts=(
     "/workspace/scripts/tmux-workspace.sh"
-    "/workspace/scripts/lib/tmux-helpers.sh"
+    "/workspace/scripts/tmux-helpers.sh"
     "/workspace/scripts/tmux-auto-start.sh"
   )
 
@@ -286,7 +286,7 @@ status() {
   echo ""
   print_status "Workspace scripts:"
   [[ -f "/workspace/scripts/tmux-workspace.sh" ]] && echo "  ✓ tmux-workspace.sh" || echo "  ✗ tmux-workspace.sh"
-  [[ -f "/workspace/scripts/lib/tmux-helpers.sh" ]] && echo "  ✓ tmux-helpers.sh" || echo "  ✗ tmux-helpers.sh"
+  [[ -f "/workspace/scripts/tmux-helpers.sh" ]] && echo "  ✓ tmux-helpers.sh" || echo "  ✗ tmux-helpers.sh"
   [[ -f "/workspace/scripts/tmux-auto-start.sh" ]] && echo "  ✓ tmux-auto-start.sh" || echo "  ✗ tmux-auto-start.sh"
 
   # Show running sessions
@@ -379,7 +379,7 @@ remove() {
   # Remove scripts
   local scripts=(
     "/workspace/scripts/tmux-workspace.sh"
-    "/workspace/scripts/lib/tmux-helpers.sh"
+    "/workspace/scripts/tmux-helpers.sh"
     "/workspace/scripts/tmux-auto-start.sh"
   )
 

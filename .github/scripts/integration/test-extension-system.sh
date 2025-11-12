@@ -2,14 +2,12 @@
 # Test extension system with nodejs installation
 set -e
 
-cd /workspace/scripts/lib
-
 echo "=== Testing Extension System ==="
 
 # Test extension-manager availability
 echo ""
 echo "Testing extension-manager list..."
-bash extension-manager.sh list
+extension-manager list
 
 echo ""
 echo "✅ Extension manager available"
@@ -17,7 +15,7 @@ echo "✅ Extension manager available"
 # Test extension installation (mise already available from base image)
 echo ""
 echo "Installing nodejs extension..."
-if bash extension-manager.sh install nodejs 2>&1; then
+if extension-manager install nodejs 2>&1; then
   echo "✅ nodejs extension installed"
 else
   echo "⚠️  Installation failed, checking mise status..."

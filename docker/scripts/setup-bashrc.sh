@@ -33,8 +33,8 @@ if command -v direnv >/dev/null 2>&1; then
 fi
 
 # Source agent discovery utilities if available
-if [ -f /workspace/scripts/lib/agent-discovery.sh ]; then
-    source /workspace/scripts/lib/agent-discovery.sh
+if [ -f /workspace/scripts/agent-discovery.sh ]; then
+    source /workspace/scripts/agent-discovery.sh
 fi
 
 # Source agent aliases if available
