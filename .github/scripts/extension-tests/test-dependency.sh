@@ -4,9 +4,19 @@ set -e
 
 manifest="/workspace/.system/manifest/active-extensions.conf"
 
-# Source the common setup for extension-manager
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/setup-extension-manager.sh"
+# Set up extension-manager with fallback to absolute path
+# This handles Hallpass SSH context where PATH may not be fully configured
+EXTENSION_MANAGER="extension-manager"
+if ! command -v extension-manager &> /dev/null; then
+  if [ -f "/workspace/.system/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+  elif [ -f "/workspace/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/bin/extension-manager"
+  else
+    echo "❌ Extension manager not found in PATH or known locations"
+    exit 1
+  fi
+fi
 
 echo "=== Testing Dependency Chain Error Handling ==="
 

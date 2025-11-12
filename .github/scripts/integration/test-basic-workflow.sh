@@ -39,9 +39,21 @@ echo "=== Testing Extension Manager Workflow ==="
 # Test listing extensions (should NOT include workspace-structure, mise-config, etc.)
 echo ""
 
-# Source the common setup for extension-manager
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/setup-extension-manager.sh"
+# Set up extension-manager with fallback to absolute path
+# This handles Hallpass SSH context where PATH may not be fully configured
+EXTENSION_MANAGER="extension-manager"
+if ! command -v extension-manager &> /dev/null; then
+  if [ -f "/workspace/.system/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from absolute path"
+  elif [ -f "/workspace/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from /workspace/bin"
+  else
+    echo "❌ Extension manager not found in PATH or known locations"
+    exit 1
+  fi
+fi
 
 echo "Available installable extensions:"
 $EXTENSION_MANAGER list
