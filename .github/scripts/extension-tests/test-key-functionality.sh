@@ -56,13 +56,13 @@ case "$key_tool" in
         # Test 1: Verify YAML configuration file exists
         # Check which config was actually installed (don't assume based on mode)
         yaml_file=""
-        if [ -f "/workspace/marketplaces.ci.yml" ]; then
-            yaml_file="/workspace/marketplaces.ci.yml"
-        elif [ -f "/workspace/marketplaces.yml" ]; then
-            yaml_file="/workspace/marketplaces.yml"
+        if [ -f "/workspace/config/marketplaces.ci.yml" ]; then
+            yaml_file="/workspace/config/marketplaces.ci.yml"
+        elif [ -f "/workspace/config/marketplaces.yml" ]; then
+            yaml_file="/workspace/config/marketplaces.yml"
         else
             print_error "No YAML configuration file found"
-            print_error "Expected either /workspace/marketplaces.ci.yml or /workspace/marketplaces.yml"
+            print_error "Expected either /workspace/config/marketplaces.ci.yml or /workspace/config/marketplaces.yml"
             exit 1
         fi
 
