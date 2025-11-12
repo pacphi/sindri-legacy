@@ -6,12 +6,18 @@
 # Determine script location
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-
-# Extension definitions are always in Docker image (immutable)
-EXTENSIONS_BASE="/docker/lib/extensions.d"
-
-# Manifest is on persistent volume (user's active extension choices)
-MANIFEST_FILE="/workspace/.system/manifest/active-extensions.conf"
+# Detect environment and set paths accordingly
+# On deployed VM: use absolute paths in Docker image and persistent volume
+# In CI/dev: use relative paths from script location
+if [[ -d "/docker/lib/extensions.d" ]]; then
+    # Running on deployed VM (production environment)
+    EXTENSIONS_BASE="/docker/lib/extensions.d"
+    MANIFEST_FILE="/workspace/.system/manifest/active-extensions.conf"
+else
+    # Running in CI or development (GitHub Actions runner, local development)
+    EXTENSIONS_BASE="$SCRIPT_DIR/extensions.d"
+    MANIFEST_FILE="$SCRIPT_DIR/extensions.d/active-extensions.conf"
+fi
 
 # Source common utilities
 if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
