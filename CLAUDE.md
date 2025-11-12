@@ -299,8 +299,8 @@ Common workflow:
 
 ```bash
 # Copy template and customize
-cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
-vim /workspace/marketplaces.yml
+cp /workspace/config/marketplaces.yml.example /workspace/config/marketplaces.yml
+vim /workspace/config/marketplaces.yml
 
 # Install extension (processes YAML → settings.json)
 extension-manager install claude-marketplace
