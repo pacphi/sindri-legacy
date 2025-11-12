@@ -11,7 +11,7 @@ inputs:
   test-path:
     description: "Path for test file on volume"
     required: false
-    default: "/workspace"
+    default: "/workspace/developer"
   max-verification-attempts:
     description: "Maximum attempts to verify file after restart"
     required: false
@@ -40,6 +40,11 @@ runs:
         app_name="${{ inputs.app-name }}"
         test_file="${{ inputs.test-path }}/test-persistence-$(date +%s).txt"
         test_content="integration-test-$(date +%s)"
+
+        # Note: Default test path is /workspace/developer/ because:
+        # - /workspace root is owned by root:root (755) by design for security
+        # - Developer user can write to /workspace/developer/ (developer:developer, 775)
+        # - This tests realistic developer workflow with proper permissions
 
         # ============================================================
         # PHASE 1: Create test file and sync
