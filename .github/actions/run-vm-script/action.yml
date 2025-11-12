@@ -86,7 +86,7 @@ runs:
         echo "🚀 Executing script on VM..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -lc 'bash $vm_script_path $script_args'"; then
+        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -c 'source ~/.bashrc && bash $vm_script_path $script_args'"; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Script executed successfully"
