@@ -39,7 +39,7 @@ echo "=== Testing Extension Manager Workflow ==="
 # Test listing extensions (should NOT include workspace-structure, mise-config, etc.)
 echo ""
 echo "Available installable extensions:"
-extension-manager list
+/workspace/.system/bin/extension-manager list
 
 # Test installing an actual optional extension that installs new tools
 echo ""
