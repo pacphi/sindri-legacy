@@ -1,13 +1,14 @@
 #!/bin/bash
 # jvm.sh.example - JVM languages and development tools
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs JVM development environment with:
-# - SDKMAN for managing JVM SDKs
+# - SDKMAN for managing JVM SDKs (Java, Kotlin, Scala, Maven, Gradle)
 # - Java (LTS versions: 25, 21, 17, 11)
-# - Build tools (Maven, Gradle)
-# - Languages (Kotlin, Scala, Clojure)
-# - Frameworks (Spring Boot, Micronaut)
+# - Build tools (Maven, Gradle, sbt)
+# - Languages via SDKMAN (Kotlin, Scala)
+# - Languages via mise (Clojure, Leiningen)
+# - Frameworks (Spring Boot, Micronaut, JBang)
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,9 +21,9 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 EXT_NAME="jvm"
 EXT_VERSION="2.0.0"
 EXT_API_VERSION="2.0"
-EXT_DESCRIPTION="JVM languages (Java, Kotlin, Scala, Clojure) with SDKMAN"
+EXT_DESCRIPTION="JVM languages (Java, Kotlin, Scala) with SDKMAN and Clojure/Leiningen with mise"
 EXT_CATEGORY="language"
-EXT_INSTALL_METHOD="native"  # SDKMAN manages everything
+EXT_INSTALL_METHOD="mixed"  # SDKMAN for most tools, mise for Clojure/Leiningen
 EXT_UPGRADE_STRATEGY="manual"
 
 # Initialize extension environment
@@ -34,6 +35,9 @@ extension_init
 
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
+
+  # Check for mise (required for Clojure and Leiningen)
+  check_mise_prerequisite || return 1
 
   # Check for required tools
   local missing_tools=()
@@ -137,13 +141,9 @@ install() {
   # Clojure
   if ! command_exists clojure; then
     print_debug "Installing Clojure..."
-    if curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh \
-       && chmod +x linux-install.sh \
-       && sudo ./linux-install.sh 2>/dev/null; then
-      rm -f linux-install.sh
+    if mise use -g clojure@latest 2>/dev/null && mise install clojure 2>/dev/null; then
       print_debug "✓ Clojure installed"
     else
-      rm -f linux-install.sh
       print_warning "Failed to install Clojure"
     fi
   fi
@@ -151,13 +151,9 @@ install() {
   # Leiningen
   if ! command_exists lein; then
     print_debug "Installing Leiningen..."
-    if wget -q https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
-       && chmod +x lein \
-       && sudo mv lein /usr/local/bin/ \
-       && lein 2>/dev/null; then
+    if mise use -g leiningen@latest 2>/dev/null && mise install leiningen 2>/dev/null; then
       print_debug "✓ Leiningen installed"
     else
-      rm -f lein
       print_warning "Failed to install Leiningen"
     fi
   fi
@@ -209,6 +205,14 @@ configure() {
     fi
   fi
 
+  # Configure mise shims for Clojure and Leiningen
+  if command_exists mise && (command_exists clojure || command_exists lein); then
+    if command_exists setup_tool_path 2>/dev/null; then
+      setup_tool_path "jvm-mise-tools" \
+        "eval \"\$(mise activate bash --shims)\""
+    fi
+  fi
+
   # Create SSH wrappers - use dynamic wrappers since SDKMAN manages versions
   if command_exists create_tool_wrapper 2>/dev/null; then
     create_tool_wrapper "sdk" "" "dynamic"
@@ -219,6 +223,8 @@ configure() {
     create_tool_wrapper "kotlin" "" "dynamic"
     create_tool_wrapper "scala" "" "dynamic"
     create_tool_wrapper "sbt" "" "dynamic"
+    create_tool_wrapper "clojure" "" "dynamic"
+    create_tool_wrapper "lein" "" "dynamic"
   fi
 
   # Create JVM aliases
@@ -359,6 +365,8 @@ upgrade() {
   print_status "  sdk upgrade gradle     # Upgrade Gradle"
   print_status "  sdk upgrade kotlin     # Upgrade Kotlin"
   print_status "  sdk selfupdate         # Update SDKMAN itself"
+  print_status "  mise upgrade clojure   # Upgrade Clojure"
+  print_status "  mise upgrade leiningen # Upgrade Leiningen"
 
   return 0
 }
@@ -387,13 +395,15 @@ remove() {
   # Remove Clojure
   if command_exists clojure; then
     print_status "Removing Clojure..."
-    sudo rm -f /usr/local/bin/clojure /usr/local/bin/clj
-    sudo rm -rf /usr/local/lib/clojure
+    mise uninstall clojure 2>/dev/null || true
+    print_success "Clojure removed"
   fi
 
   # Remove Leiningen
-  if [[ -f "/usr/local/bin/lein" ]]; then
-    sudo rm -f /usr/local/bin/lein
+  if command_exists lein; then
+    print_status "Removing Leiningen..."
+    mise uninstall leiningen 2>/dev/null || true
+    print_success "Leiningen removed"
   fi
 
   # Remove aliases

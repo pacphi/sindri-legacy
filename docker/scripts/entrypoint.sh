@@ -82,6 +82,16 @@ setup_developer_home() {
         echo "    ✓ Created missing .bash_profile from skeleton"
     fi
 
+    # Ensure .claude directory exists (required for claude-marketplace extension)
+    if [ ! -d "$DEVELOPER_HOME_RUNTIME/.claude" ] && [ -d "$DEVELOPER_HOME_BUILD/.claude" ]; then
+        cp -r "$DEVELOPER_HOME_BUILD/.claude" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .claude directory from Docker build"
+    elif [ ! -d "$DEVELOPER_HOME_RUNTIME/.claude" ]; then
+        # Fallback: create minimal .claude directory if build version doesn't exist
+        mkdir -p "$DEVELOPER_HOME_RUNTIME/.claude"
+        echo "    ✓ Created minimal .claude directory"
+    fi
+
     # Create extensions directory for extension artifacts
     # This is where extensions install/configure (see WORKSPACE_DIR in common.sh)
     mkdir -p "$DEVELOPER_HOME_RUNTIME/extensions"
