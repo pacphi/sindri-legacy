@@ -228,19 +228,26 @@ jobs:
           ${{ needs.generate-changelog.outputs.full_changelog }}
           CHANGELOG_EOF
 
+            # Simplified logic: preserve everything before first ## [ line, insert new content, then rest
             awk -v changelog_file="$changelog_content_file" '
-              /^# Changelog/ { print; in_header=1; next }
-              in_header && /^$/ { print; getline; print; print ""; in_header=0 }
-              in_header { print; next }
-              !inserted && /^## \[/ {
+              # If we haven'\''t found the first version section yet, print the line
+              !found_first_version && !/^## \[/ { print; next }
+
+              # When we find the first version section, insert the new content before it
+              !found_first_version && /^## \[/ {
                 while ((getline line < changelog_file) > 0) print line
                 close(changelog_file)
                 print ""
-                inserted=1
+                found_first_version=1
               }
+
+              # Print all remaining lines (including the first version line that triggered insertion)
               { print }
+
+              # If we never found a version section, append the new content at the end
               END {
-                if (!inserted) {
+                if (!found_first_version) {
+                  print ""
                   while ((getline line < changelog_file) > 0) print line
                   close(changelog_file)
                 }
