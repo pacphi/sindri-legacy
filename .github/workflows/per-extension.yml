@@ -72,8 +72,8 @@ jobs:
           # Infrastructure
           - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
           - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5 }
-          - { name: "cloud-tools", commands: "aws", key_tool: "aws", timeout: "30m", status_timeout: 5 }
-          - { name: "ai-tools", commands: "codex,gemini", key_tool: "codex", timeout: "30m", depends_on: "nodejs" }
+          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5 }
+          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang" }
           # Utilities
           - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5 }
           - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs" }

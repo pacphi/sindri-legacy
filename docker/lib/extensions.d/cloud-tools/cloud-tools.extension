@@ -395,19 +395,23 @@ upgrade() {
   command_exists aws && echo "  aws: $(aws --version 2>&1)"
   command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
   command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+  command_exists oci && echo "  oci: $(oci --version 2>&1)"
+  command_exists aliyun && echo "  aliyun: $(aliyun version 2>&1)"
+  command_exists doctl && echo "  doctl: $(doctl version 2>&1)"
+  command_exists ibmcloud && echo "  ibmcloud: $(ibmcloud version 2>&1)"
   echo ""
 
   # Upgrade AWS CLI
   if command_exists aws; then
     print_status "Upgrading AWS CLI..."
-    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
-       && unzip -q awscliv2.zip \
-       && sudo ./aws/install --update 2>/dev/null; then
-      rm -rf aws awscliv2.zip
+    # Use /tmp for downloads to ensure writable location
+    if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip" \
+       && (cd /tmp && unzip -q awscliv2.zip && sudo ./aws/install --update 2>/dev/null); then
+      rm -rf /tmp/aws /tmp/awscliv2.zip
       print_success "AWS CLI upgraded"
       ((upgraded_count++))
     else
-      rm -rf aws awscliv2.zip 2>/dev/null
+      rm -rf /tmp/aws /tmp/awscliv2.zip 2>/dev/null
       print_warning "Failed to upgrade AWS CLI"
       ((failed_count++))
     fi
@@ -437,12 +441,76 @@ upgrade() {
     fi
   fi
 
+  # Upgrade Oracle Cloud CLI
+  if command_exists oci; then
+    print_status "Upgrading Oracle Cloud CLI..."
+    if bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --accept-all-defaults --update-existing 2>/dev/null; then
+      print_success "Oracle Cloud CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Oracle Cloud CLI"
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade Alibaba Cloud CLI
+  if command_exists aliyun; then
+    print_status "Upgrading Alibaba Cloud CLI..."
+    # Use /tmp for downloads to ensure writable location
+    if wget -q -O /tmp/aliyun-cli-linux-latest-amd64.tgz https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz; then
+      tar xzf /tmp/aliyun-cli-linux-latest-amd64.tgz -C /tmp
+      sudo mv /tmp/aliyun /usr/local/bin/
+      rm -f /tmp/aliyun-cli-linux-latest-amd64.tgz
+      print_success "Alibaba Cloud CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade Alibaba Cloud CLI"
+      rm -f /tmp/aliyun-cli-linux-latest-amd64.tgz
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade DigitalOcean CLI
+  if command_exists doctl; then
+    print_status "Upgrading DigitalOcean CLI..."
+    local DOCTL_VERSION
+    DOCTL_VERSION=$(curl -s https://api.github.com/repos/digitalocean/doctl/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+    # Use /tmp for downloads to ensure writable location
+    if [[ -n "$DOCTL_VERSION" ]] && wget -q -O "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"; then
+      tar xzf "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" -C /tmp
+      sudo mv /tmp/doctl /usr/local/bin/
+      rm -f "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+      print_success "DigitalOcean CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade DigitalOcean CLI"
+      rm -f "/tmp/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" /tmp/doctl
+      ((failed_count++))
+    fi
+  fi
+
+  # Upgrade IBM Cloud CLI
+  if command_exists ibmcloud; then
+    print_status "Upgrading IBM Cloud CLI..."
+    if ibmcloud update -f 2>/dev/null; then
+      print_success "IBM Cloud CLI upgraded"
+      ((upgraded_count++))
+    else
+      print_warning "Failed to upgrade IBM Cloud CLI"
+      ((failed_count++))
+    fi
+  fi
+
   # Summary
   echo ""
   print_status "Updated versions:"
   command_exists aws && echo "  aws: $(aws --version 2>&1)"
   command_exists az && echo "  az: $(az version --output tsv --query '\"azure-cli\"' 2>/dev/null)"
   command_exists gcloud && echo "  gcloud: $(gcloud version --format='value(version)' 2>/dev/null)"
+  command_exists oci && echo "  oci: $(oci --version 2>&1)"
+  command_exists aliyun && echo "  aliyun: $(aliyun version 2>&1)"
+  command_exists doctl && echo "  doctl: $(doctl version 2>&1)"
+  command_exists ibmcloud && echo "  ibmcloud: $(ibmcloud version 2>&1)"
 
   echo ""
   print_status "Upgrade summary: $upgraded_count upgraded, $failed_count failed"
