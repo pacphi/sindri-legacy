@@ -4,10 +4,14 @@ set -e
 
 echo "=== Testing Extension System ==="
 
+# Source the common setup for extension-manager
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../common/setup-extension-manager.sh"
+
 # Test extension-manager availability
 echo ""
 echo "Testing extension-manager list..."
-extension-manager list
+$EXTENSION_MANAGER list
 
 echo ""
 echo "✅ Extension manager available"
@@ -15,7 +19,7 @@ echo "✅ Extension manager available"
 # Test extension installation (mise already available from base image)
 echo ""
 echo "Installing nodejs extension..."
-if extension-manager install nodejs 2>&1; then
+if $EXTENSION_MANAGER install nodejs 2>&1; then
   echo "✅ nodejs extension installed"
 else
   echo "⚠️  Installation failed, checking mise status..."

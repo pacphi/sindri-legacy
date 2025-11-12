@@ -4,6 +4,10 @@ set -e
 
 manifest="/workspace/.system/manifest/active-extensions.conf"
 
+# Source the common setup for extension-manager
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../common/setup-extension-manager.sh"
+
 echo "=== Testing Dependency Chain Error Handling ==="
 
 echo "Creating manifest with nodejs only..."
@@ -19,7 +23,7 @@ fi
 echo ""
 echo "Running: extension-manager install nodejs (should fail - mise missing)"
 # Capture exit code before piping to tee
-extension-manager install nodejs 2>&1 | tee /tmp/prereq_fail.log
+$EXTENSION_MANAGER install nodejs 2>&1 | tee /tmp/prereq_fail.log
 install_exit=${PIPESTATUS[0]}
 
 if [ $install_exit -eq 0 ]; then

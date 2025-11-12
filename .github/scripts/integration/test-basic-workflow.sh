@@ -38,8 +38,13 @@ echo "=== Testing Extension Manager Workflow ==="
 
 # Test listing extensions (should NOT include workspace-structure, mise-config, etc.)
 echo ""
+
+# Source the common setup for extension-manager
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../common/setup-extension-manager.sh"
+
 echo "Available installable extensions:"
-/workspace/.system/bin/extension-manager list
+$EXTENSION_MANAGER list
 
 # Test installing an actual optional extension that installs new tools
 echo ""
@@ -52,7 +57,7 @@ if command -v node &> /dev/null; then
 fi
 
 echo "nodejs" > /workspace/.system/manifest/active-extensions.conf
-if extension-manager install-all; then
+if $EXTENSION_MANAGER install-all; then
   echo "✅ Extension installation completed"
 
   # Verify actual installation occurred (node command should now be available)
@@ -72,7 +77,7 @@ if extension-manager install-all; then
   fi
 
   # Verify extension status
-  if extension-manager status nodejs; then
+  if $EXTENSION_MANAGER status nodejs; then
     echo "✅ Extension status verified"
   else
     echo "❌ Extension status check failed"
