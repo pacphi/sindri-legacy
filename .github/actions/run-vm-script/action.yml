@@ -88,7 +88,8 @@ runs:
 
         # Set PATH explicitly to ensure extension-manager is available in Hallpass context
         # This addresses the limitation where Hallpass SSH doesn't source shell initialization files
-        if flyctl ssh console --app $app_name --user $user -C "export PATH=/workspace/.system/bin:/workspace/bin:\$PATH; bash $vm_script_path $script_args"; then
+        # We use /bin/bash -c to ensure export is available as a shell builtin
+        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -c 'export PATH=/workspace/.system/bin:/workspace/bin:\$PATH; bash $vm_script_path $script_args'"; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Script executed successfully"
