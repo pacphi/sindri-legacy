@@ -1,8 +1,17 @@
 #!/bin/bash
 set -e
 
-# This script sets up the initial bashrc that will be used as a template
+# This script sets up the initial bash configuration that will be used as a template
 # The actual home directory will be created on the persistent volume during runtime
+
+# Create .bash_profile for login shells (sources .bashrc)
+cat > /etc/skel/.bash_profile << 'EOF'
+# .bash_profile - Executed for login shells
+# Source .bashrc to ensure consistent environment for both login and non-login shells
+if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+fi
+EOF
 
 # Create the bashrc content and save it to /etc/skel so it gets copied
 # to the developer home when created
