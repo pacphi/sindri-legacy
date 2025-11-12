@@ -52,8 +52,10 @@ runs:
           echo \"Directory permissions:\"
           stat $mount_path/ || echo \"WARNING: stat command failed\"
           echo \"\"
-          echo \"Testing write permissions:\"
-          touch $mount_path/mount-test-\$(date +%s).tmp && echo \"✅ Write permission confirmed\" || { echo \"❌ Write permission failed\"; exit 1; }
+          echo \"Testing write permissions (in developer directory):\"
+          # Note: /workspace root is owned by root:root (755) by design for security
+          # Developer user has write access to /workspace/developer/ and other user subdirectories
+          touch $mount_path/developer/mount-test-\$(date +%s).tmp && echo \"✅ Write permission confirmed\" || { echo \"❌ Write permission failed\"; exit 1; }
           echo \"=== End Volume Mount Verification ===\"
         '"; then
           echo ""
