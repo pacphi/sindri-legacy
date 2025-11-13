@@ -113,7 +113,7 @@ install() {
       if [[ -n "$hashicorp_checksum" ]]; then
         # Checksum verification available
         if secure_download "$hashicorp_gpg_url" "$hashicorp_checksum" "$temp_gpg"; then
-          sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$temp_gpg"
+          cat "$temp_gpg" | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           gpg_verified=true
           print_status "✓ HashiCorp GPG key added (checksum verified)"
         fi
@@ -122,7 +122,7 @@ install() {
         if curl --proto '=https' --tlsv1.2 -fsSL \
            --max-time 120 --connect-timeout 30 \
            "$hashicorp_gpg_url" -o "$temp_gpg"; then
-          sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$temp_gpg"
+          cat "$temp_gpg" | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           gpg_verified=true
           print_status "✓ HashiCorp GPG key added (HTTPS verified)"
         fi

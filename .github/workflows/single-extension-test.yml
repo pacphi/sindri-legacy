@@ -122,6 +122,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
+
       - name: Validate extension exists
         id: validate
         run: |

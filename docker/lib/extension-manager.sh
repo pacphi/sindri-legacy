@@ -50,6 +50,13 @@ elif [[ -f "/docker/lib/upgrade-history.sh" ]]; then
     source "/docker/lib/upgrade-history.sh"
 fi
 
+# Source extension helpers (secure temp files, downloads)
+if [[ -f "$SCRIPT_DIR/extension-helpers.sh" ]]; then
+    source "$SCRIPT_DIR/extension-helpers.sh"
+elif [[ -f "/docker/lib/extension-helpers.sh" ]]; then
+    source "/docker/lib/extension-helpers.sh"
+fi
+
 # Base system (workspace-structure, mise-config, ssh-environment, claude)
 # is pre-installed in the Docker image
 
@@ -82,7 +89,8 @@ validate_extension_name() {
     fi
 
     # Prevent shell metacharacters
-    if [[ "$name" =~ [';$`|&<>(){}] ]]; then
+    # shellcheck disable=SC2076
+    if [[ "$name" =~ [\;\$\`\|\&\<\>\(\)\{\}] ]]; then
         print_error "Extension name contains invalid characters"
         return 1
     fi
@@ -299,7 +307,11 @@ remove_from_manifest() {
     fi
 
     # Remove from manifest (create temp file to preserve comments)
-    local temp_file=$(mktemp)
+    # SECURITY: Use secure temp file creation (C5 fix)
+    local temp_file
+    temp_file=$(create_secure_temp_file) || return 1
+    setup_cleanup_trap "$temp_file"
+
     while IFS= read -r line; do
         # Keep comments and empty lines
         if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
@@ -1078,7 +1090,10 @@ reorder_extension() {
     fi
 
     # Write back to manifest
-    local temp_file=$(mktemp)
+    # SECURITY: Use secure temp file creation (C5 fix)
+    local temp_file
+    temp_file=$(create_secure_temp_file) || return 1
+    setup_cleanup_trap "$temp_file"
 
     # Preserve header comments
     if [[ -f "$MANIFEST_FILE" ]]; then
@@ -1576,7 +1591,11 @@ check_updates() {
 # Function to compare status snapshots
 status_diff_extensions() {
     local snapshot_file="${1:-}"
-    local temp_current=$(mktemp)
+
+    # SECURITY: Use secure temp file creation (C5 fix)
+    local temp_current
+    temp_current=$(create_secure_temp_file) || return 1
+    setup_cleanup_trap "$temp_current"
 
     # Generate current status snapshot in JSON
     print_status "Generating current status snapshot..."

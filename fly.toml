@@ -21,6 +21,45 @@ primary_region = "{{REGION}}"
   TZ = "UTC"
 
 # Volume mounts for persistent storage
+# SECURITY: Volume security documentation (H5 fix)
+#
+# Fly.io Volume Security Features:
+# 1. Encryption at Rest:
+#    - All Fly.io volumes are encrypted at rest using AES-256
+#    - Encryption keys are managed by Fly.io infrastructure
+#    - No additional configuration required
+#
+# 2. Access Control:
+#    - Volumes are isolated to the application namespace
+#    - Only machines in the same app can access the volume
+#    - Volume access requires valid Fly.io API authentication
+#
+# 3. Permission Management:
+#    - Volume mounted with developer:developer ownership (1000:1000)
+#    - Configured in docker/scripts/entrypoint.sh
+#    - SSH access restricted to developer user (no root access)
+#    - Sudo access limited to specific commands (see docker/config/developer-sudoers)
+#
+# 4. Backup Security:
+#    - Snapshots retained for 7 days (configurable below)
+#    - Snapshots encrypted with same keys as volumes
+#    - Use `flyctl volumes snapshots list <volume-id>` to view
+#    - Restore with `flyctl volumes restore <snapshot-id>`
+#
+# 5. Data Retention:
+#    - Volumes persist across machine restarts and updates
+#    - Manual deletion required (`flyctl volumes delete <volume-id>`)
+#    - Consider regular backups for critical data
+#    - WARNING: Volume deletion is permanent and irreversible
+#
+# 6. Best Practices:
+#    - Regularly review volume permissions: `ls -la /workspace`
+#    - Monitor volume usage: `df -h /workspace`
+#    - Keep sensitive files with 600 permissions (e.g., ~/.secrets/credentials)
+#    - Use .gitignore to prevent committing secrets
+#    - Rotate API keys and tokens regularly
+#    - Enable auto-extend to prevent out-of-space issues
+#
 [mounts]
   # Mount persistent volume for all development work
   source = "{{VOLUME_NAME}}"
@@ -29,11 +68,11 @@ primary_region = "{{REGION}}"
   initial_size = "{{VOLUME_SIZE}}GB"
   # Keep snapshots for a week
   snapshot_retention = 7
-  # Auto-extend when 80% full
+  # Auto-extend when 80% full (prevents out-of-space errors)
   auto_extend_size_threshold = 80
-  # Grow by 5GB increments
+  # Grow by 5GB increments (balance cost vs. convenience)
   auto_extend_size_increment = "5GB"
-  # Maximum size limit
+  # Maximum size limit (prevents runaway costs)
   auto_extend_size_limit = "250GB"
 
 # SSH service configuration (primary access method)
@@ -119,7 +158,13 @@ primary_region = "{{REGION}}"
 # 2. Non-standard SSH port (10022) reduces automated attacks
 # 3. Auto-restart on failure provides resilience
 # 4. No root access via SSH (configured in Dockerfile)
-# 5. Secrets management via Fly.io secrets:
+# 5. Secrets management via Fly.io secrets (C4 security hardening):
+#    - Secrets stored in ~/.secrets/credentials (600 permissions)
+#    - Loaded on-demand via wrapper functions (not in environment)
+#    - Not visible in `env` or `ps aux` output
+#    - Prevents accidental disclosure in logs or debugging
+#
+#    Available secrets:
 #    - ANTHROPIC_API_KEY: Claude API authentication
 #    - GITHUB_TOKEN: GitHub authentication for git operations
 #    - GIT_USER_NAME: Git config user.name
@@ -128,6 +173,10 @@ primary_region = "{{REGION}}"
 #    - OPENROUTER_API_KEY: OpenRouter API for cost-optimized models (agent-flow)
 #    - GOOGLE_GEMINI_API_KEY: Google Gemini API for free-tier access (agent-flow)
 #    - PERPLEXITY_API_KEY: Perplexity API for Goalie research assistant
+#
+#    Set secrets via stdin (recommended for security):
+#    echo 'sk-ant-...' | flyctl secrets set ANTHROPIC_API_KEY=- -a <app-name>
+#    echo 'ghp_...' | flyctl secrets set GITHUB_TOKEN=- -a <app-name>
 
 # Scaling notes:
 # 1. Machines will automatically start on incoming connections
@@ -137,17 +186,68 @@ primary_region = "{{REGION}}"
 
 # Development workflow:
 # 1. Deploy: flyctl deploy
-# 2. Set secrets (optional):
-#    flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>
-#    flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>
+# 2. Set secrets via stdin (recommended):
+#    echo 'sk-ant-...' | flyctl secrets set ANTHROPIC_API_KEY=- -a <app-name>
+#    echo 'ghp_...' | flyctl secrets set GITHUB_TOKEN=- -a <app-name>
 #    flyctl secrets set GIT_USER_NAME="Your Name" -a <app-name>
 #    flyctl secrets set GIT_USER_EMAIL="you@example.com" -a <app-name>
-#    flyctl secrets set OPENROUTER_API_KEY=sk-or-... -a <app-name>
-#    flyctl secrets set GOOGLE_GEMINI_API_KEY=... -a <app-name>
-#    flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a <app-name>
+#    echo 'sk-or-...' | flyctl secrets set OPENROUTER_API_KEY=- -a <app-name>
+#    echo '...' | flyctl secrets set GOOGLE_GEMINI_API_KEY=- -a <app-name>
+#    echo 'pplx-...' | flyctl secrets set PERPLEXITY_API_KEY=- -a <app-name>
 # 3. Connect: ssh developer@<app-name>.fly.dev -p 10022
 #    (External port 10022 maps to internal SSH daemon on port 2222)
 #    Alternative: flyctl ssh console -a <app-name> (uses Fly.io's hallpass service)
 # 4. Work: All files in /workspace are persistent
 # 5. Idle: VM automatically suspends after inactivity
 # 6. Resume: VM starts automatically on next connection
+
+# CI Mode Security Implications (H10 fix):
+# SECURITY: CI_MODE=true disables custom SSH daemon for automated testing
+#
+# When CI_MODE=true is set (via environment variable or secrets):
+#
+# 1. What Changes:
+#    - Custom SSH daemon (port 2222) is NOT started
+#    - Only Fly.io's hallpass service (port 22) available for SSH
+#    - Uses CI-specific extension manifest (fewer extensions, faster startup)
+#    - Optimized for short-lived test deployments
+#
+# 2. Security Trade-offs:
+#    ✅ BENEFITS:
+#    - Avoids port conflicts with Fly.io's hallpass service
+#    - Faster startup for CI/CD pipelines
+#    - No custom daemon to manage or secure
+#    - Reliable automated deployments
+#
+#    ⚠️  CONSIDERATIONS:
+#    - Only accessible via: flyctl ssh console -a <app-name>
+#    - Cannot use direct SSH: ssh developer@<app>.fly.dev -p 10022
+#    - Requires Fly.io API authentication for access
+#    - hallpass service has its own rate limits
+#
+# 3. When to Use:
+#    - Automated testing in GitHub Actions
+#    - Temporary test environments
+#    - CI/CD pipeline deployments
+#    - Extension validation workflows
+#
+# 4. When NOT to Use:
+#    - Production development environments
+#    - Long-lived personal environments
+#    - Environments requiring direct SSH access
+#    - Workflows depending on port 10022 access
+#
+# 5. Enable CI Mode:
+#    flyctl secrets set CI_MODE=true -a <test-app-name>
+#    Or in deployment: CI_MODE=true flyctl deploy
+#
+# 6. Audit Logging:
+#    - hallpass access logged by Fly.io infrastructure
+#    - Custom SSH daemon logs to /var/log/auth.log (LogLevel VERBOSE)
+#    - Review logs: flyctl ssh console -a <app> -C "sudo tail -f /var/log/auth.log"
+#
+# 7. Best Practices:
+#    - Use CI mode ONLY for automated testing
+#    - Use production mode for development work
+#    - Set meaningful app names to distinguish CI vs prod
+#    - Clean up CI test apps after use

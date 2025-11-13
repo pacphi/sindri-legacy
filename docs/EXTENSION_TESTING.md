@@ -37,7 +37,7 @@ The test suite is designed to:
 ### Test Statistics
 
 - **Total Test Jobs**: 10
-- **Extensions Tested**: 21 out of 21 (100%)
+- **Extensions Tested**: 21 out of 23 (91%) - guacamole and xfce-ubuntu not currently tested
 - **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0, 7/7 v2.1)
 - **Feature Coverage**: 96%
 - **Test Fixtures**: 3 manifest test files
@@ -228,10 +228,12 @@ Comprehensive functional testing for each extension individually using the Exten
 
 For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 
-#### Tested Extensions (21 Total)
+#### Tested Extensions (21 of 23 Total)
 
 **Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the
 Docker image and not tested as extensions.
+
+**Not Currently Tested**: guacamole and xfce-ubuntu (desktop environment extensions)
 
 | Extension                    | Key Tools          | Dependencies        | Test Focus               |
 | ---------------------------- | ------------------ | ------------------- | ------------------------ |
@@ -576,10 +578,11 @@ gh workflow run extension-tests.yml \
 
 ### Extension Coverage
 
-- **Total Extensions**: 21 (base system components not counted as extensions)
+- **Total Extensions**: 23 (base system components not counted as extensions)
 - **Extensions Tested**: 21
-- **Coverage**: 100%
-- **Untested**: None (template intentionally excluded, used as development reference)
+- **Coverage**: 91% (21/23)
+- **Untested**: guacamole, xfce-ubuntu (desktop environment extensions not included in test matrix)
+- **Template Excluded**: template.extension intentionally excluded, used as development reference only
 
 ---
 

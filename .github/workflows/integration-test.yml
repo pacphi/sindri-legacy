@@ -44,6 +44,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Mask secrets
+        uses: ./.github/actions/mask-secrets
+
       # Using composite action for setup
       - name: Setup Fly.io test environment
         id: setup

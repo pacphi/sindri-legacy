@@ -70,7 +70,8 @@ validate_repo_url() {
     fi
 
     # Block suspicious patterns
-    if [[ "$url" =~ [;\$\`\|&<>()] ]]; then
+    # shellcheck disable=SC2076
+    if [[ "$url" =~ [\;\$\`\|\&\<\>\(\)] ]]; then
         echo "ERROR: Repository URL contains invalid characters" >&2
         return 1
     fi

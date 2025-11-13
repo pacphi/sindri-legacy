@@ -134,6 +134,7 @@ create_secure_temp_dir() {
 setup_cleanup_trap() {
     local items=("$@")
 
+    # shellcheck disable=SC2329  # Function invoked via trap
     cleanup() {
         local exit_code=$?
         for item in "${items[@]}"; do
