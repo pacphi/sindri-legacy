@@ -107,25 +107,26 @@ jobs:
             cd /workspace/.system
             manifest=\"manifest/active-extensions.conf\"
 
-            # Add extension dependencies to manifest
+            # Build manifest with extension and dependencies
             # Note: mise is a core feature, already available
+            # Use > for first write to ensure idempotency on retries
             case \"$extension\" in
               nodejs|python|rust|golang|tmux-workspace|docker|agent-manager)
                 # These extensions have no dependencies (mise is core)
+                echo \"$extension\" > \$manifest
                 ;;
               monitoring)
                 # monitoring depends on nodejs and python extensions
                 echo \"nodejs\" > \$manifest
                 echo \"python\" >> \$manifest
+                echo \"$extension\" >> \$manifest
                 ;;
               openskills)
                 # openskills depends on nodejs extension
                 echo \"nodejs\" > \$manifest
+                echo \"$extension\" >> \$manifest
                 ;;
             esac
-
-            # Add the test extension itself
-            echo \"$extension\" >> \$manifest
 
             # Install all extensions from manifest
             extension-manager install-all
