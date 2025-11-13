@@ -232,13 +232,17 @@ read_manifest() {
     fi
 
     while IFS= read -r line; do
-        # Skip comments and empty lines
+        # Skip comments and empty/whitespace-only lines
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${line// }" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
 
         # Trim whitespace
         local ext_name=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        [[ -n "$ext_name" ]] && extensions+=("$ext_name")
+
+        # Extra safety: skip if trimmed name is empty
+        [[ -z "$ext_name" ]] && continue
+
+        extensions+=("$ext_name")
     done < "$MANIFEST_FILE"
 
     printf '%s\n' "${extensions[@]}"
