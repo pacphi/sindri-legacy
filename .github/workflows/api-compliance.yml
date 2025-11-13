@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   extension-api-tests:
-    name: Test Extension API - ${{ matrix.extension }}
+    name: Test Extension API - ${{ matrix.extension.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -45,14 +45,63 @@ jobs:
       max-parallel: 2
       matrix:
         # Test representative sample of extensions for API compliance
-        # Coverage by install method:
-        # - mise: nodejs, python, rust, golang (language runtimes)
-        # - native: tmux-workspace (apt-based utility)
-        # - apt: monitoring (apt packages with dependencies)
-        # - mixed: docker (apt + binary downloads, complex multi-step)
-        # - npm: openskills (npm global install pattern)
-        # - git: agent-manager (GitHub release binary pattern)
-        extension: ["nodejs", "python", "rust", "golang", "tmux-workspace", "monitoring", "docker", "openskills", "agent-manager"]
+        # Each extension configured with appropriate resources based on installation requirements
+        # Resource allocation tuned per OOM analysis (Nov 2025):
+        # - Heavy extensions (rust, ruby, jvm, dotnet): 8 GB RAM, more CPUs/performance cores
+        # - Medium extensions (golang, python, docker, monitoring): 6 GB RAM
+        # - Light extensions (nodejs, php, utilities): 4 GB RAM
+        # - SSH timeout varies by installation complexity (90s-180s)
+        extension:
+          # Heavy language runtimes - large toolchain downloads, parallel component installs
+          - name: "rust"
+            memory: "8192"
+            cpu_kind: "performance"
+            cpu_count: "4"
+            ssh_timeout: "180"
+          # Medium language runtimes - moderate downloads, multiple components
+          - name: "golang"
+            memory: "6144"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "120"
+          - name: "python"
+            memory: "6144"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "120"
+          # Light language runtimes - fast npm installs
+          - name: "nodejs"
+            memory: "4096"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "120"
+          # Complex multi-step installs - apt packages + binary downloads
+          - name: "docker"
+            memory: "6144"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "120"
+          - name: "monitoring"
+            memory: "6144"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "120"
+          # Light utilities
+          - name: "tmux-workspace"
+            memory: "4096"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "90"
+          - name: "openskills"
+            memory: "4096"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "90"
+          - name: "agent-manager"
+            memory: "4096"
+            cpu_kind: "shared"
+            cpu_count: "2"
+            ssh_timeout: "90"
 
     steps:
       - name: Checkout repository
@@ -64,12 +113,12 @@ jobs:
         uses: ./.github/actions/setup-fly-test-env
         with:
           app-prefix: "${{ inputs.test_app_prefix }}-api"
-          extension-name: ${{ matrix.extension }}
+          extension-name: ${{ matrix.extension.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
-          vm-memory: "4096"
-          vm-cpu-kind: "shared"
-          vm-cpu-count: "2"
+          vm-memory: ${{ matrix.extension.memory }}
+          vm-cpu-kind: ${{ matrix.extension.cpu_kind }}
+          vm-cpu-count: ${{ matrix.extension.cpu_count }}
 
       # NEW: Using composite action for deployment
       - name: Deploy test environment
@@ -91,6 +140,67 @@ jobs:
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           timeout-seconds: "420"
           expected-status: "started"
+
+      - name: Verify VM resources
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+          expected_memory="${{ matrix.extension.memory }}"
+          expected_cpus="${{ matrix.extension.cpu_count }}"
+          expected_cpu_kind="${{ matrix.extension.cpu_kind }}"
+
+          echo "🔍 Verifying VM resource allocation..."
+          echo "Expected: ${expected_memory} MB RAM, ${expected_cpus} CPUs (${expected_cpu_kind})"
+
+          # Get machine status from Fly.io
+          echo ""
+          echo "=== Fly.io Machine Status ==="
+          flyctl status -a "$app_name" --json | jq -r '.Machines[] | {
+            id: .id,
+            state: .state,
+            region: .region,
+            instance_id: .instance_id,
+            cpus: .config.guest.cpus,
+            memory_mb: .config.guest.memory_mb,
+            cpu_kind: .config.guest.cpu_kind
+          }'
+
+          # Check actual memory inside VM via SSH
+          echo ""
+          echo "=== Actual VM Memory (from inside VM) ==="
+          flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -c '
+            echo \"Total RAM (from /proc/meminfo):\"
+            grep MemTotal /proc/meminfo
+
+            echo \"\"
+            echo \"Available RAM:\"
+            grep MemAvailable /proc/meminfo
+
+            echo \"\"
+            echo \"Swap:\"
+            grep SwapTotal /proc/meminfo
+
+            echo \"\"
+            echo \"cgroup memory limit:\"
+            cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo \"No cgroup limit\"
+
+            echo \"\"
+            echo \"Free memory summary:\"
+            free -h
+          '"
+
+          # DEFENSIVE: Fail if memory is less than expected
+          actual_memory_mb=$(flyctl status -a "$app_name" --json | jq -r '.Machines[0].config.guest.memory_mb // 0')
+
+          echo ""
+          if [ "$actual_memory_mb" -lt "$expected_memory" ]; then
+            echo "❌ ERROR: VM has only ${actual_memory_mb} MB, expected ${expected_memory} MB"
+            echo "This will likely cause OOM failures during installation"
+            exit 1
+          else
+            echo "✅ Memory allocation verified: ${actual_memory_mb} MB"
+          fi
 
       - name: Validate bash environment
         env:
@@ -122,10 +232,11 @@ jobs:
           source .github/scripts/common/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
-          extension="${{ matrix.extension }}"
+          extension="${{ matrix.extension.name }}"
+          ssh_timeout="${{ matrix.extension.ssh_timeout }}"
 
-          # Execute install with retry
-          ssh_command_retry "$app_name" "/bin/bash -lc '
+          # Execute install with retry and extension-specific timeout
+          ssh_command_retry "$app_name" "$ssh_timeout" "/bin/bash -lc '
             cd /workspace/.system
             manifest=\"manifest/active-extensions.conf\"
 
@@ -172,7 +283,7 @@ jobs:
           source .github/scripts/common/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
-          extension="${{ matrix.extension }}"
+          extension="${{ matrix.extension.name }}"
 
           echo "Testing API compliance for $extension..."
 
@@ -196,7 +307,7 @@ jobs:
           source .github/scripts/common/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
-          extension="${{ matrix.extension }}"
+          extension="${{ matrix.extension.name }}"
 
           echo "Testing uninstall() function for $extension..."
 
@@ -228,7 +339,7 @@ jobs:
           source .github/scripts/common/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
-          extension="${{ matrix.extension }}"
+          extension="${{ matrix.extension.name }}"
 
           echo "Testing deactivate() function for $extension..."
 

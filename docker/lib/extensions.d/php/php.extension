@@ -79,15 +79,45 @@ prerequisites() {
 install() {
   print_status "Installing PHP and Symfony development environment..."
 
-  # Add PHP repository if not already added
+  # Add PHP repository if not already added with retry logic
   if ! grep -q "ondrej/php" /etc/apt/sources.list.d/*.list 2>/dev/null; then
     print_status "Adding PHP repository..."
-    if ! sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>/dev/null; then
-      print_error "Failed to add Ondrej PHP PPA repository"
-      return 1
-    fi
-    # Wait for repository to be available
-    sleep 3
+
+    local max_attempts=3
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+      print_status "Adding Ondrej PHP PPA (attempt $attempt/$max_attempts)..."
+
+      if sudo DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ondrej/php 2>&1 | tee /tmp/ppa-add.log; then
+        print_success "PPA added successfully"
+        # Wait for repository to be available
+        sleep 3
+        break
+      else
+        local exit_code=$?
+        print_error "PPA addition failed with exit code $exit_code"
+
+        # Show detailed error
+        print_status "=== PPA Addition Error Log ==="
+        cat /tmp/ppa-add.log
+        print_status "==========================="
+
+        if [ $attempt -lt $max_attempts ]; then
+          print_warning "Retrying in 10 seconds..."
+          sleep 10
+          attempt=$((attempt + 1))
+        else
+          print_error "Failed to add Ondrej PHP PPA after $max_attempts attempts"
+          print_status "Possible causes:"
+          print_status "  - Network connectivity issues"
+          print_status "  - DNS resolution failures"
+          print_status "  - GPG keyserver unavailable"
+          print_status "  - Repository temporarily down"
+          return 1
+        fi
+      fi
+    done
   fi
 
   # Update package lists with retry

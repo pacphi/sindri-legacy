@@ -85,12 +85,21 @@ flyctl_deploy_retry() {
 }
 
 # SSH command with retry
-# Usage: ssh_command_retry <app_name> <command>
+# Usage: ssh_command_retry <app_name> [timeout_seconds] <command>
 # Example: ssh_command_retry my-app "/bin/bash -lc 'echo test'"
+# Example: ssh_command_retry my-app 120 "/bin/bash -lc 'long-running-command'"
 # Note: Automatically sets PATH for Sindri binaries unless command already handles it
 ssh_command_retry() {
   local app_name=$1
   shift
+
+  # Check if second parameter is a timeout (numeric)
+  local timeout_seconds=45  # Default timeout
+  if [[ "$1" =~ ^[0-9]+$ ]]; then
+    timeout_seconds=$1
+    shift
+  fi
+
   local command="$*"
   local max_attempts=5
   local attempt=1
@@ -112,11 +121,11 @@ ssh_command_retry() {
   fi
 
   while [ $attempt -le $max_attempts ]; do
-    echo "▶️  SSH attempt $attempt of $max_attempts..."
+    echo "▶️  SSH attempt $attempt of $max_attempts (timeout: ${timeout_seconds}s)..."
 
     # Execute command and capture output for error detection
     local output
-    output=$(timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command" 2>&1)
+    output=$(timeout "${timeout_seconds}s" flyctl ssh console -a "$app_name" --user developer -C "$command" 2>&1)
     local exit_code=$?
 
     # Check for bash function import errors (fail fast - no retry)

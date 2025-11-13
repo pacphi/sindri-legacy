@@ -292,8 +292,9 @@ jobs:
               else
                 echo "❌ extension-manager install-all failed after $max_config_attempts attempts"
                 echo "Retrieving app logs for diagnosis (with 30s timeout)..."
-                timeout 30s flyctl logs --app $app_name --limit 200 || {
-                  echo "⚠️  Log retrieval timed out or failed"
+                # Use --no-tail to get recent logs, pipe to head for limiting
+                flyctl logs --app $app_name --no-tail 2>&1 | head -200 || {
+                  echo "⚠️  Log retrieval failed"
                   echo "Attempting to get machine status instead..."
                   flyctl status --app $app_name || echo "Status check also failed"
                 }

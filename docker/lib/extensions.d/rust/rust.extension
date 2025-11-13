@@ -75,26 +75,59 @@ install() {
     print_warning "Cargo tools may take 10-15 minutes to compile from source"
   fi
 
-  # Retry logic for mise installation
+  # Retry logic for mise installation with cleanup
   local max_attempts=3
   local attempt=1
 
   while [ $attempt -le $max_attempts ]; do
     print_debug "Rust installation attempt $attempt of $max_attempts..."
 
+    # DEFENSIVE: Clean up any corrupted rustup state before retry
+    if [ $attempt -gt 1 ]; then
+      print_warning "Cleaning up corrupted Rust installation..."
+
+      # Remove rustup and cargo directories
+      rm -rf "$HOME/.cargo" "$HOME/.rustup" 2>/dev/null || true
+
+      # Clean mise's Rust state
+      mise uninstall rust@stable 2>/dev/null || true
+      mise cache clear 2>/dev/null || true
+
+      print_status "Cleanup complete, retrying installation..."
+      sleep $((5 * attempt))
+    fi
+
     if install_mise_config "rust"; then
       print_success "Rust installation successful"
-      break
+
+      # Verify installation is actually working
+      if command_exists rustc && command_exists cargo; then
+        if rustc --version >/dev/null 2>&1 && cargo --version >/dev/null 2>&1; then
+          print_success "Rust toolchain verified"
+          break
+        else
+          print_warning "Rust installed but tools not functional, retrying..."
+          attempt=$((attempt + 1))
+          continue
+        fi
+      else
+        print_warning "Rust commands not found after installation, retrying..."
+        attempt=$((attempt + 1))
+        continue
+      fi
     else
       if [ $attempt -lt $max_attempts ]; then
-        print_warning "Rust installation attempt $attempt failed, cleaning up and retrying..."
-        # Clean up partial installation
-        mise uninstall rust@stable 2>/dev/null || true
-        mise cache clear 2>/dev/null || true
-        sleep $((5 * attempt))
+        print_warning "Rust installation attempt $attempt failed, will retry..."
         attempt=$((attempt + 1))
       else
         print_error "Rust installation failed after $max_attempts attempts"
+
+        # Debug output
+        print_status "Debugging information:"
+        ls -la "$HOME/.cargo" 2>/dev/null || print_debug "No .cargo directory"
+        ls -la "$HOME/.rustup" 2>/dev/null || print_debug "No .rustup directory"
+        mise list rust 2>/dev/null || print_debug "No mise Rust installations"
+
         return 1
       fi
     fi

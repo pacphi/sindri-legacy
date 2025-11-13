@@ -73,14 +73,47 @@ install() {
   # Mitigation: HTTPS+TLS1.2 enforcement, timeout limits, official domain only
   if [[ -d "$HOME/.sdkman" ]]; then
     print_warning "SDKMAN is already installed"
+
+    # WORKAROUND: SDKMAN incompatible with set -u (GitHub issue #597)
+    # Temporarily disable nounset to allow SDKMAN initialization
+    local restore_nounset=false
+    if [[ $- =~ u ]]; then
+      restore_nounset=true
+      set +u
+      print_debug "Temporarily disabled set -u for SDKMAN compatibility"
+    fi
+
     source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+    # Restore nounset if it was enabled
+    if [[ "$restore_nounset" == "true" ]]; then
+      set -u
+      print_debug "Restored set -u"
+    fi
   else
     print_status "Installing SDKMAN (dynamic installer, HTTPS verified)..."
     # SECURITY: Enforce HTTPS+TLS1.2, add timeouts (C2/H7 fix)
     if curl --proto '=https' --tlsv1.2 -fsSL \
        --max-time 120 --connect-timeout 30 \
        "https://get.sdkman.io" | bash; then
+
+      # WORKAROUND: SDKMAN incompatible with set -u (GitHub issue #597)
+      # Temporarily disable nounset to allow SDKMAN initialization
+      local restore_nounset=false
+      if [[ $- =~ u ]]; then
+        restore_nounset=true
+        set +u
+        print_debug "Temporarily disabled set -u for SDKMAN compatibility"
+      fi
+
       source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+      # Restore nounset if it was enabled
+      if [[ "$restore_nounset" == "true" ]]; then
+        set -u
+        print_debug "Restored set -u"
+      fi
+
       print_success "SDKMAN installed successfully"
     else
       print_error "Failed to install SDKMAN"
@@ -258,7 +291,19 @@ validate() {
   # Check SDKMAN
   if [[ -d "$HOME/.sdkman" ]]; then
     print_success "SDKMAN: installed"
+
+    # WORKAROUND: SDKMAN incompatible with set -u
+    local restore_nounset=false
+    if [[ $- =~ u ]]; then
+      restore_nounset=true
+      set +u
+    fi
+
     source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
+
+    if [[ "$restore_nounset" == "true" ]]; then
+      set -u
+    fi
   else
     print_error "SDKMAN not found"
     all_valid=false
@@ -313,7 +358,18 @@ status() {
   echo "Status: ✓ INSTALLED"
   echo ""
 
+  # WORKAROUND: SDKMAN incompatible with set -u
+  local restore_nounset=false
+  if [[ $- =~ u ]]; then
+    restore_nounset=true
+    set +u
+  fi
+
   source "$HOME/.sdkman/bin/sdkman-init.sh" 2>/dev/null
+
+  if [[ "$restore_nounset" == "true" ]]; then
+    set -u
+  fi
 
   # Show installed tools with versions
   print_status "Installed tools:"
