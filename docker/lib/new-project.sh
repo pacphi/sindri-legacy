@@ -6,6 +6,9 @@
 # structure, extension activation via extension-manager, and Claude AI enhancements.
 #
 
+# SECURITY: Enhanced error handling (H3 fix)
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 source "${SCRIPT_DIR}/git.sh"

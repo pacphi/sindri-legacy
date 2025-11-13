@@ -3,6 +3,49 @@
 # To update digest: docker pull ubuntu:24.04 && docker inspect ubuntu:24.04 | grep -A1 RepoDigests
 FROM ubuntu:24.04@sha256:b359f1067efa76f37863778f7b6d0e8d911e3ee8efa807ad01fbf5dc1ef9006b
 
+# ==============================================================================
+# DOCKER BUILDKIT SECRETS (H9 fix)
+# ==============================================================================
+# SECURITY: Use BuildKit secrets for build-time credentials
+#
+# BuildKit secrets allow passing sensitive data to build steps without:
+# - Storing secrets in image layers
+# - Exposing secrets in docker history
+# - Leaking secrets via cache
+#
+# Usage Pattern:
+# 1. Create secret file:
+#    echo "sk-ant-..." > /tmp/anthropic_key.txt
+#
+# 2. Build with secret:
+#    DOCKER_BUILDKIT=1 docker build \
+#      --secret id=anthropic_key,src=/tmp/anthropic_key.txt \
+#      -t sindri .
+#
+# 3. Access in RUN command:
+#    RUN --mount=type=secret,id=anthropic_key \
+#        ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key) && \
+#        # Use secret here (not persisted in layer)
+#
+# Example Use Cases:
+# - Download private packages during build
+# - Authenticate to private registries
+# - Access private Git repositories
+# - Verify checksums from authenticated sources
+#
+# Security Benefits:
+# - Secrets never written to image layers
+# - Secrets not visible in docker history
+# - Secrets automatically cleaned up after RUN
+# - No risk of accidental commit via `docker commit`
+#
+# Important:
+# - Secrets are ONLY for build-time operations
+# - Runtime secrets should use Fly.io secrets or environment variables
+# - Never hardcode secrets in Dockerfile
+# - Always use --mount=type=secret with RUN
+# ==============================================================================
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 

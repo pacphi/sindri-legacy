@@ -3,6 +3,9 @@
 # Extension API v2.0 - Manifest-based activation with install/uninstall support
 # This script provides comprehensive management of extension scripts in the extensions.d directory
 
+# SECURITY: Enhanced error handling (H3 fix)
+set -euo pipefail
+
 # Determine script location
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 

@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# SECURITY: Enhanced error handling (H3 fix)
+set -euo pipefail
 
 # ==============================================================================
 # Sindri Container Entrypoint

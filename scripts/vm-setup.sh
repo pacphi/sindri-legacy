@@ -2,7 +2,8 @@
 # vm-setup.sh - Initial setup script for Sindri on Fly.io
 # This script helps set up the Fly.io VM with all necessary tools and configurations
 
-set -e  # Exit on any error
+# SECURITY: Enhanced error handling (H3 fix)
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -343,34 +344,36 @@ create_volume() {
 }
 
 # Function to configure secrets
+# SECURITY: Use stdin for secret passing to prevent exposure in process list (H12 fix)
 configure_secrets() {
     print_status "Configuring SSH keys and secrets"
 
-    # Set SSH authorized keys
+    # Set SSH authorized keys via stdin
     local ssh_key_content
     ssh_key_content=$(cat "$SSH_KEY_PATH")
-    flyctl secrets set AUTHORIZED_KEYS="$ssh_key_content" -a "$APP_NAME"
+    echo "$ssh_key_content" | flyctl secrets set AUTHORIZED_KEYS=- -a "$APP_NAME"
     print_success "SSH keys configured"
 
-    # Optionally set Anthropic API key
+    # Optionally set Anthropic API key via stdin
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        flyctl secrets set ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" -a "$APP_NAME"
+        echo "$ANTHROPIC_API_KEY" | flyctl secrets set ANTHROPIC_API_KEY=- -a "$APP_NAME"
         print_success "Anthropic API key configured"
     else
         print_warning "ANTHROPIC_API_KEY not set. You can set it later with:"
-        print_warning "  flyctl secrets set ANTHROPIC_API_KEY=your_api_key -a $APP_NAME"
+        print_warning "  echo 'your_api_key' | flyctl secrets set ANTHROPIC_API_KEY=- -a $APP_NAME"
     fi
 
-    # Optionally set GitHub credentials
+    # Optionally set GitHub credentials via stdin
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
         print_status "Setting GitHub token..."
-        flyctl secrets set GITHUB_TOKEN="$GITHUB_TOKEN" -a "$APP_NAME"
+        echo "$GITHUB_TOKEN" | flyctl secrets set GITHUB_TOKEN=- -a "$APP_NAME"
         print_success "GitHub token configured"
     else
         print_status "No GITHUB_TOKEN found. You can set it later with:"
-        print_status "  flyctl secrets set GITHUB_TOKEN=<your-token> -a $APP_NAME"
+        print_status "  echo '<your-token>' | flyctl secrets set GITHUB_TOKEN=- -a $APP_NAME"
     fi
 
+    # Set Git configuration (non-sensitive, can use command line)
     if [[ -n "${GIT_USER_NAME:-}" ]]; then
         flyctl secrets set GIT_USER_NAME="$GIT_USER_NAME" -a "$APP_NAME"
         print_success "Git user name configured: $GIT_USER_NAME"
@@ -386,13 +389,13 @@ configure_secrets() {
         print_success "GitHub username configured: $GITHUB_USER"
     fi
 
-    # Optionally set Perplexity API key for Goalie
+    # Optionally set Perplexity API key via stdin
     if [[ -n "${PERPLEXITY_API_KEY:-}" ]]; then
-        flyctl secrets set PERPLEXITY_API_KEY="$PERPLEXITY_API_KEY" -a "$APP_NAME"
+        echo "$PERPLEXITY_API_KEY" | flyctl secrets set PERPLEXITY_API_KEY=- -a "$APP_NAME"
         print_success "Perplexity API key configured"
     else
         print_status "No PERPLEXITY_API_KEY found. You can set it later with:"
-        print_status "  flyctl secrets set PERPLEXITY_API_KEY=<your-key> -a $APP_NAME"
+        print_status "  echo '<your-key>' | flyctl secrets set PERPLEXITY_API_KEY=- -a $APP_NAME"
         print_status "  Get your API key from: https://www.perplexity.ai/settings/api"
     fi
 }
