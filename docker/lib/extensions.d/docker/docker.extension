@@ -117,7 +117,7 @@ install() {
       setup_cleanup_trap "$temp_gpg"
 
       if secure_download "$docker_gpg_url" "$docker_gpg_checksum" "$temp_gpg"; then
-        cat "$temp_gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg "$temp_gpg"
         sudo chmod a+r /etc/apt/keyrings/docker.gpg
         print_status "✓ GPG key added (checksum verified)"
       else
