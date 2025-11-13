@@ -118,7 +118,8 @@ setup_developer_home() {
 # setup_ssh_keys - Configure SSH authorized keys from environment
 # ------------------------------------------------------------------------------
 setup_ssh_keys() {
-    if [ -n "$AUTHORIZED_KEYS" ]; then
+    # SECURITY: Use ${VAR:-} to safely check optional environment variables with set -u
+    if [ -n "${AUTHORIZED_KEYS:-}" ]; then
         echo "🔑 Configuring SSH keys..."
 
         mkdir -p "$DEVELOPER_HOME_RUNTIME/.ssh"
@@ -191,27 +192,28 @@ setup_secure_secrets() {
 SECRETS_EOF
 
     # Add secrets if they exist
-    if [ -n "$ANTHROPIC_API_KEY" ]; then
+    # SECURITY: Use ${VAR:-} to safely check optional environment variables with set -u
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
         echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> "$secrets_file"
         has_secrets=true
     fi
 
-    if [ -n "$GITHUB_TOKEN" ]; then
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
         echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> "$secrets_file"
         has_secrets=true
     fi
 
-    if [ -n "$OPENROUTER_API_KEY" ]; then
+    if [ -n "${OPENROUTER_API_KEY:-}" ]; then
         echo "export OPENROUTER_API_KEY='$OPENROUTER_API_KEY'" >> "$secrets_file"
         has_secrets=true
     fi
 
-    if [ -n "$GOOGLE_GEMINI_API_KEY" ]; then
+    if [ -n "${GOOGLE_GEMINI_API_KEY:-}" ]; then
         echo "export GOOGLE_GEMINI_API_KEY='$GOOGLE_GEMINI_API_KEY'" >> "$secrets_file"
         has_secrets=true
     fi
 
-    if [ -n "$PERPLEXITY_API_KEY" ]; then
+    if [ -n "${PERPLEXITY_API_KEY:-}" ]; then
         echo "export PERPLEXITY_API_KEY='$PERPLEXITY_API_KEY'" >> "$secrets_file"
         has_secrets=true
     fi
@@ -290,7 +292,8 @@ BASHRC_EOF
 # SECURITY: Token now stored in ~/.secrets/credentials, not bashrc (C4 fix)
 # ------------------------------------------------------------------------------
 setup_github_auth() {
-    if [ -n "$GITHUB_TOKEN" ]; then
+    # SECURITY: Use ${VAR:-} to safely check optional environment variables with set -u
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
         echo "🔐 Configuring GitHub CLI..."
 
         # Create GitHub CLI config for gh commands
@@ -299,7 +302,7 @@ setup_github_auth() {
         cat > "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml" << EOF
 github.com:
     oauth_token: $GITHUB_TOKEN
-    user: $GITHUB_USER
+    user: ${GITHUB_USER:-developer}
     git_protocol: https
 EOF
         chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.config/gh"
@@ -315,13 +318,14 @@ EOF
 setup_git_config() {
     local configured=false
 
-    if [ -n "$GIT_USER_NAME" ]; then
+    # SECURITY: Use ${VAR:-} to safely check optional environment variables with set -u
+    if [ -n "${GIT_USER_NAME:-}" ]; then
         sudo -u "$DEVELOPER_USER" git config --global user.name "$GIT_USER_NAME"
         echo "✅ Git user name configured: $GIT_USER_NAME"
         configured=true
     fi
 
-    if [ -n "$GIT_USER_EMAIL" ]; then
+    if [ -n "${GIT_USER_EMAIL:-}" ]; then
         sudo -u "$DEVELOPER_USER" git config --global user.email "$GIT_USER_EMAIL"
         echo "✅ Git user email configured: $GIT_USER_EMAIL"
         configured=true
@@ -329,7 +333,7 @@ setup_git_config() {
 
     # Setup Git credential helper for GitHub token
     # SECURITY: Credential helper reads from secure storage (C4/C7 fix)
-    if [ -n "$GITHUB_TOKEN" ]; then
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
         # Create credential helper script that reads from secure storage
         cat > "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh" << 'CREDHELPER_EOF'
 #!/bin/bash
