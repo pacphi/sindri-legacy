@@ -121,10 +121,10 @@ File locations after deployment to the VM:
 | Repository Location                                      | VM Runtime Location                                      | Purpose                   |
 | -------------------------------------------------------- | -------------------------------------------------------- | ------------------------- |
 | `docker/scripts/vm-configure.sh`                         | `/workspace/scripts/vm-configure.sh`                     | Main configuration script |
-| `docker/lib/*.sh`                                        | `/workspace/scripts/lib/*.sh`                            | Shared utility libraries  |
-| `docker/lib/extension-manager.sh`                        | `/workspace/scripts/lib/extension-manager.sh`            | Extension management CLI  |
+| `docker/lib/*.sh`                                        | `/workspace/.system/lib/*.sh`                            | Shared utility libraries  |
+| `docker/lib/extension-manager.sh`                        | `/workspace/.system/bin/extension-manager`            | Extension management CLI  |
 | `docker/lib/extensions.d/*.sh.example`                   | `/workspace/scripts/extensions.d/*.sh.example`           | Available extensions      |
-| `docker/lib/extensions.d/active-extensions.conf.example` | `/workspace/scripts/extensions.d/active-extensions.conf` | Activation manifest       |
+| `docker/lib/.system/manifest/active-extensions.conf.example` | `/workspace/scripts/.system/manifest/active-extensions.conf` | Activation manifest       |
 | `docker/config/*`                                        | Various VM locations                                     | Configuration files       |
 
 ## Development Workflow Architecture

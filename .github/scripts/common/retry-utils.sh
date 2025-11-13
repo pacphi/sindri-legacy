@@ -87,6 +87,7 @@ flyctl_deploy_retry() {
 # SSH command with retry
 # Usage: ssh_command_retry <app_name> <command>
 # Example: ssh_command_retry my-app "/bin/bash -lc 'echo test'"
+# Note: Automatically sets PATH for Sindri binaries unless command already handles it
 ssh_command_retry() {
   local app_name=$1
   shift
@@ -94,10 +95,26 @@ ssh_command_retry() {
   local max_attempts=5
   local attempt=1
 
+  # Smart PATH handling: Only add PATH export if not already present
+  # This ensures extension-manager and other Sindri tools are available in Hallpass SSH context
+  if [[ ! "$command" =~ export[[:space:]]+PATH ]]; then
+    # Check if command is already wrapped in bash -c
+    if [[ "$command" =~ ^/bin/bash[[:space:]]+-[lc]?c[[:space:]]+[\'\"] ]]; then
+      # Command is wrapped but missing PATH export, inject it after the opening quote
+      # This handles cases like: /bin/bash -lc 'commands...'
+      command=$(echo "$command" | sed "s|^\(/bin/bash.*-[lc]*c[[:space:]]*['\"]\)|\1export PATH=/workspace/.system/bin:/workspace/bin:\\\$PATH; |")
+      echo "📍 Injecting PATH into existing bash command"
+    else
+      # Command is not wrapped, wrap it with PATH export
+      command="/bin/bash -c 'export PATH=/workspace/.system/bin:/workspace/bin:\$PATH; $command'"
+      echo "📍 Wrapping command with PATH for Sindri tools"
+    fi
+  fi
+
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SSH attempt $attempt of $max_attempts..."
 
-    # Execute command directly - caller provides complete command with shell invocation
+    # Execute command with smart PATH handling
     if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
       echo "✅ SSH command succeeded"
       return 0

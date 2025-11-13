@@ -16,13 +16,8 @@ WORKSPACE_DIR="/workspace"
 DEVELOPER_HOME_BUILD="/home/$DEVELOPER_USER"
 DEVELOPER_HOME_RUNTIME="$WORKSPACE_DIR/$DEVELOPER_USER"
 SKEL_DIR="/etc/skel"
-DOCKER_LIB_DIR="/docker/lib"
-WORKSPACE_SCRIPTS_DIR="$WORKSPACE_DIR/scripts"
-WORKSPACE_LIB_DIR="$WORKSPACE_SCRIPTS_DIR/lib"
 WORKSPACE_BIN_DIR="$WORKSPACE_DIR/bin"
-EXTENSIONS_DIR="$WORKSPACE_LIB_DIR/extensions.d"
-EXTENSION_MANIFEST="$EXTENSIONS_DIR/active-extensions.conf"
-EXTENSION_MANIFEST_CI="$DOCKER_LIB_DIR/extensions.d/active-extensions.ci.conf"
+SYSTEM_BIN_DIR="$WORKSPACE_DIR/.system/bin"
 
 # ==============================================================================
 # Functions
@@ -33,13 +28,6 @@ EXTENSION_MANIFEST_CI="$DOCKER_LIB_DIR/extensions.d/active-extensions.ci.conf"
 # ------------------------------------------------------------------------------
 setup_workspace() {
     /docker/scripts/setup-workspace.sh
-
-    # Ensure developer user owns workspace root for write access
-    # This is critical for volume mount tests and developer usage
-    if id "$DEVELOPER_USER" >/dev/null 2>&1; then
-        chown "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_DIR"
-        chmod 775 "$WORKSPACE_DIR"
-    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -73,9 +61,49 @@ setup_developer_home() {
             cp -r "$DEVELOPER_HOME_BUILD/.claude" "$DEVELOPER_HOME_RUNTIME/"
             echo "    ✓ Copied Claude configuration"
         fi
+    else
+        echo "  Developer home already exists on persistent volume"
+    fi
 
-        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME"
-        chmod 755 "$DEVELOPER_HOME_RUNTIME"
+    # CRITICAL: Always ensure proper ownership and permissions
+    # This must run every time, not just on first creation
+    # Without this, extensions fail with "Permission denied" on .bashrc writes
+    echo "  🔒 Ensuring correct ownership and permissions..."
+
+    # Ensure .bashrc exists (may be missing if directory was created externally)
+    if [ ! -f "$DEVELOPER_HOME_RUNTIME/.bashrc" ] && [ -f "$SKEL_DIR/.bashrc" ]; then
+        cp "$SKEL_DIR/.bashrc" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .bashrc from skeleton"
+    fi
+
+    # Ensure .bash_profile exists
+    if [ ! -f "$DEVELOPER_HOME_RUNTIME/.bash_profile" ] && [ -f "$SKEL_DIR/.bash_profile" ]; then
+        cp "$SKEL_DIR/.bash_profile" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .bash_profile from skeleton"
+    fi
+
+    # Ensure .claude directory exists (required for claude-marketplace extension)
+    if [ ! -d "$DEVELOPER_HOME_RUNTIME/.claude" ] && [ -d "$DEVELOPER_HOME_BUILD/.claude" ]; then
+        cp -r "$DEVELOPER_HOME_BUILD/.claude" "$DEVELOPER_HOME_RUNTIME/"
+        echo "    ✓ Created missing .claude directory from Docker build"
+    elif [ ! -d "$DEVELOPER_HOME_RUNTIME/.claude" ]; then
+        # Fallback: create minimal .claude directory if build version doesn't exist
+        mkdir -p "$DEVELOPER_HOME_RUNTIME/.claude"
+        echo "    ✓ Created minimal .claude directory"
+    fi
+
+    # Create extensions directory for extension artifacts
+    # This is where extensions install/configure (see WORKSPACE_DIR in common.sh)
+    mkdir -p "$DEVELOPER_HOME_RUNTIME/extensions"
+    echo "    ✓ Created extensions directory"
+
+    # Always set ownership - critical for extension installation
+    chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME"
+    chmod 755 "$DEVELOPER_HOME_RUNTIME"
+
+    # Ensure .bashrc is writable by developer user
+    if [ -f "$DEVELOPER_HOME_RUNTIME/.bashrc" ]; then
+        chmod 644 "$DEVELOPER_HOME_RUNTIME/.bashrc"
     fi
 
     # Update the user's home directory to point to persistent volume
@@ -104,76 +132,36 @@ setup_ssh_keys() {
 }
 
 # ------------------------------------------------------------------------------
-# setup_scripts_lib - Copy library scripts to workspace
-# ------------------------------------------------------------------------------
-setup_scripts_lib() {
-    if [ ! -d "$WORKSPACE_LIB_DIR" ]; then
-        echo "📚 Setting up scripts library..."
-
-        cp -r "$DOCKER_LIB_DIR" "$WORKSPACE_SCRIPTS_DIR/"
-        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_LIB_DIR"
-        chmod +x "$WORKSPACE_LIB_DIR"/*.sh
-
-        echo "✅ Scripts library configured"
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# setup_extension_manifest - Configure extension activation manifest
-# ------------------------------------------------------------------------------
-setup_extension_manifest() {
-    echo "📋 Configuring extension manifest..."
-
-    if [ "$CI_MODE" = "true" ]; then
-        # CI mode: Use pre-configured CI manifest
-        if [ -f "$EXTENSION_MANIFEST_CI" ]; then
-            cp "$EXTENSION_MANIFEST_CI" "$EXTENSION_MANIFEST"
-            echo "✅ Using CI extension manifest"
-        else
-            echo "⚠️  CI manifest not found, creating empty manifest"
-            mkdir -p "$EXTENSIONS_DIR"
-            touch "$EXTENSION_MANIFEST"
-        fi
-    else
-        # Production mode: Check if manifest exists, create from template if not
-        if [ ! -f "$EXTENSION_MANIFEST" ]; then
-            echo "  Creating default extension manifest..."
-            # Use CI manifest as template (has good documentation)
-            if [ -f "$EXTENSION_MANIFEST_CI" ]; then
-                cp "$EXTENSION_MANIFEST_CI" "$EXTENSION_MANIFEST"
-                echo "✅ Extension manifest created from template"
-            else
-                mkdir -p "$EXTENSIONS_DIR"
-                touch "$EXTENSION_MANIFEST"
-                echo "✅ Empty extension manifest created"
-            fi
-        else
-            echo "✅ Existing extension manifest found"
-        fi
-    fi
-
-    # Ensure correct permissions
-    chown "$DEVELOPER_USER:$DEVELOPER_USER" "$EXTENSION_MANIFEST"
-    chmod 644 "$EXTENSION_MANIFEST"
-}
-
-# ------------------------------------------------------------------------------
-# setup_workspace_bin - Create workspace bin directory and symlinks
+# setup_workspace_bin - Create symlinks in user bin directory
 # ------------------------------------------------------------------------------
 setup_workspace_bin() {
     echo "🔗 Setting up workspace bin directory..."
 
-    if [ ! -d "$WORKSPACE_BIN_DIR" ]; then
-        mkdir -p "$WORKSPACE_BIN_DIR"
-        chown "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR"
+    # Symlink system binaries to user bin (for PATH convenience)
+    if [ -f "$SYSTEM_BIN_DIR/extension-manager" ] && [ ! -L "$WORKSPACE_BIN_DIR/extension-manager" ]; then
+        ln -sf "$SYSTEM_BIN_DIR/extension-manager" "$WORKSPACE_BIN_DIR/extension-manager"
+        echo "  ✓ Linked extension-manager"
     fi
 
-    # Create symlink for extension-manager if script exists and symlink doesn't
-    if [ -f "$WORKSPACE_LIB_DIR/extension-manager.sh" ] && \
-       [ ! -L "$WORKSPACE_BIN_DIR/extension-manager" ]; then
-        ln -sf "$WORKSPACE_LIB_DIR/extension-manager.sh" "$WORKSPACE_BIN_DIR/extension-manager"
-        chown -h "$DEVELOPER_USER:$DEVELOPER_USER" "$WORKSPACE_BIN_DIR/extension-manager"
-    fi
+    # Symlink user-facing scripts from /docker/scripts
+    local user_scripts=(
+        "backup"
+        "clone-project"
+        "new-project"
+        "restore"
+        "system-status"
+        "upgrade-history"
+    )
+
+    for script in "${user_scripts[@]}"; do
+        local source_file="/docker/scripts/${script}.sh"
+        local target_link="$WORKSPACE_BIN_DIR/$script"
+
+        if [ -f "$source_file" ] && [ ! -L "$target_link" ]; then
+            ln -sf "$source_file" "$target_link"
+            echo "  ✓ Linked $script"
+        fi
+    done
 
     echo "✅ Workspace bin directory configured"
 }
@@ -326,8 +314,6 @@ main() {
     setup_workspace
     setup_developer_home
     setup_ssh_keys
-    setup_scripts_lib
-    setup_extension_manifest
     setup_workspace_bin
     setup_environment_variables
     setup_github_auth

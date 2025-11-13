@@ -3,15 +3,17 @@
 # Extension API v2.0
 #
 # This extension installs .NET development environment with:
-# - .NET SDK (9.0, 8.0 LTS)
+# - .NET SDK (10.0, 8.0 LTS)
 # - ASP.NET Core Runtime
 # - 19 global tools (EF Core, formatters, diagnostics)
 # - NuGet CLI with Mono wrapper
 # - Comprehensive aliases and templates
 #
-# Installation Method:
-# - Ubuntu 24.04+: Uses Ubuntu native package feeds (recommended)
-# - Ubuntu <24.04: Uses Microsoft package repository
+# Requirements:
+# - Ubuntu 24.04+ only
+# - Set EXT_USE_DOTNET_BACKPORTS=true to enable Ubuntu .NET backports PPA
+# - Backports PPA provides newer .NET versions before they reach standard repos
+# - Usage: EXT_USE_DOTNET_BACKPORTS=true extension-manager install dotnet
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +30,8 @@ EXT_DESCRIPTION=".NET SDK with ASP.NET Core and development tools"
 EXT_CATEGORY="language"
 EXT_INSTALL_METHOD="apt"
 EXT_UPGRADE_STRATEGY="automatic"
-EXT_REQUIRED_DOMAINS="packages.microsoft.com dist.nuget.org archive.ubuntu.com"
+EXT_REQUIRED_DOMAINS="dist.nuget.org archive.ubuntu.com ppa.launchpadcontent.net"
+EXT_USE_DOTNET_BACKPORTS="${EXT_USE_DOTNET_BACKPORTS:-false}"
 
 # Initialize extension environment
 extension_init
@@ -61,6 +64,22 @@ prerequisites() {
     return 1
   fi
 
+  # Check Ubuntu version (24.04+ required)
+  local ubuntu_version
+  ubuntu_version=$(lsb_release -rs 2>/dev/null)
+  if [[ -z "$ubuntu_version" ]]; then
+    print_error "Could not detect Ubuntu version"
+    print_status "This extension requires Ubuntu 24.04 or later"
+    return 1
+  fi
+
+  local major_version="${ubuntu_version%%.*}"
+  if [[ "$major_version" -lt 24 ]]; then
+    print_error "Ubuntu $ubuntu_version detected, but Ubuntu 24.04+ is required"
+    print_status "This extension only supports Ubuntu 24.04 and later"
+    return 1
+  fi
+
   # Check disk space (.NET needs ~2GB)
   check_disk_space 2500
 
@@ -72,7 +91,7 @@ prerequisites() {
     }
   fi
 
-  print_success "All prerequisites met"
+  print_success "All prerequisites met (Ubuntu $ubuntu_version)"
   return 0
 }
 
@@ -92,60 +111,23 @@ install() {
     return 0
   fi
 
-  # Detect Ubuntu version
-  local UBUNTU_VERSION
-  UBUNTU_VERSION=$(lsb_release -rs)
-  print_status "Detected Ubuntu $UBUNTU_VERSION"
-
-  # Ubuntu 24.04+ uses native Ubuntu package feeds (no Microsoft repository)
-  # See: https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu
-  if [[ "$UBUNTU_VERSION" == "24.04" ]] || [[ "${UBUNTU_VERSION%%.*}" -ge 24 ]]; then
-    print_status "Using Ubuntu native package feeds for .NET (recommended for Ubuntu 24.04+)"
-    print_status "Updating package lists..."
-    apt_update_retry 3
-  else
-    # Older Ubuntu versions require Microsoft package repository
-    print_status "Setting up Microsoft package repository for Ubuntu $UBUNTU_VERSION..."
-
-    # Use /tmp for downloads to ensure writable location
-    local max_retries=3
-    local retry_count=0
-    local download_success=false
-
-    while [ $retry_count -lt $max_retries ]; do
-      if wget -q --timeout=30 --tries=2 \
-           https://packages.microsoft.com/config/ubuntu/$UBUNTU_VERSION/packages-microsoft-prod.deb \
-           -O /tmp/packages-microsoft-prod.deb; then
-        download_success=true
-        break
-      fi
-
-      retry_count=$((retry_count + 1))
-      if [ $retry_count -lt $max_retries ]; then
-        print_warning "Download attempt $retry_count failed, retrying in $((retry_count * 2)) seconds..."
-        sleep $((retry_count * 2))
-      fi
-    done
-
-    if [ "$download_success" = false ]; then
-      print_error "Failed to download Microsoft package configuration after $max_retries attempts"
-      print_error "Please check network connectivity and DNS resolution"
-      rm -f /tmp/packages-microsoft-prod.deb
-      return 1
+  # Conditionally add .NET backports PPA for newer .NET versions
+  if [[ "$EXT_USE_DOTNET_BACKPORTS" == "true" ]]; then
+    print_status "Adding Ubuntu .NET backports PPA (provides newer .NET versions)..."
+    if sudo add-apt-repository -y ppa:dotnet/backports 2>/dev/null; then
+      print_success "Backports PPA added successfully"
+    else
+      print_warning "Failed to add backports PPA, continuing with standard repositories"
     fi
-
-    print_status "Installing Microsoft package repository..."
-    sudo dpkg -i /tmp/packages-microsoft-prod.deb
-    rm -f /tmp/packages-microsoft-prod.deb
-    print_status "Updating package lists..."
-    apt_update_retry 3
-    print_success "Microsoft package repository configured"
   fi
+
+  print_status "Updating package lists..."
+  apt_update_retry 3
 
   # Install .NET SDK versions
   print_status "Installing .NET SDKs (this may take 2-5 minutes)..."
   local dotnet_sdks=(
-    "dotnet-sdk-9.0"    # Current LTS
+    "dotnet-sdk-10.0"   # Current LTS
     "dotnet-sdk-8.0"    # Previous version
   )
 
@@ -163,13 +145,18 @@ install() {
 
   print_status "Installed $installed_count/${#dotnet_sdks[@]} .NET SDKs"
 
-  # Install ASP.NET Core Runtime
-  print_status "Installing ASP.NET Core Runtime..."
-  if apt_install_retry 3 aspnetcore-runtime-8.0; then
-    print_success "ASP.NET Core Runtime installed"
-  else
-    print_warning "Failed to install ASP.NET Core Runtime or already installed"
-  fi
+  # Install ASP.NET Core Runtimes
+  print_status "Installing ASP.NET Core Runtimes..."
+  local runtimes_installed=0
+  for runtime in aspnetcore-runtime-10.0 aspnetcore-runtime-8.0; do
+    if apt_install_retry 3 "$runtime"; then
+      print_debug "✓ $runtime installed"
+      ((runtimes_installed++))
+    else
+      print_warning "Failed to install $runtime or already installed"
+    fi
+  done
+  print_status "Installed $runtimes_installed/2 ASP.NET Core Runtimes"
 
   # Verify installation
   if command_exists dotnet; then
@@ -471,13 +458,13 @@ remove() {
 
   # Remove .NET packages
   print_status "Removing .NET packages..."
-  sudo apt-get remove -y dotnet-sdk-9.0 dotnet-sdk-8.0 aspnetcore-runtime-8.0 2>/dev/null
+  sudo apt-get remove -y dotnet-sdk-10.0 dotnet-sdk-8.0 aspnetcore-runtime-8.0 aspnetcore-runtime-10.0 2>/dev/null
   sudo apt-get autoremove -y 2>/dev/null
 
-  # Remove Microsoft package repository
-  if [[ -f /etc/apt/sources.list.d/microsoft-prod.list ]]; then
-    sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-    sudo apt-get update -qq
+  # Remove .NET backports PPA if present
+  if grep -q "dotnet/backports" /etc/apt/sources.list.d/*.list 2>/dev/null; then
+    print_status "Removing .NET backports PPA..."
+    sudo add-apt-repository -y --remove ppa:dotnet/backports 2>/dev/null || true
   fi
 
   # Remove global tools directory
@@ -534,7 +521,7 @@ upgrade() {
     print_status "Upgrading ${EXT_NAME}..."
 
     # Upgrade .NET packages via APT
-    if upgrade_apt_packages "dotnet-sdk-9.0" "dotnet-sdk-8.0" "aspnetcore-runtime-9.0" "aspnetcore-runtime-8.0"; then
+    if upgrade_apt_packages "dotnet-sdk-10.0" "dotnet-sdk-8.0" "aspnetcore-runtime-10.0" "aspnetcore-runtime-8.0"; then
         print_success ".NET SDK upgraded successfully"
         return 0
     else

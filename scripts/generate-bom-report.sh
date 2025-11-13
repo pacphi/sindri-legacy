@@ -65,18 +65,22 @@ echo ""
 echo "=== Extension Status Report ==="
 echo ""
 
-# Determine the correct path to extension-manager.sh
-if [[ -f "/workspace/scripts/lib/extension-manager.sh" ]]; then
-    # On VM
-    EXTENSION_MANAGER="/workspace/scripts/lib/extension-manager.sh"
-elif [[ -f "$(dirname "$0")/lib/extension-manager.sh" ]]; then
+# Determine the correct path to extension-manager
+if command -v extension-manager >/dev/null 2>&1; then
+    # On VM (in PATH)
+    EXTENSION_MANAGER="extension-manager"
+elif [[ -f "/workspace/.system/bin/extension-manager" ]]; then
+    # On VM (direct path)
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+elif [[ -f "$(dirname "$0")/../docker/lib/extension-manager.sh" ]]; then
     # In repository (relative to this script)
-    EXTENSION_MANAGER="$(dirname "$0")/lib/extension-manager.sh"
+    EXTENSION_MANAGER="$(dirname "$0")/../docker/lib/extension-manager.sh"
 else
-    echo "ERROR: extension-manager.sh not found"
+    echo "ERROR: extension-manager not found"
     echo "Searched locations:"
-    echo "  - /workspace/scripts/lib/extension-manager.sh"
-    echo "  - $(dirname "$0")/lib/extension-manager.sh"
+    echo "  - PATH (extension-manager command)"
+    echo "  - /workspace/.system/bin/extension-manager"
+    echo "  - $(dirname "$0")/../docker/lib/extension-manager.sh"
     exit 1
 fi
 

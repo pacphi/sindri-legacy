@@ -1,15 +1,24 @@
 #!/bin/bash
 set -e
 
-# This script sets up the initial bashrc that will be used as a template
+# This script sets up the initial bash configuration that will be used as a template
 # The actual home directory will be created on the persistent volume during runtime
+
+# Create .bash_profile for login shells (sources .bashrc)
+cat > /etc/skel/.bash_profile << 'EOF'
+# .bash_profile - Executed for login shells
+# Source .bashrc to ensure consistent environment for both login and non-login shells
+if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+fi
+EOF
 
 # Create the bashrc content and save it to /etc/skel so it gets copied
 # to the developer home when created
 cat >> /etc/skel/.bashrc << 'EOF'
 
-# Add /workspace/bin to PATH for custom utilities
-export PATH="/workspace/bin:$PATH"
+# Add /workspace/bin and /workspace/.system/bin to PATH for custom utilities
+export PATH="/workspace/bin:/workspace/.system/bin:$PATH"
 
 # Custom aliases and functions
 alias ll="ls -alF"
@@ -27,9 +36,14 @@ PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
 # Change to workspace by default
 cd /workspace
 
+# Enable direnv hook for project-specific environment management
+if command -v direnv >/dev/null 2>&1; then
+    eval "$(direnv hook bash)"
+fi
+
 # Source agent discovery utilities if available
-if [ -f /workspace/scripts/lib/agent-discovery.sh ]; then
-    source /workspace/scripts/lib/agent-discovery.sh
+if [ -f /workspace/scripts/agent-discovery.sh ]; then
+    source /workspace/scripts/agent-discovery.sh
 fi
 
 # Source agent aliases if available

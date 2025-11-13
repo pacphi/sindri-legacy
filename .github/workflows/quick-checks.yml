@@ -18,10 +18,11 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      docs_only: ${{ steps.filter.outputs.docs_only }}
+      docs_changed: ${{ steps.filter.outputs.docs_changed }}
       core_system: ${{ steps.filter.outputs.core_system }}
       extensions_changed: ${{ steps.filter.outputs.extensions_changed }}
       changed_extensions: ${{ steps.extensions.outputs.list }}
+      only_docs: ${{ steps.compute-only-docs.outputs.only_docs }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -33,7 +34,7 @@ jobs:
         id: filter
         with:
           filters: |
-            docs_only:
+            docs_changed:
               - '**/*.md'
               - 'docs/**'
             core_system:
@@ -72,16 +73,34 @@ jobs:
           echo "Changed extensions: $EXTENSIONS"
           echo "list=$EXTENSIONS" >> $GITHUB_OUTPUT
 
+      - name: Compute only-docs flag
+        id: compute-only-docs
+        run: |
+          # Only docs changed if docs were changed AND neither core system nor extensions changed
+          DOCS_CHANGED="${{ steps.filter.outputs.docs_changed }}"
+          CORE_CHANGED="${{ steps.filter.outputs.core_system }}"
+          EXTS_CHANGED="${{ steps.filter.outputs.extensions_changed }}"
+
+          if [ "$DOCS_CHANGED" = "true" ] && [ "$CORE_CHANGED" != "true" ] && [ "$EXTS_CHANGED" != "true" ]; then
+            echo "only_docs=true" >> $GITHUB_OUTPUT
+            echo "Only documentation files changed"
+          else
+            echo "only_docs=false" >> $GITHUB_OUTPUT
+            echo "Code or configuration files changed"
+          fi
+
       - name: Log detection results
         run: |
           echo "## Change Detection Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docs Only**: ${{ steps.filter.outputs.docs_only }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Core System**: ${{ steps.filter.outputs.core_system }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docs Changed**: ${{ steps.filter.outputs.docs_changed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Core System Changed**: ${{ steps.filter.outputs.core_system }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Extensions Changed**: ${{ steps.filter.outputs.extensions_changed }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.filter.outputs.extensions_changed }}" = "true" ]; then
             echo "- **Changed Extensions**: ${{ steps.extensions.outputs.list }}" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**→ Only Docs Changed**: ${{ steps.compute-only-docs.outputs.only_docs }}" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # Fast Validation (Always Run Unless Docs-Only)
@@ -90,19 +109,19 @@ jobs:
   shellcheck:
     name: Shellcheck
     needs: detect-changes
-    if: needs.detect-changes.outputs.docs_only != 'true'
+    if: needs.detect-changes.outputs.only_docs != 'true'
     uses: ./.github/workflows/shellcheck-validation.yml
 
   yaml-validation:
     name: YAML Validation
     needs: detect-changes
-    if: needs.detect-changes.outputs.docs_only != 'true'
+    if: needs.detect-changes.outputs.only_docs != 'true'
     uses: ./.github/workflows/yaml-validation.yml
 
   extension-manager:
     name: Extension Manager
     needs: detect-changes
-    if: needs.detect-changes.outputs.docs_only != 'true'
+    if: needs.detect-changes.outputs.only_docs != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -167,7 +186,7 @@ jobs:
           echo "## Quick Checks Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.detect-changes.outputs.docs_only }}" = "true" ]; then
+          if [ "${{ needs.detect-changes.outputs.only_docs }}" = "true" ]; then
             echo "✅ **Documentation-only changes detected**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "No code validation or testing required." >> $GITHUB_STEP_SUMMARY

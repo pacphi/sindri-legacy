@@ -1,6 +1,6 @@
 #!/bin/bash
 # nodejs-devtools.extension - Node.js development tools via mise npm backend
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs TypeScript, ESLint, Prettier, and other Node.js development tools
 # using mise npm backend for unified tool management.

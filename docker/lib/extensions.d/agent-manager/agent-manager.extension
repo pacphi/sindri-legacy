@@ -1,6 +1,6 @@
 #!/bin/bash
 # agent-manager.sh.example - Claude Code agent manager
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs the agent-manager binary for managing Claude Code agents.
 # It downloads the latest release from GitHub and sets up agent configuration.
@@ -253,10 +253,10 @@ configure() {
   fi
 
   # Set up agent discovery utilities
-  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  local discovery_script="/workspace/scripts/agent-discovery.sh"
   local discovery_template="/docker/lib/templates/agent-discovery.sh"
 
-  mkdir -p "/workspace/scripts/lib"
+  mkdir -p "/workspace/scripts"
 
   if [[ -f "$discovery_template" ]]; then
     print_status "Copying agent discovery script..."
@@ -270,8 +270,8 @@ configure() {
       if ! grep -q "agent-discovery.sh" "$bashrc_file"; then
         echo "" >> "$bashrc_file"
         echo "# ${EXT_NAME} - agent discovery utilities" >> "$bashrc_file"
-        echo "if [ -f /workspace/scripts/lib/agent-discovery.sh ]; then" >> "$bashrc_file"
-        echo "    source /workspace/scripts/lib/agent-discovery.sh" >> "$bashrc_file"
+        echo "if [ -f /workspace/scripts/agent-discovery.sh ]; then" >> "$bashrc_file"
+        echo "    source /workspace/scripts/agent-discovery.sh" >> "$bashrc_file"
         echo "fi" >> "$bashrc_file"
         print_success "Added agent-discovery.sh to .bashrc"
       fi
@@ -374,7 +374,7 @@ validate() {
   fi
 
   # Check agent discovery utilities
-  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  local discovery_script="/workspace/scripts/agent-discovery.sh"
   if [[ -f "$discovery_script" ]]; then
     print_success "Agent discovery utilities installed"
   else
@@ -446,7 +446,7 @@ status() {
   # Show agent discovery status
   echo ""
   print_status "Agent discovery utilities:"
-  if [[ -f "/workspace/scripts/lib/agent-discovery.sh" ]]; then
+  if [[ -f "/workspace/scripts/agent-discovery.sh" ]]; then
     echo "  ✓ installed"
   else
     echo "  ✗ not found"
@@ -569,7 +569,7 @@ remove() {
   fi
 
   # Ask about agent discovery utilities
-  local discovery_script="/workspace/scripts/lib/agent-discovery.sh"
+  local discovery_script="/workspace/scripts/agent-discovery.sh"
   if [[ -f "$discovery_script" ]]; then
     print_warning "Agent discovery utilities exist: $discovery_script"
     if prompt_confirmation "Remove agent discovery utilities?"; then

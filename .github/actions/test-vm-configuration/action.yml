@@ -52,7 +52,7 @@ runs:
           echo \"\"
 
           # Check extension manager
-          if [ -f \"/workspace/scripts/lib/extension-manager.sh\" ]; then
+          if [ -f \"/workspace/.system/bin/extension-manager\" ]; then
             echo \"✅ Extension manager found\"
           else
             echo \"❌ Extension manager missing\"

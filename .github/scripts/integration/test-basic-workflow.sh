@@ -2,8 +2,6 @@
 # Test core system features and basic extension workflow
 set -e
 
-cd /workspace/scripts/lib
-
 echo "=== Testing Core System Features ==="
 
 # Verify core directories exist (from baked workspace-structure)
@@ -40,8 +38,25 @@ echo "=== Testing Extension Manager Workflow ==="
 
 # Test listing extensions (should NOT include workspace-structure, mise-config, etc.)
 echo ""
+
+# Set up extension-manager with fallback to absolute path
+# This handles Hallpass SSH context where PATH may not be fully configured
+EXTENSION_MANAGER="extension-manager"
+if ! command -v extension-manager &> /dev/null; then
+  if [ -f "/workspace/.system/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from absolute path"
+  elif [ -f "/workspace/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from /workspace/bin"
+  else
+    echo "❌ Extension manager not found in PATH or known locations"
+    exit 1
+  fi
+fi
+
 echo "Available installable extensions:"
-bash extension-manager.sh list
+$EXTENSION_MANAGER list
 
 # Test installing an actual optional extension that installs new tools
 echo ""
@@ -53,8 +68,8 @@ if command -v node &> /dev/null; then
   echo "   This means nodejs may already be installed, making this test less meaningful"
 fi
 
-echo "nodejs" > extensions.d/active-extensions.conf
-if bash extension-manager.sh install-all; then
+echo "nodejs" > /workspace/.system/manifest/active-extensions.conf
+if $EXTENSION_MANAGER install-all; then
   echo "✅ Extension installation completed"
 
   # Verify actual installation occurred (node command should now be available)
@@ -74,7 +89,7 @@ if bash extension-manager.sh install-all; then
   fi
 
   # Verify extension status
-  if bash extension-manager.sh status nodejs; then
+  if $EXTENSION_MANAGER status nodejs; then
     echo "✅ Extension status verified"
   else
     echo "❌ Extension status check failed"

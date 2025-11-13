@@ -16,20 +16,20 @@ EXTENSIONS_COMMON_SH_LOADED="true"
 # This function replaces the COMMON UTILITIES section in each extension
 extension_init() {
     # Calculate script and library directories
-    # Extension file is at: /workspace/scripts/lib/extensions.d/<name>/<name>.extension
-    # SCRIPT_DIR will be: /workspace/scripts/lib/extensions.d/<name>
+    # Extension file is at: /workspace/.system/lib/extensions.d/<name>/<name>.extension (symlinked from /docker/lib/extensions.d)
+    # SCRIPT_DIR will be: /workspace/.system/lib/extensions.d/<name>
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
 
-    # Go up TWO levels to get to /workspace/scripts/lib
-    # From: /workspace/scripts/lib/extensions.d/<name>
-    # To:   /workspace/scripts/lib
+    # Go up TWO levels to get to /workspace/.system/lib
+    # From: /workspace/.system/lib/extensions.d/<name>
+    # To:   /workspace/.system/lib
     LIB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
     # Try to source common.sh from known locations
     if [[ -f "$LIB_DIR/common.sh" ]]; then
         source "$LIB_DIR/common.sh"
-    elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-        source "/workspace/scripts/lib/common.sh"
+    elif [[ -f "/workspace/.system/lib/common.sh" ]]; then
+        source "/workspace/.system/lib/common.sh"
     else
         # Fallback: define minimal required functions (invoked indirectly by extension scripts)
         # shellcheck disable=SC2329
@@ -69,7 +69,7 @@ check_dependent_extensions() {
 
     # Get manifest file location
     local manifest_file="$SCRIPT_DIR/active-extensions.conf"
-    [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/scripts/lib/extensions.d/active-extensions.conf"
+    [[ ! -f "$manifest_file" ]] && manifest_file="/workspace/.system/manifest/active-extensions.conf"
 
     if [[ ! -f "$manifest_file" ]]; then
         return 0
@@ -564,6 +564,70 @@ extension_main() {
 }
 
 # ============================================================================
+# GIT HELPERS
+# ============================================================================
+
+# Setup git aliases for extension-specific commands
+# Usage: setup_git_aliases "alias1:command1" "alias2:command2" ...
+# Example: setup_git_aliases "gotest:!go test ./..." "gofmt:!go fmt ./..."
+# Returns: 0 on success
+setup_git_aliases() {
+    local aliases=("$@")
+
+    if [[ ${#aliases[@]} -eq 0 ]]; then
+        print_debug "No git aliases to setup"
+        return 0
+    fi
+
+    print_status "Setting up git aliases..."
+
+    for alias_def in "${aliases[@]}"; do
+        # Parse "alias:command" format
+        local alias_name="${alias_def%%:*}"
+        local alias_cmd="${alias_def#*:}"
+
+        if [[ -z "$alias_name" ]] || [[ -z "$alias_cmd" ]]; then
+            print_warning "Invalid alias format: $alias_def (expected 'name:command')"
+            continue
+        fi
+
+        # Set git alias
+        if git config --global alias."$alias_name" "$alias_cmd" 2>/dev/null; then
+            print_debug "✓ git ${alias_name}"
+        else
+            print_warning "Failed to set git alias: ${alias_name}"
+        fi
+    done
+
+    print_success "Git aliases configured"
+    return 0
+}
+
+# Cleanup git aliases for extension
+# Usage: cleanup_git_aliases "alias1" "alias2" ...
+# Example: cleanup_git_aliases "gotest" "gofmt"
+# Returns: 0 on success
+cleanup_git_aliases() {
+    local aliases=("$@")
+
+    if [[ ${#aliases[@]} -eq 0 ]]; then
+        print_debug "No git aliases to cleanup"
+        return 0
+    fi
+
+    print_status "Removing git aliases..."
+
+    for alias_name in "${aliases[@]}"; do
+        if git config --global --unset alias."$alias_name" 2>/dev/null; then
+            print_debug "✗ git ${alias_name}"
+        fi
+    done
+
+    print_success "Git aliases removed"
+    return 0
+}
+
+# ============================================================================
 # CLEANUP HELPERS
 # ============================================================================
 
@@ -988,6 +1052,10 @@ export -f remove_mise_config
 # Dependency checking
 export -f check_dependent_extensions
 export -f show_dependent_extensions_warning
+
+# Git helpers
+export -f setup_git_aliases
+export -f cleanup_git_aliases
 
 # Cleanup helpers
 export -f cleanup_bashrc

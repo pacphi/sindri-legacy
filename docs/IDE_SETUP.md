@@ -231,7 +231,7 @@ Source the common library for colored output and utilities:
 
 ```bash
 # Source the common library for colored output
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Use print functions in your terminal
 print_success "Build completed!"
@@ -261,7 +261,7 @@ retry_with_backoff 3 2 "npm install"
 
 ```bash
 # Source workspace utilities
-source /workspace/scripts/lib/workspace.sh
+source /workspace/.system/lib/workspace.sh
 
 # Create a new project
 setup_workspace_structure
@@ -272,7 +272,7 @@ create_project_templates
 
 ```bash
 # Source Git utilities
-source /workspace/scripts/lib/git.sh
+source /workspace/.system/lib/git.sh
 
 # Setup Git aliases and hooks
 setup_git_aliases

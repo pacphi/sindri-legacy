@@ -231,7 +231,7 @@ sindri/
 set -euo pipefail
 
 # Source common utilities
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Use descriptive function names
 function install_development_tool() {
@@ -271,8 +271,8 @@ function install_development_tool() {
 # Test script locally before submitting
 ./scripts/vm-setup.sh --app-name test-dev --region sjc
 
-# Validate configuration
-ssh developer@test-dev.fly.dev -p 10022 "/workspace/scripts/validate-setup.sh"
+# Validate active extensions
+ssh developer@test-dev.fly.dev -p 10022 "extension-manager validate-all"
 
 # Clean up test environment
 ./scripts/vm-teardown.sh --app-name test-dev
@@ -357,8 +357,8 @@ ssh -o PasswordAuthentication=no -o PreferredAuthentications=publickey \
    # Deploy test environment
    ./scripts/vm-setup.sh --app-name pr-test --region sjc
 
-   # Verify changes work
-   ssh developer@pr-test.fly.dev -p 10022 "your-test-commands"
+   # Validate extensions and changes
+   ssh developer@pr-test.fly.dev -p 10022 "extension-manager validate-all"
    ```
 
 4. **Commit Changes**
@@ -427,7 +427,7 @@ docker/lib/extensions.d/
 # Usage: How to enable and use this extension
 
 # Load common utilities
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 print_status "Installing [Extension Name]..."
 
@@ -502,7 +502,7 @@ consider using mise for simplified tool management.
 # Prerequisites: mise-config extension
 # Uses: mise for version management
 
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Prerequisites check
 function prerequisites() {

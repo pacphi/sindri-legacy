@@ -89,7 +89,7 @@ While not protected, these are highly recommended:
 - **docker** - Docker Engine with compose, dive, ctop
 - **infra-tools** - Terraform, Ansible, kubectl, Helm
 - **cloud-tools** - AWS, Azure, GCP, Oracle, DigitalOcean, Alibaba, IBM CLIs
-- **ai-tools** - AI coding assistants (Gemini, Grok, Goalie, Plandex, Hector, Ollama, Fabric)
+- **ai-tools** - AI coding assistants (Gemini, xAI Grok SDK, Goalie, Hector, Ollama, Fabric, Codex)
 
 #### Development Utilities
 
@@ -183,7 +183,7 @@ extension-manager reorder python 5
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/extensions.d/active-extensions.conf`.
+Extensions are executed in the order listed in `/workspace/scripts/.system/manifest/active-extensions.conf`.
 
 **Example manifest:**
 
@@ -214,7 +214,7 @@ monitoring
 
 ```bash
 # View current manifest
-cat /workspace/scripts/extensions.d/active-extensions.conf
+cat /workspace/scripts/.system/manifest/active-extensions.conf
 
 # Install extension (auto-activates and adds to manifest)
 extension-manager install <name>
@@ -223,7 +223,7 @@ extension-manager install <name>
 extension-manager deactivate <name>
 
 # Manually edit manifest (for advanced users)
-nano /workspace/scripts/extensions.d/active-extensions.conf
+nano /workspace/scripts/.system/manifest/active-extensions.conf
 ```
 
 ## Creating Custom Extensions
@@ -895,8 +895,8 @@ setw -g pane-base-index 1
 EOF
 
   # Custom workspace launcher
-  mkdir -p /workspace/scripts/lib
-  cat > /workspace/scripts/lib/my-workspace.sh << 'EOF'
+  mkdir -p /workspace/.system/lib
+  cat > /workspace/.system/lib/my-workspace.sh << 'EOF'
 #!/bin/bash
 # Custom workspace layout
 
@@ -927,7 +927,7 @@ fi
 tmux attach-session -t $SESSION_NAME
 EOF
 
-  chmod +x /workspace/scripts/lib/my-workspace.sh
+  chmod +x /workspace/.system/lib/my-workspace.sh
 
   print_success "${EXT_NAME} configured successfully"
   return 0
@@ -961,7 +961,7 @@ remove() {
   print_status "Removing ${EXT_NAME}..."
 
   rm -f "$HOME/.tmux.conf"
-  rm -f /workspace/scripts/lib/my-workspace.sh
+  rm -f /workspace/.system/lib/my-workspace.sh
 
   print_success "${EXT_NAME} removed successfully"
   return 0
@@ -1179,18 +1179,6 @@ gh copilot suggest "git command to undo"
 # Uses AWS credentials (see AWS CLI section above)
 aws q chat
 aws q explain "lambda function"
-```
-
-**Plandex:**
-
-```bash
-# Supports multiple providers via API keys
-flyctl secrets set OPENAI_API_KEY=sk-... -a <app-name>
-# Or ANTHROPIC_API_KEY, etc.
-
-# Usage
-plandex init
-plandex plan "add user authentication"
 ```
 
 **Hector:**

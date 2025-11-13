@@ -2,14 +2,28 @@
 # Test extension system with nodejs installation
 set -e
 
-cd /workspace/scripts/lib
-
 echo "=== Testing Extension System ==="
+
+# Set up extension-manager with fallback to absolute path
+# This handles Hallpass SSH context where PATH may not be fully configured
+EXTENSION_MANAGER="extension-manager"
+if ! command -v extension-manager &> /dev/null; then
+  if [ -f "/workspace/.system/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from absolute path"
+  elif [ -f "/workspace/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/bin/extension-manager"
+    echo "ℹ️  Using extension-manager from /workspace/bin"
+  else
+    echo "❌ Extension manager not found in PATH or known locations"
+    exit 1
+  fi
+fi
 
 # Test extension-manager availability
 echo ""
 echo "Testing extension-manager list..."
-bash extension-manager.sh list
+$EXTENSION_MANAGER list
 
 echo ""
 echo "✅ Extension manager available"
@@ -17,7 +31,7 @@ echo "✅ Extension manager available"
 # Test extension installation (mise already available from base image)
 echo ""
 echo "Installing nodejs extension..."
-if bash extension-manager.sh install nodejs 2>&1; then
+if $EXTENSION_MANAGER install nodejs 2>&1; then
   echo "✅ nodejs extension installed"
 else
   echo "⚠️  Installation failed, checking mise status..."

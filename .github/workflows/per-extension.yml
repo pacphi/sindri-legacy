@@ -72,8 +72,8 @@ jobs:
           # Infrastructure
           - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
           - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5 }
-          - { name: "cloud-tools", commands: "aws", key_tool: "aws", timeout: "30m", status_timeout: 5 }
-          - { name: "ai-tools", commands: "codex,gemini", key_tool: "codex", timeout: "30m", depends_on: "nodejs" }
+          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5 }
+          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang" }
           # Utilities
           - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5 }
           - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs" }
@@ -198,7 +198,7 @@ jobs:
               echo \"Timeout: $timeout\"
               echo \"\"
 
-              if timeout --kill-after=60s $timeout bash -c \"cd /workspace/scripts/lib && bash extension-manager.sh install-all\" 2>&1 | tee /tmp/configure.log; then
+              if timeout --kill-after=60s $timeout bash -c \"/workspace/.system/bin/extension-manager install-all\" 2>&1 | tee /tmp/configure.log; then
                 config_exit_code=\${PIPESTATUS[0]}
 
                 if [ \$config_exit_code -eq 0 ]; then
@@ -368,7 +368,7 @@ jobs:
           echo "Testing enhanced status() output for $extension_name (timeout: ${{ matrix.extension.status_timeout || 2 }} minutes)..."
 
           # Use a temporary file to capture output with retry
-          if ssh_command_retry "$app_name" "/bin/bash -lc 'cd /workspace/scripts/lib && bash extension-manager.sh status $extension_name'" > /tmp/status_output.txt; then
+          if ssh_command_retry "$app_name" "/bin/bash -lc '/workspace/.system/bin/extension-manager status $extension_name'" > /tmp/status_output.txt; then
             status_output=$(cat /tmp/status_output.txt)
             echo "$status_output"
 

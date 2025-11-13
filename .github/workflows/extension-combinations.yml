@@ -127,8 +127,8 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
-            manifest_file=\"extensions.d/active-extensions.conf\"
+            cd /workspace/.system
+            manifest_file=\"manifest/active-extensions.conf\"
             failed_extensions=()
 
             # Create manifest from CI template if needed
@@ -171,10 +171,10 @@ jobs:
 
           # Execute with retry
           ssh_command_retry "$app_name" "/bin/bash -lc '
-            cd /workspace/scripts/lib
+            cd /workspace/.system
 
             echo \"Running install-all...\"
-            if bash extension-manager.sh install-all; then
+            if extension-manager install-all; then
               echo \"✅ All extensions installed\"
             else
               echo \"❌ Extension installation failed\"

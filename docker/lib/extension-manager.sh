@@ -1,20 +1,29 @@
 #!/bin/bash
 # extension-manager.sh - Manage extension scripts activation and deactivation
-# Extension API v1.0 - Manifest-based activation with install/uninstall support
+# Extension API v2.0 - Manifest-based activation with install/uninstall support
 # This script provides comprehensive management of extension scripts in the extensions.d directory
 
 # Determine script location
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Check if we're in the repository or on the VM
-if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
-    # In repository
-    source "$SCRIPT_DIR/common.sh"
+# Detect environment and set paths accordingly
+# On deployed VM: use absolute paths in Docker image and persistent volume
+# In CI/dev: use relative paths from script location
+if [[ -d "/docker/lib/extensions.d" ]]; then
+    # Running on deployed VM (production environment)
+    EXTENSIONS_BASE="/docker/lib/extensions.d"
+    MANIFEST_FILE="/workspace/.system/manifest/active-extensions.conf"
+else
+    # Running in CI or development (GitHub Actions runner, local development)
     EXTENSIONS_BASE="$SCRIPT_DIR/extensions.d"
-elif [[ -f "/workspace/scripts/lib/common.sh" ]]; then
-    # On VM
-    source "/workspace/scripts/lib/common.sh"
-    EXTENSIONS_BASE="/workspace/scripts/lib/extensions.d"
+    MANIFEST_FILE="$SCRIPT_DIR/extensions.d/active-extensions.conf"
+fi
+
+# Source common utilities
+if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
+    source "$SCRIPT_DIR/common.sh"
+elif [[ -f "/docker/lib/common.sh" ]]; then
+    source "/docker/lib/common.sh"
 else
     # Fallback - define minimal needed functions
     RED='\033[0;31m'
@@ -29,25 +38,13 @@ else
     print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
     print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
     print_debug() { [[ "${DEBUG:-}" == "true" ]] && echo -e "[DEBUG] $1"; }
-
-    EXTENSIONS_BASE="./extensions.d"
 fi
 
 # Source upgrade history tracking
 if [[ -f "$SCRIPT_DIR/upgrade-history.sh" ]]; then
     source "$SCRIPT_DIR/upgrade-history.sh"
-elif [[ -f "/workspace/scripts/lib/upgrade-history.sh" ]]; then
-    source "/workspace/scripts/lib/upgrade-history.sh"
-fi
-
-# Activation manifest file location (colocated with extensions)
-if [[ -f "$EXTENSIONS_BASE/active-extensions.conf" ]]; then
-    MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
-elif [[ -f "/workspace/scripts/lib/extensions.d/active-extensions.conf" ]]; then
-    MANIFEST_FILE="/workspace/scripts/lib/extensions.d/active-extensions.conf"
-else
-    # Default location
-    MANIFEST_FILE="$EXTENSIONS_BASE/active-extensions.conf"
+elif [[ -f "/docker/lib/upgrade-history.sh" ]]; then
+    source "/docker/lib/upgrade-history.sh"
 fi
 
 # Base system (workspace-structure, mise-config, ssh-environment, claude)
@@ -70,18 +67,15 @@ is_extension_installed() {
         return 1
     fi
 
-    # Source the extension
-    source "$activated_file"
-
-    # Check if status function exists and succeeds
-    if declare -F status >/dev/null 2>&1; then
-        # Suppress output and just check exit code
-        if status >/dev/null 2>&1; then
-            return 0
-        fi
+    # Run status check in isolated subshell to avoid pollution
+    if (
+        source "$activated_file" 2>/dev/null
+        declare -F status >/dev/null 2>&1 && status >/dev/null 2>&1
+    ); then
+        return 0
+    else
+        return 1
     fi
-
-    return 1
 }
 
 # Function to extract extension name from filename

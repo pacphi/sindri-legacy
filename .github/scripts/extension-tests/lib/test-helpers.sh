@@ -147,12 +147,14 @@ retry_command() {
 
 # Get extension manager path
 get_extension_manager_path() {
-    echo "/workspace/scripts/lib"
+    # Extension manager is at /docker/lib/extension-manager.sh
+    echo "/docker/lib"
 }
 
 # Get manifest path
 get_manifest_path() {
-    echo "$(get_extension_manager_path)/extensions.d/active-extensions.conf"
+    # Manifest is at /workspace/.system/manifest/active-extensions.conf
+    echo "/workspace/.system/manifest/active-extensions.conf"
 }
 
 # Check if extension is in manifest

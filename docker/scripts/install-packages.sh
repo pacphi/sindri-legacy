@@ -23,6 +23,7 @@ apt_install_retry 3 \
     build-essential \
     ca-certificates \
     curl \
+    direnv \
     gettext-base \
     git \
     gnupg \

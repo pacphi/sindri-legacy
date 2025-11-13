@@ -1,6 +1,6 @@
 #!/bin/bash
 # golang.extension - Go toolchain and development tools via mise
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs Go with:
 # - Go 1.24 via mise
@@ -93,10 +93,24 @@ configure() {
 
   # Create Go project template script
   print_status "Creating Go project template..."
-  cat "$(dirname "${BASH_SOURCE[0]}")/golang.create-project-script.template" > /workspace/scripts/create-go-project.sh
 
-  chmod +x /workspace/scripts/create-go-project.sh
-  print_success "Project template created"
+  # Ensure /workspace/scripts directory exists
+  mkdir -p /workspace/scripts
+
+  # Copy template file
+  local template_file="$SCRIPT_DIR/golang.create-project-script.template"
+  if [[ ! -f "$template_file" ]]; then
+    print_error "Template file not found: $template_file"
+    return 1
+  fi
+
+  if cat "$template_file" > /workspace/scripts/create-go-project.sh && \
+     chmod +x /workspace/scripts/create-go-project.sh; then
+    print_success "Project template created"
+  else
+    print_error "Failed to create project template"
+    return 1
+  fi
 
   # Add Git aliases
   setup_git_aliases \
@@ -269,7 +283,18 @@ remove() {
   if [[ -d "$HOME/go" ]]; then
     read -p "Remove $HOME/go directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      rm -rf "$HOME/go"
+      # Clean Go module cache properly (handles read-only permissions)
+      if command_exists go; then
+        print_status "Cleaning Go module cache..."
+        go clean -modcache 2>/dev/null || true
+      fi
+
+      # Make files writable before removing (in case go clean didn't run)
+      if [[ -d "$HOME/go" ]]; then
+        print_status "Making files writable..."
+        chmod -R +w "$HOME/go" 2>/dev/null || true
+        rm -rf "$HOME/go"
+      fi
       print_success "GOPATH directory removed"
     fi
   fi

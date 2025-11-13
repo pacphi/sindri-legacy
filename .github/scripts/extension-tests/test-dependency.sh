@@ -2,8 +2,21 @@
 # Test dependency chain resolution and error handling
 set -e
 
-cd /workspace/scripts/lib
-manifest="extensions.d/active-extensions.conf"
+manifest="/workspace/.system/manifest/active-extensions.conf"
+
+# Set up extension-manager with fallback to absolute path
+# This handles Hallpass SSH context where PATH may not be fully configured
+EXTENSION_MANAGER="extension-manager"
+if ! command -v extension-manager &> /dev/null; then
+  if [ -f "/workspace/.system/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/.system/bin/extension-manager"
+  elif [ -f "/workspace/bin/extension-manager" ]; then
+    EXTENSION_MANAGER="/workspace/bin/extension-manager"
+  else
+    echo "❌ Extension manager not found in PATH or known locations"
+    exit 1
+  fi
+fi
 
 echo "=== Testing Dependency Chain Error Handling ==="
 
@@ -20,7 +33,7 @@ fi
 echo ""
 echo "Running: extension-manager install nodejs (should fail - mise missing)"
 # Capture exit code before piping to tee
-bash extension-manager.sh install nodejs 2>&1 | tee /tmp/prereq_fail.log
+$EXTENSION_MANAGER install nodejs 2>&1 | tee /tmp/prereq_fail.log
 install_exit=${PIPESTATUS[0]}
 
 if [ $install_exit -eq 0 ]; then

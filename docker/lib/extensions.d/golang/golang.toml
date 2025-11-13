@@ -6,12 +6,12 @@
 go = "1.24"
 
 # Go tools via go backend
-"go:golang.org/x/tools/gopls@latest" = "latest"
-"go:github.com/go-delve/delve/cmd/dlv@latest" = "latest"
-"go:golang.org/x/tools/cmd/goimports@latest" = "latest"
-"go:github.com/golangci/golangci-lint/cmd/golangci-lint@latest" = "latest"
-"go:github.com/air-verse/air@latest" = "latest"
-"go:github.com/goreleaser/goreleaser@latest" = "latest"
+"go:golang.org/x/tools/gopls" = "latest"
+"go:github.com/go-delve/delve/cmd/dlv" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+"go:github.com/golangci/golangci-lint/cmd/golangci-lint" = "latest"
+"go:github.com/air-verse/air" = "latest"
+"go:github.com/goreleaser/goreleaser" = "latest"
 
 [env]
 GOPATH = "$HOME/go"

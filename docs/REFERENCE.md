@@ -258,7 +258,7 @@ flyctl ssh console -a <app-name>
 
 ```bash
 # On the VM
-/workspace/scripts/lib/new-project.sh <project-name> [options]
+/workspace/.system/lib/new-project.sh <project-name> [options]
 
 # Options:
 --type <node|python|go|rust|web>  # Project type
@@ -268,8 +268,8 @@ flyctl ssh console -a <app-name>
 --claude-init                     # Initialize Claude Flow
 
 # Examples:
-/workspace/scripts/lib/new-project.sh my-api --type node --github-repo
-/workspace/scripts/lib/new-project.sh data-analysis --type python --claude-init
+/workspace/.system/lib/new-project.sh my-api --type node --github-repo
+/workspace/.system/lib/new-project.sh data-analysis --type python --claude-init
 ```
 
 **Clone and enhance existing project:**
@@ -334,10 +334,10 @@ npx claude-flow@alpha agent run <name>    # Run specific agent
 
 ```bash
 # On the VM
-/workspace/scripts/lib/system-status.sh
+/workspace/.system/lib/system-status.sh
 
-# Check specific components
-/workspace/scripts/lib/validate-setup.sh
+# Validate extension installations
+extension-manager validate-all
 ```
 
 **Git configuration:**
@@ -439,7 +439,7 @@ cat > docker/lib/extensions.d/custom.sh.example << 'EOF'
 # custom.sh.example - Custom tools extension
 # Implements Extension API v1.0
 
-source /workspace/scripts/lib/common.sh
+source /workspace/.system/lib/common.sh
 
 # Extension metadata
 EXT_NAME="custom"
@@ -928,7 +928,7 @@ flyctl ssh console -a <app-name> "df -h"
 flyctl volumes list -a <app-name>
 
 # Clean up workspace
-flyctl ssh console -a <app-name> "/workspace/scripts/lib/cleanup.sh"
+flyctl ssh console -a <app-name> "/workspace/.system/lib/cleanup.sh"
 ```
 
 ### Log Analysis

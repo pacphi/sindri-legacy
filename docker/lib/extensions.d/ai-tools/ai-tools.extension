@@ -1,11 +1,11 @@
 #!/bin/bash
 # ai-tools.extension - AI CLI tools and coding assistants
-# Extension API v1.0
+# Extension API v2.0
 #
 # This extension installs AI CLI tools using a hybrid approach:
 # - Native installs: Ollama (binary), Fabric (git clone)
-# - mise npm backend: codex-cli, @google/gemini-cli (if Node.js available)
-# - mise go backend: plandex, hector (if Go available)
+# - mise npm backend: @openai/codex, @google/gemini-cli (if Node.js available)
+# - mise go backend: hector (if Go available)
 # - Fallback: Direct npm/go install if mise unavailable
 
 # Source shared extension library
@@ -166,7 +166,7 @@ install() {
     # Add npm-based tools if Node.js is available
     if command_exists npm || command_exists node; then
       toml_content+="# npm-based tools (requires nodejs extension)\n"
-      toml_content+='"npm:codex-cli" = "latest"\n'
+      toml_content+='"npm:@openai/codex" = "latest"\n'
       toml_content+='"npm:@google/gemini-cli" = "latest"\n'
       toml_content+="\n"
     fi
@@ -174,7 +174,6 @@ install() {
     # Add Go-based tools if Go is available
     if command_exists go; then
       toml_content+="# Go-based tools (requires golang extension)\n"
-      toml_content+='"go:github.com/plandex-ai/plandex" = "latest"\n'
       toml_content+='"go:github.com/kadirpekel/hector/cmd/hector" = "latest"\n'
       toml_content+="\n"
     fi
@@ -204,7 +203,7 @@ install() {
       if command_exists codex; then
         print_warning "Codex CLI already installed"
       else
-        if npm install -g codex-cli 2>&1; then
+        if npm install -g @openai/codex 2>&1; then
           command_exists codex && print_success "Codex CLI installed"
         else
           print_warning "Failed to install Codex CLI"
@@ -235,17 +234,6 @@ install() {
       export GOBIN=$GOPATH/bin
       export PATH=$PATH:$GOBIN
       mkdir -p "$GOBIN"
-
-      # Plandex
-      if command_exists plandex; then
-        print_warning "Plandex already installed"
-      else
-        if timeout 300 go install github.com/plandex-ai/plandex@latest 2>&1; then
-          command_exists plandex && print_success "Plandex installed"
-        else
-          print_warning "Failed to install Plandex"
-        fi
-      fi
 
       # Hector
       if command_exists hector; then
@@ -292,23 +280,24 @@ install() {
     print_status "Install cloud-tools extension for AWS CLI"
   fi
 
-  # Python-based tools (Grok CLI)
+  # Python-based tools (xAI Grok SDK)
   if command_exists pip || command_exists pip3; then
     local pip_cmd="pip"
     command_exists pip3 && pip_cmd="pip3"
 
-    print_status "Installing Grok CLI..."
-    if command_exists grok; then
-      print_warning "Grok CLI already installed"
+    print_status "Installing xAI Grok SDK..."
+    if $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+      print_warning "xAI Grok SDK already installed"
     else
-      if $pip_cmd install grok-cli 2>&1; then
-        command_exists grok && print_success "Grok CLI installed"
+      if $pip_cmd install xai-grok-sdk 2>&1; then
+        print_success "xAI Grok SDK installed"
+        print_status "Use in Python: from xai_grok_sdk import GrokClient"
       else
-        print_warning "Failed to install Grok CLI"
+        print_warning "Failed to install xAI Grok SDK"
       fi
     fi
   else
-    print_warning "pip not found - skipping Grok CLI"
+    print_warning "pip not found - skipping xAI Grok SDK"
     print_status "Install python extension for Python-based tools"
   fi
 
@@ -356,7 +345,7 @@ configure() {
 
   # Create SSH wrappers
   if command_exists create_tool_wrapper 2>/dev/null; then
-    local ai_tools=(codex gemini ollama fabric plandex hector grok)
+    local ai_tools=(codex gemini ollama fabric hector)
     for tool in "${ai_tools[@]}"; do
       if command_exists "$tool"; then
         create_tool_wrapper "$tool" "$(which $tool)"
@@ -374,7 +363,7 @@ configure() {
   fi
 
   # Create AI tools workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh (/workspace/developer/extensions)
   print_status "Setting up AI tools workspace..."
   mkdir -p "$WORKSPACE_DIR/ai-tools"/{ollama-models,fabric-patterns,projects}
 
@@ -428,12 +417,6 @@ validate() {
 
   # Go-based tools (mise or fallback)
   print_status "Checking Go-based tools..."
-  if command_exists plandex; then
-    local plandex_version=$(plandex version 2>/dev/null || echo "installed")
-    print_success "plandex: $plandex_version"
-    ((tools_found++))
-  fi
-
   if command_exists hector; then
     local hector_version=$(hector version 2>/dev/null || echo "installed")
     print_success "hector: $hector_version"
@@ -441,8 +424,11 @@ validate() {
   fi
 
   # Python-based tools
-  if command_exists grok; then
-    print_success "grok: installed"
+  print_status "Checking Python-based SDKs..."
+  local pip_cmd="pip"
+  command_exists pip3 && pip_cmd="pip3"
+  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+    print_success "xai-grok-sdk: installed"
     ((tools_found++))
   fi
 
@@ -467,7 +453,7 @@ validate() {
   fi
 
   # Check workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     print_success "AI tools workspace: exists"
   else
@@ -500,7 +486,7 @@ status() {
 
   # Check installation status - at least one tool should be present
   local any_tool_found=false
-  local all_tools=(codex gemini ollama fabric plandex hector grok)
+  local all_tools=(codex gemini ollama fabric hector)
   for tool in "${all_tools[@]}"; do
     if command_exists "$tool"; then
       any_tool_found=true
@@ -570,25 +556,25 @@ status() {
   # Go-based tools
   if command_exists go; then
     echo "    Go-based:"
-    for tool in plandex hector; do
-      if command_exists "$tool"; then
-        local version=$($tool version 2>/dev/null || echo "installed")
-        echo "      ✓ $tool: $version"
-      else
-        echo "      ✗ $tool: not installed"
-      fi
-    done
+    if command_exists hector; then
+      local version=$(hector version 2>/dev/null || echo "installed")
+      echo "      ✓ hector: $version"
+    else
+      echo "      ✗ hector: not installed"
+    fi
   else
     echo "    Go-based: (Go not available)"
   fi
 
   # Python-based tools
   echo ""
-  echo "  Python-based tools:"
-  if command_exists grok; then
-    echo "    ✓ grok: installed"
+  echo "  Python-based SDKs:"
+  local pip_cmd="pip"
+  command_exists pip3 && pip_cmd="pip3"
+  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
+    echo "    ✓ xai-grok-sdk: installed"
   else
-    echo "    ✗ grok: not installed (requires pip)"
+    echo "    ✗ xai-grok-sdk: not installed (requires pip)"
   fi
 
   # Platform CLIs
@@ -614,7 +600,7 @@ status() {
   echo "  • Gemini: Requires GOOGLE_GEMINI_API_KEY"
   echo "  • GitHub Copilot: Requires GitHub subscription"
   echo "  • AWS Q: Requires AWS credentials"
-  echo "  • Grok: Requires GROK_API_KEY"
+  echo "  • xAI Grok SDK: Requires XAI_API_KEY"
 
   # Dependencies
   echo ""
@@ -647,7 +633,7 @@ status() {
 
   # Workspace
   echo ""
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     print_status "AI tools workspace:"
     echo "  $WORKSPACE_DIR/ai-tools/"
@@ -733,6 +719,46 @@ upgrade() {
     fi
   fi
 
+  # Upgrade fallback installations (when mise is not available or not used)
+  if ! command_exists mise || [[ ! -f "$HOME/.config/mise/conf.d/ai-tools.toml" ]]; then
+    # Upgrade npm-based tools (fallback)
+    if command_exists npm; then
+      for tool_pkg in "@openai/codex" "@google/gemini-cli"; do
+        local tool_name="${tool_pkg##*:}"
+        tool_name="${tool_name##*/}"  # Extract binary name
+        [[ "$tool_name" == "@google" ]] && tool_name="gemini"
+        [[ "$tool_pkg" == "@openai/codex" ]] && tool_name="codex"
+
+        if command_exists "$tool_name"; then
+          print_status "Upgrading $tool_name (npm fallback)..."
+          if npm update -g "$tool_pkg" 2>&1; then
+            print_success "$tool_name upgraded"
+            ((upgraded_count++))
+          else
+            print_warning "Failed to upgrade $tool_name"
+            ((failed_count++))
+          fi
+        fi
+      done
+    fi
+
+    # Upgrade Go-based tools (fallback)
+    if command_exists go && command_exists hector; then
+      print_status "Upgrading Hector (Go fallback)..."
+      export GOPATH=$HOME/go
+      export GOBIN=$GOPATH/bin
+      export PATH=$PATH:$GOBIN
+
+      if timeout 300 go install github.com/kadirpekel/hector/cmd/hector@latest 2>&1; then
+        print_success "Hector upgraded"
+        ((upgraded_count++))
+      else
+        print_warning "Failed to upgrade Hector"
+        ((failed_count++))
+      fi
+    fi
+  fi
+
   # Summary
   echo ""
   print_status "Upgrade summary: $upgraded_count upgraded, $failed_count failed"
@@ -753,17 +779,33 @@ upgrade() {
 remove() {
   print_warning "Uninstalling AI CLI tools (hybrid approach)..."
 
-  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "plandex"
+  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "hector"
 
   if ! prompt_confirmation "Continue with AI tools removal?"; then
     print_status "Removal cancelled"
     return 1
   fi
 
-  # Remove mise config
+  # Remove mise-managed tools
   if command_exists mise; then
     local TOML_FILE="$HOME/.config/mise/conf.d/ai-tools.toml"
     if [[ -f "$TOML_FILE" ]]; then
+      print_status "Removing mise-managed AI tools..."
+
+      # Uninstall npm-based tools
+      if command_exists codex; then
+        mise uninstall npm:@openai/codex 2>/dev/null && print_success "Codex removed (mise)"
+      fi
+      if command_exists gemini; then
+        mise uninstall npm:@google/gemini-cli 2>/dev/null && print_success "Gemini removed (mise)"
+      fi
+
+      # Uninstall Go-based tools
+      if command_exists hector; then
+        mise uninstall go:github.com/kadirpekel/hector/cmd/hector 2>/dev/null && print_success "Hector removed (mise)"
+      fi
+
+      # Remove mise config
       print_status "Removing mise configuration..."
       rm -f "$TOML_FILE"
       print_success "mise config removed"
@@ -773,7 +815,7 @@ remove() {
   # Remove npm-based tools (if installed via fallback)
   if command_exists npm; then
     print_status "Removing npm-based tools..."
-    local npm_tools=(codex-cli @google/gemini-cli)
+    local npm_tools=(@openai/codex @google/gemini-cli)
     for tool in "${npm_tools[@]}"; do
       if npm list -g "$tool" 2>/dev/null | grep -q "$tool"; then
         npm uninstall -g "$tool" 2>/dev/null
@@ -806,16 +848,14 @@ remove() {
 
   # Remove Go-based tools (if installed via fallback)
   if [[ -d "$HOME/go/bin" ]]; then
-    for tool in plandex hector; do
-      [[ -f "$HOME/go/bin/$tool" ]] && rm -f "$HOME/go/bin/$tool"
-    done
+    [[ -f "$HOME/go/bin/hector" ]] && rm -f "$HOME/go/bin/hector"
   fi
 
   # Remove Python-based tools
   if command_exists pip || command_exists pip3; then
     local pip_cmd="pip"
     command_exists pip3 && pip_cmd="pip3"
-    $pip_cmd uninstall -y grok-cli 2>/dev/null
+    $pip_cmd uninstall -y xai-grok-sdk 2>/dev/null
   fi
 
   # Remove aliases
@@ -828,7 +868,7 @@ remove() {
   cleanup_bashrc "# ${EXT_NAME} - Local bin"
 
   # Remove workspace
-  local WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
+  # Use global WORKSPACE_DIR from common.sh
   if [[ -d "$WORKSPACE_DIR/ai-tools" ]]; then
     read -p "Remove AI tools workspace directory? (y/N): " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then

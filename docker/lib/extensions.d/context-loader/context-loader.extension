@@ -66,14 +66,14 @@ configure() {
   print_status "Configuring context management..."
 
   # Create context loading utilities
-  local utilities_script="/workspace/scripts/lib/context-loader.sh"
+  local utilities_script="/workspace/scripts/context-loader.sh"
   local template_file="/docker/lib/templates/context-loader.sh"
 
-  sudo mkdir -p "/workspace/scripts/lib"
+  mkdir -p "/workspace/scripts"
 
   if [[ -f "$template_file" ]]; then
     print_status "Copying context loader utilities..."
-    if sudo cp "$template_file" "$utilities_script" && sudo chmod +x "$utilities_script"; then
+    if cp "$template_file" "$utilities_script" && chmod +x "$utilities_script"; then
       print_success "Context loading utilities installed"
     else
       print_error "Failed to install context loader utilities"
@@ -88,11 +88,11 @@ configure() {
   local wrapper_script="/workspace/scripts/cf-with-context.sh"
   local wrapper_template="/docker/lib/templates/cf-with-context.sh"
 
-  sudo mkdir -p /workspace/scripts
+  mkdir -p /workspace/scripts
 
   if [[ -f "$wrapper_template" ]]; then
     print_status "Copying Claude Flow context wrapper..."
-    if sudo cp "$wrapper_template" "$wrapper_script" && sudo chmod +x "$wrapper_script"; then
+    if cp "$wrapper_template" "$wrapper_script" && chmod +x "$wrapper_script"; then
       print_success "Claude Flow context wrapper installed"
     else
       print_error "Failed to install Claude Flow context wrapper"
@@ -114,8 +114,8 @@ configure() {
 # context-load - CLI wrapper for context loading utilities
 
 # Source the context loader library
-if [[ -f /workspace/scripts/lib/context-loader.sh ]]; then
-  source /workspace/scripts/lib/context-loader.sh
+if [[ -f /workspace/scripts/context-loader.sh ]]; then
+  source /workspace/scripts/context-loader.sh
 else
   echo "Error: context-loader.sh not found" >&2
   exit 1
@@ -210,13 +210,13 @@ validate() {
   local all_valid=true
 
   # Check utilities script
-  if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
+  if [[ ! -f "/workspace/scripts/context-loader.sh" ]]; then
     print_error "Context loader utilities not found"
     all_valid=false
   else
     print_success "Context loader utilities: installed"
 
-    if [[ ! -x "/workspace/scripts/lib/context-loader.sh" ]]; then
+    if [[ ! -x "/workspace/scripts/context-loader.sh" ]]; then
       print_warning "Context loader is not executable"
     fi
   fi
@@ -271,11 +271,11 @@ validate() {
 status() {
   print_extension_header
 
-  if [[ ! -f "/workspace/scripts/lib/context-loader.sh" ]]; then
+  if [[ ! -f "/workspace/scripts/context-loader.sh" ]]; then
     echo "Status: ✗ NOT INSTALLED"
     echo ""
     print_status "Missing files:"
-    echo "  ✗ /workspace/scripts/lib/context-loader.sh"
+    echo "  ✗ /workspace/scripts/context-loader.sh"
     echo "  ✗ /workspace/scripts/cf-with-context.sh"
     return 1
   fi
@@ -284,7 +284,7 @@ status() {
     echo "Status: ⚠ PARTIALLY INSTALLED (missing context-load command)"
     echo ""
     print_status "Files installed but command not in PATH"
-    echo "  ✓ /workspace/scripts/lib/context-loader.sh"
+    echo "  ✓ /workspace/scripts/context-loader.sh"
     [[ -f "/workspace/scripts/cf-with-context.sh" ]] && echo "  ✓ /workspace/scripts/cf-with-context.sh"
     echo "  ✗ context-load command not found"
     echo ""
@@ -296,7 +296,7 @@ status() {
   echo ""
 
   print_status "Installed tools:"
-  [[ -f "/workspace/scripts/lib/context-loader.sh" ]] && echo "  ✓ context-loader.sh" || echo "  ✗ context-loader.sh"
+  [[ -f "/workspace/scripts/context-loader.sh" ]] && echo "  ✓ context-loader.sh" || echo "  ✗ context-loader.sh"
   [[ -f "/workspace/scripts/cf-with-context.sh" ]] && echo "  ✓ cf-with-context.sh" || echo "  ✗ cf-with-context.sh"
 
   echo ""
@@ -358,7 +358,7 @@ remove() {
 
   # Remove scripts
   local scripts=(
-    "/workspace/scripts/lib/context-loader.sh"
+    "/workspace/scripts/context-loader.sh"
     "/workspace/scripts/cf-with-context.sh"
   )
 

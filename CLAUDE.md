@@ -40,12 +40,26 @@ clone-project <url> [options]                    # Clone and enhance repository
 
 ## Key Directories
 
-- `/workspace/` - Persistent volume root (survives VM restarts)
+### User Workspace (developer-owned, writable)
+
 - `/workspace/developer/` - Developer home directory (persistent)
+- `/workspace/scripts/` - User scripts and extension-generated helpers
 - `/workspace/projects/active/` - Active development projects
-- `/workspace/scripts/` - Utility and management scripts
+- `/workspace/config/` - User configuration files
+- `/workspace/bin/` - User binaries (in PATH)
 - `/workspace/docs/` - Workspace-wide documentation
-- All user data (npm cache, configs, SSH keys) persists between VM restarts
+
+### System Directories (managed by Sindri)
+
+- `/docker/lib/` - System libraries and extension definitions (immutable, from Docker image)
+- `/docker/lib/extensions.d/` - Extension definitions and templates
+- `/workspace/.system/` - System runtime files (do not modify directly)
+  - `bin/` - System binaries (symlinked to /docker)
+  - `lib/` - System libraries (symlinked to /docker)
+  - `manifest/` - Extension activation configuration
+
+All user data in `/workspace` persists between VM restarts. System files in `/docker` are immutable
+and updated only via Docker image rebuilds. The `.system/` directory uses symlinks for efficiency.
 
 ## Development Workflow
 
@@ -168,8 +182,9 @@ These are baked into the Docker image for faster startup (~10s vs ~90-120s) and 
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `docker/lib/extensions.d/active-extensions.conf.example` (development)
-or `active-extensions.ci.conf` (CI mode).
+Extensions are defined in the Docker image at `/docker/lib/extensions.d/`. Your active extensions are
+configured in `/workspace/.system/manifest/active-extensions.conf`, which is initialized from
+`docker/lib/extensions.d/active-extensions.conf.example` (development) or `active-extensions.ci.conf` (CI mode).
 
 Example manifest:
 
@@ -284,8 +299,8 @@ Common workflow:
 
 ```bash
 # Copy template and customize
-cp /workspace/marketplaces.yml.example /workspace/marketplaces.yml
-vim /workspace/marketplaces.yml
+cp /workspace/config/marketplaces.yml.example /workspace/config/marketplaces.yml
+vim /workspace/config/marketplaces.yml
 
 # Install extension (processes YAML → settings.json)
 extension-manager install claude-marketplace
@@ -366,8 +381,8 @@ Shell aliases available:
 **Typical Setup**:
 
 ```bash
-# Edit manifest to uncomment desired extensions
-# docker/lib/extensions.d/active-extensions.conf.example
+# Edit manifest to activate desired extensions (auto-created on first boot)
+# /workspace/.system/manifest/active-extensions.conf
 
 # Then install all at once
 extension-manager install-all
@@ -793,11 +808,6 @@ codex suggest "optimize this function"
 codex edit file.js
 codex run "create REST API"
 
-# Plandex - Multi-step development tasks
-plandex init                         # Initialize in project
-plandex plan "add user auth"         # Plan task
-plandex execute                      # Execute plan
-
 # Hector - Declarative AI agent platform
 hector serve --config agent.yaml     # Start agent server
 hector chat assistant                # Interactive chat
@@ -841,17 +851,17 @@ fabric --list                               # List patterns
 ```bash
 # Via Fly.io secrets (recommended)
 flyctl secrets set GOOGLE_GEMINI_API_KEY=... -a <app-name>
-flyctl secrets set GROK_API_KEY=... -a <app-name>
+flyctl secrets set XAI_API_KEY=... -a <app-name>
 
 # Or in shell (temporary)
 export GOOGLE_GEMINI_API_KEY=your_key
-export GROK_API_KEY=your_key
+export XAI_API_KEY=your_key
 ```
 
 **Get API keys:**
 
 - Gemini: <https://makersuite.google.com/app/apikey>
-- Grok: xAI account required
+- xAI Grok: xAI account required
 
 **Enable the extension:**
 

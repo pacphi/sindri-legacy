@@ -42,9 +42,6 @@ infrastructure, AI tools, and developer workflows into a legendary platform for 
 git clone https://github.com/pacphi/sindri.git
 cd sindri
 
-# Prepare extension configuration
-cp docker/lib/extensions.d/active-extensions.conf.example docker/lib/extensions.d/active-extensions.conf
-
 # Deploy (flyctl will be auto-installed if needed)
 ./scripts/vm-setup.sh --app-name my-sindri-dev --region sjc
 

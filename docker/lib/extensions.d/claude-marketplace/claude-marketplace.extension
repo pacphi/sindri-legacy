@@ -42,8 +42,9 @@ else
   MARKETPLACES_EXAMPLE="$SCRIPT_DIR/marketplaces.yml.example"
 fi
 
-# Working file location
-MARKETPLACES_FILE="/workspace/$MARKETPLACES_YAML"
+# Working file location in config directory (developer-owned)
+MARKETPLACES_CONFIG_DIR="/workspace/config"
+MARKETPLACES_FILE="$MARKETPLACES_CONFIG_DIR/$MARKETPLACES_YAML"
 
 # ============================================================================
 # PREREQUISITES
@@ -99,8 +100,14 @@ prerequisites() {
 install() {
   print_status "Installing ${EXT_NAME}..."
 
-  # Copy YAML example template to workspace
-  local workspace_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+  # Ensure config directory exists (should be created by setup-workspace.sh, but verify)
+  if [[ ! -d "$MARKETPLACES_CONFIG_DIR" ]]; then
+    mkdir -p "$MARKETPLACES_CONFIG_DIR"
+    print_status "Created config directory: $MARKETPLACES_CONFIG_DIR"
+  fi
+
+  # Copy YAML example template to config directory
+  local workspace_example="$MARKETPLACES_CONFIG_DIR/$(basename "$MARKETPLACES_EXAMPLE")"
   if [[ ! -f "$workspace_example" ]]; then
     print_status "Creating YAML example template..."
     if cp "$MARKETPLACES_EXAMPLE" "$workspace_example"; then
@@ -475,7 +482,7 @@ validate() {
   fi
 
   # Check YAML template exists
-  local yaml_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+  local yaml_example="$MARKETPLACES_CONFIG_DIR/$(basename "$MARKETPLACES_EXAMPLE")"
   if [[ -f "$yaml_example" ]]; then
     print_success "YAML template exists: $yaml_example"
   else
@@ -738,7 +745,7 @@ remove() {
       files_removed=$((files_removed + 1))
     fi
 
-    local yaml_example="/workspace/$(basename "$MARKETPLACES_EXAMPLE")"
+    local yaml_example="$MARKETPLACES_CONFIG_DIR/$(basename "$MARKETPLACES_EXAMPLE")"
     if [[ -f "$yaml_example" ]]; then
       rm -f "$yaml_example"
       print_success "Removed: $yaml_example"

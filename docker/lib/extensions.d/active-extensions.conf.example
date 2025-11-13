@@ -104,6 +104,16 @@ context-loader
 # ai-tools
 
 # ============================================================================
+# GUI & REMOTE ACCESS
+# ============================================================================
+
+# XFCE desktop with xRDP server (requires 2GB+ RAM, adds ~800MB)
+# xfce-ubuntu
+
+# Apache Guacamole web-based gateway for SSH/RDP/VNC (requires 1GB+ RAM, adds ~512MB)
+# guacamole
+
+# ============================================================================
 # NOTES
 # ============================================================================
 # • Order matters: extensions execute top to bottom
