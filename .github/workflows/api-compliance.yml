@@ -92,6 +92,28 @@ jobs:
           timeout-seconds: "420"
           expected-status: "started"
 
+      - name: Validate bash environment
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          app_name="${{ steps.setup.outputs.app-name }}"
+
+          echo "🔍 Checking for bash function export errors..."
+
+          # Test bash environment for function import errors
+          if flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc 'echo Environment check passed'" 2>&1 | tee /tmp/bash-check.log | grep -i "syntax error\|error importing function"; then
+            echo "❌ Bash environment has errors"
+            echo ""
+            echo "Error details:"
+            grep -i "bash:.*error" /tmp/bash-check.log || true
+            echo ""
+            echo "Exported functions:"
+            flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -c 'export -f 2>&1 | head -50'" || true
+            exit 1
+          else
+            echo "✅ Bash environment is clean"
+          fi
+
       - name: Install extension
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
@@ -107,9 +129,13 @@ jobs:
             cd /workspace/.system
             manifest=\"manifest/active-extensions.conf\"
 
+            # IDEMPOTENCY: Always start with clean manifest
+            # This prevents manifest escalation across retry attempts
+            rm -f \$manifest
+            touch \$manifest
+
             # Build manifest with extension and dependencies
             # Note: mise is a core feature, already available
-            # Use > for first write to ensure idempotency on retries
             case \"$extension\" in
               nodejs|python|rust|golang|tmux-workspace|docker|agent-manager)
                 # These extensions have no dependencies (mise is core)
@@ -127,6 +153,11 @@ jobs:
                 echo \"$extension\" >> \$manifest
                 ;;
             esac
+
+            # Verify manifest content before installation
+            echo \"📋 Manifest contents:\"
+            cat \$manifest
+            echo \"\"
 
             # Install all extensions from manifest
             extension-manager install-all

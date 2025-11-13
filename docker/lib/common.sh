@@ -392,22 +392,19 @@ create_tool_wrapper() {
 
     if [[ "$mode" == "dynamic" ]]; then
         # Create dynamic wrapper that resolves command via PATH after sourcing environment
-        # Build wrapper content as string to avoid heredoc serialization issues
-        local wrapper_content
-        wrapper_content="#!/bin/bash
-# Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH
-# Created by extension system to support 'flyctl ssh console --command' usage
-# Mode: dynamic (resolves command via PATH)
-
-# Source environment if available (for non-interactive sessions)
-[[ -f \"$env_file\" ]] && source \"$env_file\" 2>/dev/null
-
-# Find and execute command via PATH
-exec $tool_name \"\$@\"
-"
-
-        # Write wrapper file
-        if echo "$wrapper_content" | sudo tee "$wrapper_path" > /dev/null 2>&1; then
+        # Use printf to avoid multi-line string issues with bash function export
+        if printf '%s\n' \
+            "#!/bin/bash" \
+            "# Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH" \
+            "# Created by extension system to support 'flyctl ssh console --command' usage" \
+            "# Mode: dynamic (resolves command via PATH)" \
+            "" \
+            "# Source environment if available (for non-interactive sessions)" \
+            "[[ -f \"$env_file\" ]] && source \"$env_file\" 2>/dev/null" \
+            "" \
+            "# Find and execute command via PATH" \
+            "exec $tool_name \"\$@\"" \
+            | sudo tee "$wrapper_path" > /dev/null 2>&1; then
             if sudo chmod +x "$wrapper_path" 2>/dev/null; then
                 print_success "Created dynamic wrapper: $wrapper_path"
                 return 0
@@ -431,22 +428,19 @@ exec $tool_name \"\$@\"
             print_warning "Command not yet available: $actual_path (creating wrapper anyway)"
         fi
 
-        # Build wrapper content as string to avoid heredoc serialization issues
-        local wrapper_content
-        wrapper_content="#!/bin/bash
-# Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH
-# Created by extension system to support 'flyctl ssh console --command' usage
-# Mode: static (uses explicit path)
-
-# Source environment if available (for non-interactive sessions)
-[[ -f \"$env_file\" ]] && source \"$env_file\" 2>/dev/null
-
-# Execute actual command with all arguments
-exec \"$actual_path\" \"\$@\"
-"
-
-        # Write wrapper file
-        if echo "$wrapper_content" | sudo tee "$wrapper_path" > /dev/null 2>&1; then
+        # Use printf to avoid multi-line string issues with bash function export
+        if printf '%s\n' \
+            "#!/bin/bash" \
+            "# Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH" \
+            "# Created by extension system to support 'flyctl ssh console --command' usage" \
+            "# Mode: static (uses explicit path)" \
+            "" \
+            "# Source environment if available (for non-interactive sessions)" \
+            "[[ -f \"$env_file\" ]] && source \"$env_file\" 2>/dev/null" \
+            "" \
+            "# Execute actual command with all arguments" \
+            "exec \"$actual_path\" \"\$@\"" \
+            | sudo tee "$wrapper_path" > /dev/null 2>&1; then
             if sudo chmod +x "$wrapper_path" 2>/dev/null; then
                 print_debug "Created static wrapper: $wrapper_path -> $actual_path"
                 return 0

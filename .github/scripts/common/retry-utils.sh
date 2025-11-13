@@ -114,12 +114,37 @@ ssh_command_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SSH attempt $attempt of $max_attempts..."
 
-    # Execute command with smart PATH handling
-    if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
+    # Execute command and capture output for error detection
+    local output
+    output=$(timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command" 2>&1)
+    local exit_code=$?
+
+    # Check for bash function import errors (fail fast - no retry)
+    if echo "$output" | grep -q "error importing function definition"; then
+      echo "❌ Bash environment error detected - failing fast (no retry)"
+      echo ""
+      echo "Error details:"
+      echo "$output" | grep "bash:.*error" || echo "$output"
+      return 1
+    fi
+
+    # Check for other known fatal errors that should not be retried
+    if echo "$output" | grep -q "syntax error near unexpected token"; then
+      echo "❌ Bash syntax error detected - failing fast (no retry)"
+      echo ""
+      echo "Error details:"
+      echo "$output" | grep "bash:.*syntax error" || echo "$output"
+      return 1
+    fi
+
+    # If command succeeded, output and return
+    if [ $exit_code -eq 0 ]; then
+      echo "$output"
       echo "✅ SSH command succeeded"
       return 0
     else
-      local exit_code=$?
+      # Output the result
+      echo "$output"
 
       if [ $attempt -lt $max_attempts ]; then
         local wait_time=$((3 * attempt))
