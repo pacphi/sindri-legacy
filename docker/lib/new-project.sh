@@ -11,6 +11,7 @@ source "${SCRIPT_DIR}/common.sh"
 source "${SCRIPT_DIR}/git.sh"
 source "${SCRIPT_DIR}/project-core.sh"
 source "${SCRIPT_DIR}/project-templates.sh"
+source "${SCRIPT_DIR}/project-helpers.sh"  # SECURITY: Input validation (H1 fix)
 
 TEMPLATES_CONFIG="${SCRIPT_DIR}/project-templates.yaml"
 PROJECT_NAME=""
@@ -189,6 +190,13 @@ case "$1" in
 esac
 
 PROJECT_NAME="$1"
+
+# SECURITY: Validate project name (H1 fix)
+if ! validate_project_name "$PROJECT_NAME"; then
+    print_error "Invalid project name"
+    exit 1
+fi
+
 shift
 
 while [[ $# -gt 0 ]]; do

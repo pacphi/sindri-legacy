@@ -51,6 +51,77 @@ fi
 # is pre-installed in the Docker image
 
 # ============================================================================
+# SECURITY VALIDATION FUNCTIONS
+# ============================================================================
+
+# Validate extension name
+# Only allows alphanumeric characters, hyphens, and underscores
+validate_extension_name() {
+    local name="$1"
+
+    # Check for empty name
+    if [[ -z "$name" ]]; then
+        print_error "Extension name cannot be empty"
+        return 1
+    fi
+
+    # Only allow safe characters
+    if [[ ! "$name" =~ ^[a-z0-9_-]+$ ]]; then
+        print_error "Invalid extension name: $name"
+        print_error "Extension names must contain only lowercase letters, numbers, hyphens, and underscores"
+        return 1
+    fi
+
+    # Prevent directory traversal
+    if [[ "$name" =~ \.\. ]]; then
+        print_error "Extension name cannot contain '..'"
+        return 1
+    fi
+
+    # Prevent shell metacharacters
+    if [[ "$name" =~ [';$`|&<>(){}] ]]; then
+        print_error "Extension name contains invalid characters"
+        return 1
+    fi
+
+    return 0
+}
+
+# Validate extension file path
+# Ensures file is within expected directory structure
+validate_extension_path() {
+    local file_path="$1"
+    local canonical_path
+
+    # Get canonical path (resolves symlinks, .., etc.)
+    canonical_path=$(readlink -f "$file_path" 2>/dev/null) || {
+        print_error "Cannot resolve path: $file_path"
+        return 1
+    }
+
+    # Must be under /docker/lib/extensions.d/ or CI/dev path
+    if [[ ! "$canonical_path" =~ ^/docker/lib/extensions\.d/ ]] && \
+       [[ ! "$canonical_path" =~ extensions\.d/ ]]; then
+        print_error "Extension file outside expected directory: $canonical_path"
+        return 1
+    fi
+
+    # Must have .extension suffix
+    if [[ ! "$canonical_path" =~ \.extension$ ]]; then
+        print_error "Extension file must have .extension suffix"
+        return 1
+    fi
+
+    # File must exist and be readable
+    if [[ ! -r "$canonical_path" ]]; then
+        print_error "Extension file not readable: $canonical_path"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -369,6 +440,12 @@ list_extensions() {
         print_success "Active Extensions (in execution order):"
         local position=1
         for ext_name in "${active_extensions[@]}"; do
+            # SECURITY: Skip invalid extension names
+            if ! validate_extension_name "$ext_name" 2>/dev/null; then
+                print_warning "Skipping invalid extension name: $ext_name"
+                continue
+            fi
+
             local example_file
             example_file=$(find_extension_file "$ext_name")
             if [[ -n "$example_file" ]]; then
@@ -551,6 +628,11 @@ migrate_all_extensions() {
 install_extension() {
     local ext_name="$1"
 
+    # SECURITY: Validate extension name first
+    if ! validate_extension_name "$ext_name"; then
+        return 1
+    fi
+
     print_status "Installing extension: $ext_name"
     echo ""
 
@@ -571,6 +653,11 @@ install_extension() {
 
     if [[ -z "$activated_file" ]] || [[ ! -f "$activated_file" ]]; then
         print_error "Extension '$ext_name' could not be activated"
+        return 1
+    fi
+
+    # SECURITY: Validate extension path before sourcing
+    if ! validate_extension_path "$activated_file"; then
         return 1
     fi
 
@@ -619,6 +706,11 @@ install_extension() {
 uninstall_extension() {
     local ext_name="$1"
 
+    # SECURITY: Validate extension name first
+    if ! validate_extension_name "$ext_name"; then
+        return 1
+    fi
+
     print_status "Uninstalling extension: $ext_name"
     echo ""
 
@@ -628,6 +720,11 @@ uninstall_extension() {
 
     if [[ -z "$activated_file" ]] || [[ ! -f "$activated_file" ]]; then
         print_error "Extension '$ext_name' is not activated"
+        return 1
+    fi
+
+    # SECURITY: Validate extension path before sourcing
+    if ! validate_extension_path "$activated_file"; then
         return 1
     fi
 
@@ -653,6 +750,11 @@ uninstall_extension() {
 validate_extension() {
     local ext_name="$1"
 
+    # SECURITY: Validate extension name first
+    if ! validate_extension_name "$ext_name"; then
+        return 1
+    fi
+
     print_status "Validating extension: $ext_name"
     echo ""
 
@@ -662,6 +764,11 @@ validate_extension() {
 
     if [[ -z "$activated_file" ]] || [[ ! -f "$activated_file" ]]; then
         print_error "Extension '$ext_name' is not activated"
+        return 1
+    fi
+
+    # SECURITY: Validate extension path before sourcing
+    if ! validate_extension_path "$activated_file"; then
         return 1
     fi
 
@@ -1202,11 +1309,22 @@ doctor_extensions() {
 # Returns: 0 on success, 1 on failure, 2 if upgrade not supported
 upgrade_extension() {
     local extension_name="$1"
+
+    # SECURITY: Validate extension name first
+    if ! validate_extension_name "$extension_name"; then
+        return 1
+    fi
+
     local extension_file
     extension_file=$(find_extension_file "$extension_name")
 
     if [[ -z "$extension_file" ]]; then
         print_error "Extension not found: ${extension_name}"
+        return 1
+    fi
+
+    # SECURITY: Validate extension path before sourcing
+    if ! validate_extension_path "$extension_file"; then
         return 1
     fi
 

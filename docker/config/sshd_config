@@ -17,14 +17,16 @@ ClientAliveCountMax 3
 Port 2222
 
 # Logging
+# SECURITY: Enhanced logging for audit trail (H4 fix)
 SyslogFacility AUTH
-LogLevel INFO
+LogLevel VERBOSE
 
 # Authentication settings
-LoginGraceTime 120
+# SECURITY: Hardened authentication limits (H4 fix)
+LoginGraceTime 60
 StrictModes yes
-MaxAuthTries 6
-MaxSessions 10
+MaxAuthTries 3
+MaxSessions 5
 
 # Subsystem for SFTP
 Subsystem sftp /usr/lib/openssh/sftp-server

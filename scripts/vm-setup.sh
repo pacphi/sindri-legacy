@@ -152,52 +152,148 @@ check_ssh_key() {
         fi
     fi
 
+    # Validate SSH directory first
+    if ! validate_ssh_directory; then
+        print_error "SSH directory validation failed"
+        exit 1
+    fi
+
     # Validate SSH key permissions
-    validate_ssh_permissions "$private_key_path" "$ssh_key_path"
+    if ! validate_ssh_permissions "$private_key_path"; then
+        print_error "SSH key permission validation failed"
+        exit 1
+    fi
 
     export SSH_KEY_PATH="$ssh_key_path"
     export PRIVATE_KEY_PATH="$private_key_path"
     print_success "SSH key found: $ssh_key_path"
 }
 
-# Function to validate SSH key permissions
+# Function to validate and fix SSH key permissions
+# SECURITY: Enhanced validation with error handling (C6 fix)
+# Returns 0 on success, 1 on failure
 validate_ssh_permissions() {
-    local private_key_path="$1"
-    local public_key_path="$2"
-    local fixed_permissions=false
+    local private_key="$1"
+    local public_key="${private_key}.pub"
 
     print_status "Validating SSH key permissions..."
 
-    # Check private key exists and permissions
-    if [[ -f "$private_key_path" ]]; then
-        local private_perms=$(stat -f %A "$private_key_path" 2>/dev/null || stat -c %a "$private_key_path" 2>/dev/null)
-        if [[ "$private_perms" != "600" ]]; then
-            print_warning "Private key has incorrect permissions: $private_perms (should be 600)"
-            print_status "Fixing private key permissions..."
-            chmod 600 "$private_key_path"
-            fixed_permissions=true
-        fi
-    else
-        print_error "Private key not found: $private_key_path"
-        print_status "Make sure you have both public and private key files"
-        exit 1
+    # Check private key exists
+    if [[ ! -f "$private_key" ]]; then
+        print_error "Private key not found: $private_key"
+        return 1
     fi
 
-    # Check public key permissions (less critical but good practice)
-    if [[ -f "$public_key_path" ]]; then
-        local public_perms=$(stat -f %A "$public_key_path" 2>/dev/null || stat -c %a "$public_key_path" 2>/dev/null)
-        if [[ "$public_perms" != "644" ]]; then
-            print_status "Fixing public key permissions..."
-            chmod 644 "$public_key_path"
-            fixed_permissions=true
+    # Check public key exists
+    if [[ ! -f "$public_key" ]]; then
+        print_error "Public key not found: $public_key"
+        return 1
+    fi
+
+    # Attempt to fix private key permissions
+    if ! chmod 600 "$private_key" 2>/dev/null; then
+        print_error "Failed to set permissions on private key: $private_key"
+        return 1
+    fi
+
+    # Verify private key permissions were set correctly
+    local actual_perms
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        actual_perms=$(stat -f "%A" "$private_key" 2>/dev/null)
+    else
+        actual_perms=$(stat -c "%a" "$private_key" 2>/dev/null)
+    fi
+
+    if [[ -z "$actual_perms" ]]; then
+        print_error "Failed to read permissions for: $private_key"
+        return 1
+    fi
+
+    if [[ "$actual_perms" != "600" ]]; then
+        print_error "Private key has incorrect permissions: $actual_perms (expected 600)"
+        print_error "File: $private_key"
+        return 1
+    fi
+
+    # Fix public key permissions (644 is acceptable for public keys)
+    if ! chmod 644 "$public_key" 2>/dev/null; then
+        print_error "Failed to set permissions on public key: $public_key"
+        return 1
+    fi
+
+    # Verify public key permissions
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        actual_perms=$(stat -f "%A" "$public_key" 2>/dev/null)
+    else
+        actual_perms=$(stat -c "%a" "$public_key" 2>/dev/null)
+    fi
+
+    if [[ -z "$actual_perms" ]]; then
+        print_error "Failed to read permissions for: $public_key"
+        return 1
+    fi
+
+    if [[ "$actual_perms" != "644" ]]; then
+        print_warning "Public key has unusual permissions: $actual_perms (expected 644)"
+    fi
+
+    # Verify key is valid SSH key format
+    if ! ssh-keygen -l -f "$private_key" >/dev/null 2>&1; then
+        print_error "Private key is not a valid SSH key: $private_key"
+        return 1
+    fi
+
+    if ! ssh-keygen -l -f "$public_key" >/dev/null 2>&1; then
+        print_error "Public key is not a valid SSH key: $public_key"
+        return 1
+    fi
+
+    print_success "SSH key permissions validated: $private_key"
+    return 0
+}
+
+# Function to validate SSH directory permissions
+# SECURITY: Additional validation for ~/.ssh directory (C6 fix)
+# Returns 0 on success, 1 on failure
+validate_ssh_directory() {
+    local ssh_dir="$HOME/.ssh"
+
+    print_status "Validating SSH directory permissions..."
+
+    # Create directory if it doesn't exist
+    if [[ ! -d "$ssh_dir" ]]; then
+        if ! mkdir -p "$ssh_dir" 2>/dev/null; then
+            print_error "Failed to create SSH directory: $ssh_dir"
+            return 1
         fi
     fi
 
-    if [[ "$fixed_permissions" == "true" ]]; then
-        print_success "SSH key permissions have been corrected"
-    else
-        print_success "SSH key permissions are correct"
+    # Set directory permissions
+    if ! chmod 700 "$ssh_dir" 2>/dev/null; then
+        print_error "Failed to set permissions on SSH directory: $ssh_dir"
+        return 1
     fi
+
+    # Verify directory permissions
+    local actual_perms
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        actual_perms=$(stat -f "%A" "$ssh_dir" 2>/dev/null)
+    else
+        actual_perms=$(stat -c "%a" "$ssh_dir" 2>/dev/null)
+    fi
+
+    if [[ -z "$actual_perms" ]]; then
+        print_error "Failed to read permissions for: $ssh_dir"
+        return 1
+    fi
+
+    if [[ "$actual_perms" != "700" ]]; then
+        print_error "SSH directory has incorrect permissions: $actual_perms (expected 700)"
+        return 1
+    fi
+
+    print_success "SSH directory permissions validated"
+    return 0
 }
 
 # Function to create Fly.io application

@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 source "${SCRIPT_DIR}/git.sh"
 source "${SCRIPT_DIR}/project-core.sh"
+source "${SCRIPT_DIR}/project-helpers.sh"  # SECURITY: Input validation (H1 fix)
 
 REPO_URL=""
 FORK_MODE=false
@@ -56,16 +57,31 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
 fi
 
 REPO_URL="$1"
-shift
 
-if [[ ! "$REPO_URL" =~ ^(https?://|git@) ]]; then
-    print_error "Invalid repository URL: $REPO_URL"
+# SECURITY: Validate repository URL (H1 fix)
+if ! validate_repo_url "$REPO_URL"; then
+    print_error "Invalid repository URL"
     exit 1
 fi
+
+shift
 
 PROJECT_NAME=$(basename "$REPO_URL" .git)
 if [[ -z "$PROJECT_NAME" ]]; then
     print_error "Could not determine project name from URL"
+    exit 1
+fi
+
+# SECURITY: Validate extracted project name (H1 fix)
+if ! validate_project_name "$PROJECT_NAME"; then
+    print_error "Invalid project name extracted from URL: $PROJECT_NAME"
+    exit 1
+fi
+
+# SECURITY: Sanitize project path (H1 fix)
+PROJECT_PATH=$(sanitize_project_path "/workspace/projects/active" "$PROJECT_NAME")
+if [[ $? -ne 0 ]]; then
+    print_error "Failed to create safe project path"
     exit 1
 fi
 

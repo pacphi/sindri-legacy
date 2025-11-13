@@ -1,1 +1,30 @@
-developer ALL=(ALL) NOPASSWD:ALL
+# Sindri Developer Sudo Access
+# Only allow specific commands needed for extension installation
+# Security hardening - replaces previous NOPASSWD:ALL
+
+# Package management
+developer ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/dpkg
+developer ALL=(ALL) NOPASSWD: /usr/bin/snap install *, /usr/bin/snap remove *
+
+# Service management (specific services only)
+developer ALL=(ALL) NOPASSWD: /usr/bin/systemctl start sshd, /usr/bin/systemctl stop sshd
+developer ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart sshd, /usr/bin/systemctl status sshd
+developer ALL=(ALL) NOPASSWD: /usr/bin/systemctl start docker, /usr/bin/systemctl stop docker
+developer ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart docker, /usr/bin/systemctl enable docker
+
+# File permissions (workspace only)
+developer ALL=(ALL) NOPASSWD: /bin/chmod -R * /workspace/*
+developer ALL=(ALL) NOPASSWD: /bin/chown -R developer\:developer /workspace/*
+
+# GPG key management (for package verification)
+developer ALL=(ALL) NOPASSWD: /usr/bin/gpg --dearmor -o /etc/apt/keyrings/*
+
+# Network configuration (if needed)
+developer ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG docker developer
+
+# Tee for writing privileged files
+developer ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/*
+developer ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/share/*
+
+# Explicitly deny everything else
+developer ALL=(ALL) !ALL

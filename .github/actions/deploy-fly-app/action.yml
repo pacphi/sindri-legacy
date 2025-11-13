@@ -57,11 +57,30 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # SECURITY: Mask secrets to prevent disclosure in logs (C8 fix)
+    - name: Mask secrets
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        set +x  # Disable command echoing
+        # Mask FLY_API_TOKEN if present
+        if [[ -n "$FLY_API_TOKEN" ]]; then
+          echo "::add-mask::${FLY_API_TOKEN}"
+        fi
+        # Mask ANTHROPIC_API_KEY if present
+        if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+          echo "::add-mask::${ANTHROPIC_API_KEY}"
+        fi
+        echo "✓ Secrets masked"
+
     - name: Create Fly.io app
       shell: bash
       env:
         FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
+        set +x  # Disable command echoing
         echo "Creating Fly.io app: ${{ inputs.app-name }}"
         flyctl apps create ${{ inputs.app-name }} --org ${{ inputs.org }} || echo "App may already exist"
 

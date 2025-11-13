@@ -1,4 +1,7 @@
-FROM ubuntu:24.04
+# syntax=docker/dockerfile:1.4
+# SECURITY: Pin base image by digest for reproducibility (H6 fix)
+# To update digest: docker pull ubuntu:24.04 && docker inspect ubuntu:24.04 | grep -A1 RepoDigests
+FROM ubuntu:24.04@sha256:b359f1067efa76f37863778f7b6d0e8d911e3ee8efa807ad01fbf5dc1ef9006b
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive

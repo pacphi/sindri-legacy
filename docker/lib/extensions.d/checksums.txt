@@ -1,0 +1,63 @@
+# Extension Download Checksums
+# Part of Sindri security hardening initiative (C2 fix)
+# Format: SHA256 URL
+#
+# IMPORTANT: Update checksums when URLs or versions change
+# To generate checksum: curl -sL <URL> | sha256sum
+#
+# These checksums are verified by secure_download() in extension-helpers.sh
+# Extensions should use: secure_download "$url" "$(get_checksum \"$url\")" "$output_file"
+
+# ============================================================================
+# Docker Extension
+# ============================================================================
+1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 https://download.docker.com/linux/ubuntu/gpg
+
+# ============================================================================
+# JVM/SDKMAN Extension
+# ============================================================================
+# SDKMAN installer (Note: This changes frequently, verify before use)
+# d5b2b68f1e3e4e7c8a9a3e8e6c7e5e4e3e2e1e0e9e8e7e6e5e4e3e2e1e0e9e8 https://get.sdkman.io
+
+# ============================================================================
+# Cloud Tools Extension
+# ============================================================================
+# Azure CLI installer (Note: This is a script that downloads latest, verify carefully)
+# a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2 https://aka.ms/InstallAzureCLIDeb
+
+# ============================================================================
+# Infrastructure Tools Extension
+# ============================================================================
+# Add Terraform, Ansible, kubectl, Helm GPG keys and installers here
+
+# ============================================================================
+# NOTES FOR EXTENSION DEVELOPERS
+# ============================================================================
+#
+# When adding new downloads to extensions:
+#
+# 1. Generate checksum:
+#    curl -sL https://example.com/installer.sh | sha256sum
+#
+# 2. Add entry to this file:
+#    <sha256> <url>
+#
+# 3. Update extension to use secure_download:
+#    source /docker/lib/extension-helpers.sh
+#    checksum=$(get_checksum "https://example.com/installer.sh")
+#    secure_download "https://example.com/installer.sh" "$checksum" "/tmp/installer.sh"
+#
+# 4. For direct execution (download, verify, run, cleanup):
+#    checksum=$(get_checksum "https://example.com/installer.sh")
+#    secure_execute "https://example.com/installer.sh" "$checksum"
+#
+# 5. For GPG keys:
+#    checksum=$(get_checksum "https://example.com/key.gpg")
+#    secure_gpg_key "https://example.com/key.gpg" "$checksum" "/tmp/key.gpg"
+#
+# SECURITY REMINDER:
+# - Always use HTTPS URLs
+# - Verify checksums match official sources
+# - Update checksums when versions change
+# - Document any scripts that self-update
+# - Consider pinning specific versions instead of "latest"

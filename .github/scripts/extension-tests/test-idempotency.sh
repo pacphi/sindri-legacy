@@ -20,8 +20,15 @@ print_section "Testing Idempotency"
 if command -v jq >/dev/null 2>&1 && [ -f "$HOME/.claude/settings.json" ]; then
     print_info "Testing claude-marketplace settings.json idempotency..."
 
+    # SECURITY: Create secure temporary directory (C5 fix)
+    temp_dir=$(create_secure_temp_dir) || {
+        print_error "Failed to create secure temporary directory"
+        exit 1
+    }
+    setup_cleanup_trap "$temp_dir"
+
     # Capture settings.json before second install
-    settings_before="/tmp/settings-before-$$.json"
+    settings_before="$temp_dir/settings-before.json"
     cp "$HOME/.claude/settings.json" "$settings_before"
 
     marketplace_count_before=$(jq -r '.extraKnownMarketplaces // {} | length' "$settings_before" 2>/dev/null || echo "0")

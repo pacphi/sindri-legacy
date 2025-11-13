@@ -167,26 +167,132 @@ setup_workspace_bin() {
 }
 
 # ------------------------------------------------------------------------------
-# setup_environment_variables - Configure environment variables for developer user
+# setup_secure_secrets - Configure secure secrets management
+# SECURITY: Store secrets in protected file, not in bashrc (C4 fix)
 # ------------------------------------------------------------------------------
-setup_environment_variables() {
+setup_secure_secrets() {
+    local secrets_dir="$DEVELOPER_HOME_RUNTIME/.secrets"
+    local secrets_file="$secrets_dir/credentials"
+    local secrets_loader="$secrets_dir/load-secrets.sh"
+    local has_secrets=false
+
+    # Create secrets directory
+    mkdir -p "$secrets_dir"
+    chmod 700 "$secrets_dir"
+
+    # Create secrets file
+    cat > "$secrets_file" << 'SECRETS_EOF'
+# Sindri Secure Secrets
+# This file is loaded on-demand, not automatically in bashrc
+# Usage: source ~/.secrets/load-secrets.sh
+
+SECRETS_EOF
+
+    # Add secrets if they exist
     if [ -n "$ANTHROPIC_API_KEY" ]; then
-        echo "🔐 Configuring environment variables..."
-        echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
-        echo "✅ Environment variables configured"
+        echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> "$secrets_file"
+        has_secrets=true
+    fi
+
+    if [ -n "$GITHUB_TOKEN" ]; then
+        echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> "$secrets_file"
+        has_secrets=true
+    fi
+
+    if [ -n "$OPENROUTER_API_KEY" ]; then
+        echo "export OPENROUTER_API_KEY='$OPENROUTER_API_KEY'" >> "$secrets_file"
+        has_secrets=true
+    fi
+
+    if [ -n "$GOOGLE_GEMINI_API_KEY" ]; then
+        echo "export GOOGLE_GEMINI_API_KEY='$GOOGLE_GEMINI_API_KEY'" >> "$secrets_file"
+        has_secrets=true
+    fi
+
+    if [ -n "$PERPLEXITY_API_KEY" ]; then
+        echo "export PERPLEXITY_API_KEY='$PERPLEXITY_API_KEY'" >> "$secrets_file"
+        has_secrets=true
+    fi
+
+    # Set restrictive permissions
+    chmod 600 "$secrets_file"
+    chown "$DEVELOPER_USER:$DEVELOPER_USER" "$secrets_file"
+
+    # Create loader script
+    cat > "$secrets_loader" << 'LOADER_EOF'
+#!/bin/bash
+# Secure secrets loader
+# Sources credentials file if it exists
+
+SECRETS_FILE="$HOME/.secrets/credentials"
+
+if [[ -f "$SECRETS_FILE" ]]; then
+    source "$SECRETS_FILE"
+else
+    echo "Warning: Secrets file not found" >&2
+fi
+LOADER_EOF
+
+    chmod 700 "$secrets_loader"
+    chown "$DEVELOPER_USER:$DEVELOPER_USER" "$secrets_loader"
+
+    # Create wrapper functions that load secrets on-demand
+    cat >> "$DEVELOPER_HOME_RUNTIME/.bashrc" << 'BASHRC_EOF'
+
+# Secure secret loading helpers (added by Sindri security hardening)
+load_secrets() {
+    if [[ -f "$HOME/.secrets/load-secrets.sh" ]]; then
+        source "$HOME/.secrets/load-secrets.sh"
     fi
 }
 
+# Wrapper functions for tools that need API keys
+claude() {
+    load_secrets
+    command claude "$@"
+}
+
+gh() {
+    load_secrets
+    command gh "$@"
+}
+
+goalie() {
+    load_secrets
+    command goalie "$@"
+}
+
+# Add more wrappers as needed for tools that require API keys
+BASHRC_EOF
+
+    chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$secrets_dir"
+
+    if [ "$has_secrets" = true ]; then
+        echo "🔐 Secure secrets storage configured"
+        echo "  ✓ Secrets stored in ~/.secrets/credentials (600)"
+        echo "  ✓ Use 'load_secrets' function to access in scripts"
+    else
+        echo "ℹ️  No secrets provided (skipping)"
+    fi
+
+    # Remove old environment variables (don't pass to shell)
+    unset ANTHROPIC_API_KEY
+    unset GITHUB_TOKEN
+    unset OPENROUTER_API_KEY
+    unset GOOGLE_GEMINI_API_KEY
+    unset PERPLEXITY_API_KEY
+}
+
 # ------------------------------------------------------------------------------
-# setup_github_auth - Configure GitHub authentication (token and gh CLI)
+# setup_github_auth - Configure GitHub authentication (gh CLI)
+# SECURITY: Token now stored in ~/.secrets/credentials, not bashrc (C4 fix)
 # ------------------------------------------------------------------------------
 setup_github_auth() {
     if [ -n "$GITHUB_TOKEN" ]; then
-        echo "🔐 Configuring GitHub authentication..."
-
-        echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
+        echo "🔐 Configuring GitHub CLI..."
 
         # Create GitHub CLI config for gh commands
+        # gh CLI will get token from wrapper function that loads secrets
         sudo -u "$DEVELOPER_USER" mkdir -p "$DEVELOPER_HOME_RUNTIME/.config/gh"
         cat > "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml" << EOF
 github.com:
@@ -197,7 +303,7 @@ EOF
         chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.config/gh"
         chmod 600 "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml"
 
-        echo "✅ GitHub authentication configured"
+        echo "✅ GitHub CLI configured"
     fi
 }
 
@@ -220,37 +326,48 @@ setup_git_config() {
     fi
 
     # Setup Git credential helper for GitHub token
+    # SECURITY: Credential helper reads from secure storage (C4/C7 fix)
     if [ -n "$GITHUB_TOKEN" ]; then
-        # Create credential helper script
-        cat > "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh" << 'EOF'
+        # Create credential helper script that reads from secure storage
+        cat > "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh" << 'CREDHELPER_EOF'
 #!/bin/bash
-# Git credential helper for GitHub token authentication
+# Git credential helper - reads from secure storage
+# SECURITY: Token not embedded in file
+
+SECRETS_FILE="$HOME/.secrets/credentials"
 
 if [ "$1" = "get" ]; then
+    # Read request
+    declare -A req
     while IFS= read -r line; do
-        case "$line" in
-            host=github.com)
+        [[ -z "$line" ]] && break
+        key="${line%%=*}"
+        value="${line#*=}"
+        req[$key]="$value"
+    done
+
+    # Only provide credentials for github.com
+    if [[ "${req[host]}" == "github.com" ]]; then
+        # Source secrets file to get GITHUB_TOKEN
+        if [[ -f "$SECRETS_FILE" ]]; then
+            source "$SECRETS_FILE"
+            if [[ -n "$GITHUB_TOKEN" ]]; then
                 echo "protocol=https"
                 echo "host=github.com"
-                echo "username=token"
+                echo "username=x-access-token"
                 echo "password=$GITHUB_TOKEN"
-                break
-                ;;
-            host=*)
-                # For non-GitHub hosts, exit without providing credentials
-                exit 0
-                ;;
-        esac
-    done
+            fi
+        fi
+    fi
 fi
-EOF
+CREDHELPER_EOF
 
-        chmod +x "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
+        chmod 700 "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
         chown "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
 
         # Configure Git to use the credential helper
         sudo -u "$DEVELOPER_USER" git config --global credential.helper "$DEVELOPER_HOME_RUNTIME/.git-credential-helper.sh"
-        echo "✅ Git credential helper configured"
+        echo "✅ Git credential helper configured (secure storage)"
         configured=true
     fi
 
@@ -315,7 +432,7 @@ main() {
     setup_developer_home
     setup_ssh_keys
     setup_workspace_bin
-    setup_environment_variables
+    setup_secure_secrets
     setup_github_auth
     setup_git_config
     setup_motd

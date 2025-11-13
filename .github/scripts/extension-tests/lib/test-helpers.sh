@@ -8,6 +8,54 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# ============================================================================
+# SECURITY: Secure temporary file/directory creation (C5 fix)
+# ============================================================================
+
+# Create secure temporary file with automatic cleanup
+create_secure_temp_file() {
+    local temp_file
+    temp_file=$(mktemp) || {
+        print_error "Failed to create temporary file"
+        return 1
+    }
+    chmod 600 "$temp_file" || {
+        rm -f "$temp_file"
+        print_error "Failed to set temp file permissions"
+        return 1
+    }
+    echo "$temp_file"
+}
+
+# Create secure temporary directory with automatic cleanup
+create_secure_temp_dir() {
+    local temp_dir
+    temp_dir=$(mktemp -d) || {
+        print_error "Failed to create temporary directory"
+        return 1
+    }
+    chmod 700 "$temp_dir" || {
+        rm -rf "$temp_dir"
+        print_error "Failed to set temp directory permissions"
+        return 1
+    }
+    echo "$temp_dir"
+}
+
+# Setup cleanup trap for temporary files/directories
+setup_cleanup_trap() {
+    local items=("$@")
+    cleanup() {
+        local exit_code=$?
+        for item in "${items[@]}"; do
+            [[ -d "$item" ]] && rm -rf "$item" 2>/dev/null
+            [[ -f "$item" ]] && rm -f "$item" 2>/dev/null
+        done
+        exit $exit_code
+    }
+    trap cleanup EXIT INT TERM
+}
+
 # Print functions
 print_success() {
     echo -e "${GREEN}✅ $*${NC}"

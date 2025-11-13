@@ -1,0 +1,43 @@
+name: Mask Secrets
+description: Mask secrets in GitHub Actions output for enhanced security (C8 fix)
+
+runs:
+  using: composite
+  steps:
+    - name: Mask all secrets
+      shell: bash
+      run: |
+        # Mask common secret patterns
+        # SECURITY: Prevent accidental secret disclosure in CI logs (C8 fix)
+
+        # API Keys (sk-*, pk-*, etc.)
+        if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+          echo "::add-mask::${ANTHROPIC_API_KEY}"
+        fi
+
+        if [[ -n "$OPENROUTER_API_KEY" ]]; then
+          echo "::add-mask::${OPENROUTER_API_KEY}"
+        fi
+
+        if [[ -n "$GOOGLE_GEMINI_API_KEY" ]]; then
+          echo "::add-mask::${GOOGLE_GEMINI_API_KEY}"
+        fi
+
+        if [[ -n "$PERPLEXITY_API_KEY" ]]; then
+          echo "::add-mask::${PERPLEXITY_API_KEY}"
+        fi
+
+        # Tokens (ghp_*, gho_*, etc.)
+        if [[ -n "$GITHUB_TOKEN" ]]; then
+          echo "::add-mask::${GITHUB_TOKEN}"
+        fi
+
+        if [[ -n "$FLY_API_TOKEN" ]]; then
+          echo "::add-mask::${FLY_API_TOKEN}"
+        fi
+
+        if [[ -n "$FLYIO_AUTH_TOKEN" ]]; then
+          echo "::add-mask::${FLYIO_AUTH_TOKEN}"
+        fi
+
+        echo "✓ Secrets masked"
