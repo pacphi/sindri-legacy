@@ -63,10 +63,14 @@ RUN /docker/scripts/install-packages.sh
 # Create developer user and configure system
 RUN /docker/scripts/setup-user.sh
 
-# Configure SSH daemon
+# Configure SSH daemon and sudo permissions
 RUN mkdir -p /var/run/sshd && \
     cp /docker/config/sshd_config /etc/ssh/sshd_config && \
-    cp /docker/config/developer-sudoers /etc/sudoers.d/developer
+    cp /docker/config/developer-sudoers /etc/sudoers.d/developer && \
+    chmod 0440 /etc/sudoers.d/developer && \
+    chown root:root /etc/sudoers.d/developer && \
+    visudo -c -f /etc/sudoers.d/developer || \
+    (echo "ERROR: Invalid sudoers file" && exit 1)
 
 # Setup bash environment for developer user
 RUN /docker/scripts/setup-bashrc.sh

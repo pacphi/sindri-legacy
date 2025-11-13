@@ -325,17 +325,27 @@ setup_tool_path() {
 
     print_debug "Setting up PATH for $tool_name"
 
-    # Create /etc/profile.d/ script for login shells
-    local profile_script="/etc/profile.d/${tool_name,,}.sh"
-    if [[ ! -f "$profile_script" ]]; then
-        {
-            echo "#!/bin/bash"
-            echo "# $tool_name environment configuration"
-            echo "$path_export"
-            [[ -n "$init_command" ]] && echo "$init_command"
-        } | sudo tee "$profile_script" > /dev/null
-        sudo chmod +x "$profile_script"
-        print_debug "Created profile.d script: $profile_script"
+    # Create /etc/profile.d/ script for login shells (skip in CI mode)
+    if ! is_ci_mode; then
+        local profile_script="/etc/profile.d/${tool_name,,}.sh"
+        if [[ ! -f "$profile_script" ]]; then
+            if {
+                echo "#!/bin/bash"
+                echo "# $tool_name environment configuration"
+                echo "$path_export"
+                [[ -n "$init_command" ]] && echo "$init_command"
+            } | sudo tee "$profile_script" > /dev/null 2>&1; then
+                if sudo chmod +x "$profile_script" 2>/dev/null; then
+                    print_debug "Created profile.d script: $profile_script"
+                else
+                    print_warning "Failed to make profile.d script executable (non-critical)"
+                fi
+            else
+                print_warning "Failed to create profile.d script (non-critical in CI mode)"
+            fi
+        fi
+    else
+        print_debug "CI mode - skipping profile.d script creation for $tool_name"
     fi
 
     # Add to SSH environment
@@ -368,6 +378,12 @@ create_tool_wrapper() {
 
     print_debug "Creating wrapper for $tool_name (mode: $mode)"
 
+    # In CI mode, skip wrapper creation (tools work via PATH and mise activation)
+    if is_ci_mode; then
+        print_debug "CI mode - skipping wrapper creation for $tool_name"
+        return 0
+    fi
+
     # Skip if wrapper already exists
     if [[ -f "$wrapper_path" ]] && [[ -L "$wrapper_path" || $(head -1 "$wrapper_path" 2>/dev/null | grep -c "Wrapper for") -gt 0 ]]; then
         print_debug "Wrapper already exists: $wrapper_path"
@@ -377,7 +393,7 @@ create_tool_wrapper() {
     if [[ "$mode" == "dynamic" ]]; then
         # Create dynamic wrapper that resolves command via PATH after sourcing environment
         # This handles cases where commands are in PATH but not at fixed locations
-        sudo tee "$wrapper_path" > /dev/null << EOF
+        if sudo tee "$wrapper_path" > /dev/null 2>&1 << EOF
 #!/bin/bash
 # Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH
 # Created by extension system to support 'flyctl ssh console --command' usage
@@ -389,10 +405,20 @@ create_tool_wrapper() {
 # Find and execute command via PATH
 exec $tool_name "\$@"
 EOF
-
-        sudo chmod +x "$wrapper_path"
-        print_success "Created dynamic wrapper: $wrapper_path"
-        return 0
+        then
+            if sudo chmod +x "$wrapper_path" 2>/dev/null; then
+                print_success "Created dynamic wrapper: $wrapper_path"
+                return 0
+            else
+                print_error "Failed to make wrapper executable: $wrapper_path"
+                print_debug "Check sudo permissions in /etc/sudoers.d/developer"
+                return 1
+            fi
+        else
+            print_error "Failed to create wrapper: $wrapper_path"
+            print_debug "Check sudo permissions in /etc/sudoers.d/developer"
+            return 1
+        fi
     else
         # Static mode: use explicit path
         # Expand actual_path if it contains variables like $HOME
@@ -404,7 +430,7 @@ EOF
         fi
 
         # Create wrapper that sources environment before executing
-        sudo tee "$wrapper_path" > /dev/null << EOF
+        if sudo tee "$wrapper_path" > /dev/null 2>&1 << EOF
 #!/bin/bash
 # Wrapper for $tool_name - ensures environment is loaded for non-interactive SSH
 # Created by extension system to support 'flyctl ssh console --command' usage
@@ -416,10 +442,20 @@ EOF
 # Execute actual command with all arguments
 exec "$actual_path" "\$@"
 EOF
-
-        sudo chmod +x "$wrapper_path"
-        print_debug "Created static wrapper: $wrapper_path -> $actual_path"
-        return 0
+        then
+            if sudo chmod +x "$wrapper_path" 2>/dev/null; then
+                print_debug "Created static wrapper: $wrapper_path -> $actual_path"
+                return 0
+            else
+                print_error "Failed to make wrapper executable: $wrapper_path"
+                print_debug "Check sudo permissions in /etc/sudoers.d/developer"
+                return 1
+            fi
+        else
+            print_error "Failed to create wrapper: $wrapper_path"
+            print_debug "Check sudo permissions in /etc/sudoers.d/developer"
+            return 1
+        fi
     fi
 }
 
