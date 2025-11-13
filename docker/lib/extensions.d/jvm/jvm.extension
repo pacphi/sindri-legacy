@@ -68,12 +68,18 @@ install() {
   print_status "Installing JVM development environment..."
 
   # Install SDKMAN for managing JVM SDKs
+  # SECURITY: SDKMAN uses dynamic installer (C2 fix - accepted risk with HTTPS enforcement)
+  # Note: get.sdkman.io installer updates frequently, checksum verification not practical
+  # Mitigation: HTTPS+TLS1.2 enforcement, timeout limits, official domain only
   if [[ -d "$HOME/.sdkman" ]]; then
     print_warning "SDKMAN is already installed"
     source "$HOME/.sdkman/bin/sdkman-init.sh"
   else
-    print_status "Installing SDKMAN..."
-    if curl -s "https://get.sdkman.io" | bash; then
+    print_status "Installing SDKMAN (dynamic installer, HTTPS verified)..."
+    # SECURITY: Enforce HTTPS+TLS1.2, add timeouts (C2/H7 fix)
+    if curl --proto '=https' --tlsv1.2 -fsSL \
+       --max-time 120 --connect-timeout 30 \
+       "https://get.sdkman.io" | bash; then
       source "$HOME/.sdkman/bin/sdkman-init.sh"
       print_success "SDKMAN installed successfully"
     else

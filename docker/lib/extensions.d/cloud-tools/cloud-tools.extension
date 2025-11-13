@@ -15,6 +15,8 @@
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+# SECURITY: Source secure download helpers (C2 fix)
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extension-helpers.sh"
 
 # ============================================================================
 # METADATA
@@ -99,24 +101,59 @@ install() {
   fi
 
   # Azure CLI
+  # SECURITY: Dynamic installer from Microsoft (C2 fix - accepted risk with HTTPS enforcement)
+  # Note: aka.ms/InstallAzureCLIDeb redirects to latest installer (updates frequently)
+  # Mitigation: HTTPS+TLS1.2 enforcement, timeout limits, official Microsoft domain
   print_status "Installing Azure CLI..."
   if command_exists az; then
     print_warning "Azure CLI already installed"
   else
-    if curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash 2>/dev/null; then
-      print_success "Azure CLI installed"
+    # SECURITY: Enforce HTTPS+TLS1.2, standardized timeout (C2/H7 fix)
+    if curl --proto '=https' --tlsv1.2 -fsSL \
+       --max-time 120 --connect-timeout 30 \
+       https://aka.ms/InstallAzureCLIDeb | sudo bash 2>/dev/null; then
+      print_success "Azure CLI installed (dynamic installer, HTTPS verified)"
     else
       print_warning "Failed to install Azure CLI"
     fi
   fi
 
   # Google Cloud CLI
+  # SECURITY: Secure GPG key with fallback (C2 fix - static key)
   print_status "Installing Google Cloud CLI..."
   if command_exists gcloud; then
     print_warning "Google Cloud CLI already installed"
   else
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
-    if curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - 2>/dev/null; then
+
+    local gcloud_gpg_url="https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+    local gcloud_checksum
+    gcloud_checksum=$(get_checksum "$gcloud_gpg_url")
+
+    local gpg_added=false
+
+    if [[ -n "$gcloud_checksum" ]]; then
+      # Try checksum verification
+      local temp_gpg
+      temp_gpg=$(create_secure_temp_file) || return 1
+      setup_cleanup_trap "$temp_gpg"
+
+      if secure_download "$gcloud_gpg_url" "$gcloud_checksum" "$temp_gpg"; then
+        sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add "$temp_gpg" 2>/dev/null
+        gpg_added=true
+        print_status "✓ Google Cloud GPG key added (checksum verified)"
+      fi
+    else
+      # Fallback: HTTPS+TLS1.2 enforcement
+      if curl --proto '=https' --tlsv1.2 -fsSL \
+         --max-time 120 --connect-timeout 30 \
+         "$gcloud_gpg_url" | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - 2>/dev/null; then
+        gpg_added=true
+        print_status "✓ Google Cloud GPG key added (HTTPS verified)"
+      fi
+    fi
+
+    if [[ "$gpg_added" == "true" ]]; then
       apt_update_retry 3 && apt_install_retry 3 google-cloud-cli
       print_success "Google Cloud CLI installed"
     else

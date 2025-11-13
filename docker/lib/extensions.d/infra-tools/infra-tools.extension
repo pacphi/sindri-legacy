@@ -12,6 +12,8 @@
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
+# SECURITY: Source secure download helpers (C2 fix)
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extension-helpers.sh"
 
 # ============================================================================
 # METADATA
@@ -97,7 +99,36 @@ install() {
       print_warning "Terraform already installed: $(terraform version | head -1)"
     else
       # Add HashiCorp GPG key
-      if wget --timeout=60 --tries=2 -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg 2>/dev/null; then
+      # SECURITY: Secure GPG key download with checksum or HTTPS enforcement (C2 fix - static key)
+      local hashicorp_gpg_url="https://apt.releases.hashicorp.com/gpg"
+      local hashicorp_checksum
+      hashicorp_checksum=$(get_checksum "$hashicorp_gpg_url")
+
+      local temp_gpg
+      temp_gpg=$(create_secure_temp_file) || return 1
+      setup_cleanup_trap "$temp_gpg"
+
+      local gpg_verified=false
+
+      if [[ -n "$hashicorp_checksum" ]]; then
+        # Checksum verification available
+        if secure_download "$hashicorp_gpg_url" "$hashicorp_checksum" "$temp_gpg"; then
+          sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$temp_gpg"
+          gpg_verified=true
+          print_status "✓ HashiCorp GPG key added (checksum verified)"
+        fi
+      else
+        # Fallback: HTTPS+TLS1.2 enforcement
+        if curl --proto '=https' --tlsv1.2 -fsSL \
+           --max-time 120 --connect-timeout 30 \
+           "$hashicorp_gpg_url" -o "$temp_gpg"; then
+          sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg < "$temp_gpg"
+          gpg_verified=true
+          print_status "✓ HashiCorp GPG key added (HTTPS verified)"
+        fi
+      fi
+
+      if [[ "$gpg_verified" == "true" ]]; then
         # Add HashiCorp repository
         echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
           sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
@@ -119,11 +150,22 @@ install() {
     if command_exists kubectl; then
       print_warning "kubectl already installed"
     else
+      # SECURITY: Enforce HTTPS+TLS1.2 for all kubectl downloads (C2/H7 fix)
       local KUBECTL_VERSION
-      KUBECTL_VERSION=$(curl --max-time 30 --retry 2 -L -s https://dl.k8s.io/release/stable.txt 2>/dev/null)
-      if curl --max-time 120 --retry 2 -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" 2>/dev/null; then
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
+      KUBECTL_VERSION=$(curl --proto '=https' --tlsv1.2 -fsSL \
+        --max-time 30 --connect-timeout 30 \
+        https://dl.k8s.io/release/stable.txt 2>/dev/null)
+
+      local temp_bin
+      temp_bin=$(create_secure_temp_file) || return 1
+      setup_cleanup_trap "$temp_bin"
+
+      if curl --proto '=https' --tlsv1.2 -fsSL \
+         --max-time 120 --connect-timeout 30 \
+         -o "$temp_bin" \
+         "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" 2>/dev/null; then
+        chmod +x "$temp_bin"
+        sudo mv "$temp_bin" /usr/local/bin/kubectl
         print_success "kubectl installed"
       else
         print_warning "Failed to install kubectl"
@@ -131,6 +173,7 @@ install() {
     fi
 
     # Helm
+    # SECURITY: Dynamic installer, HTTPS enforcement with secure temp file (C2/C5 fix)
     print_status "Installing Helm..."
     if command_exists helm; then
       # Use timeout for version check to avoid hanging
@@ -138,14 +181,21 @@ install() {
       helm_version=$(timeout 3 bash -c 'helm version --short 2>&1' 2>/dev/null | head -n1 || echo "version unknown")
       print_warning "Helm already installed: ${helm_version}"
     else
-      if curl --max-time 60 --retry 2 -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 2>/dev/null; then
-        chmod 700 get_helm.sh
+      local temp_installer
+      temp_installer=$(create_secure_temp_file) || return 1
+      setup_cleanup_trap "$temp_installer"
+
+      # SECURITY: Enforce HTTPS+TLS1.2, standardized timeout (C2/H7 fix)
+      # Note: get-helm-3 is dynamic installer from official Helm repo (accepted risk)
+      if curl --proto '=https' --tlsv1.2 -fsSL \
+         --max-time 120 --connect-timeout 30 \
+         -o "$temp_installer" \
+         https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 2>/dev/null; then
+        chmod 700 "$temp_installer"
         # Run install script with timeout and check exit status
-        if timeout 180 bash get_helm.sh 2>/dev/null; then
-          rm -f get_helm.sh
-          print_success "Helm installed"
+        if timeout 180 bash "$temp_installer" 2>/dev/null; then
+          print_success "Helm installed (dynamic installer, HTTPS verified)"
         else
-          rm -f get_helm.sh
           print_warning "Failed to install Helm (timeout or error)"
         fi
       else
