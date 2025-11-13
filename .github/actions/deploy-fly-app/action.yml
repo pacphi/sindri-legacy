@@ -145,6 +145,27 @@ runs:
           fi
         done
 
+    - name: Prepare fly.toml configuration
+      shell: bash
+      run: |
+        echo "Preparing fly.toml configuration..."
+        # Set required environment variables for prepare-fly-config.sh
+        export APP_NAME="${{ inputs.app-name }}"
+        export REGION="${{ inputs.region }}"
+        export VOLUME_NAME="${{ inputs.volume-name }}"
+        export VOLUME_SIZE="${{ inputs.volume-size }}"
+
+        # Prepare the configuration with CI mode if needed
+        if [ "${{ inputs.ci-mode }}" = "true" ]; then
+          echo "Preparing fly.toml with CI mode (health checks disabled)..."
+          ./scripts/prepare-fly-config.sh --ci-mode
+        else
+          echo "Preparing fly.toml for production mode..."
+          ./scripts/prepare-fly-config.sh
+        fi
+
+        echo "✓ fly.toml prepared"
+
     - name: Set secrets
       shell: bash
       env:
