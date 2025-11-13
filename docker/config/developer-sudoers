@@ -25,6 +25,11 @@ developer ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG docker developer
 # Tee for writing privileged files
 developer ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/*
 developer ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/share/*
+developer ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/local/bin/*
+
+# Chmod for system scripts and binaries (execute permission only)
+developer ALL=(ALL) NOPASSWD: /bin/chmod +x /etc/profile.d/*
+developer ALL=(ALL) NOPASSWD: /bin/chmod +x /usr/local/bin/*
 
 # Explicitly deny everything else
 developer ALL=(ALL) !ALL
