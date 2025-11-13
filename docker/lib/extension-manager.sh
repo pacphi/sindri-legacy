@@ -459,6 +459,12 @@ list_extensions() {
         print_success "Active Extensions (in execution order):"
         local position=1
         for ext_name in "${active_extensions[@]}"; do
+            # DEFENSIVE: Skip empty extension names (edge case protection)
+            if [[ -z "$ext_name" ]]; then
+                print_debug "Skipping empty extension name in manifest"
+                continue
+            fi
+
             # SECURITY: Skip invalid extension names
             if ! validate_extension_name "$ext_name" 2>/dev/null; then
                 print_warning "Skipping invalid extension name: $ext_name"

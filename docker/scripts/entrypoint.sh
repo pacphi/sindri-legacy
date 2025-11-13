@@ -19,7 +19,9 @@ DEVELOPER_HOME_RUNTIME="$WORKSPACE_DIR/$DEVELOPER_USER"
 SKEL_DIR="/etc/skel"
 WORKSPACE_BIN_DIR="$WORKSPACE_DIR/bin"
 SYSTEM_BIN_DIR="$WORKSPACE_DIR/.system/bin"
-CI_MODE="${CI_MODE:-false}"  # Default to production mode if not set
+
+# Export CI_MODE so child processes (extension-manager, extensions) can access it
+export CI_MODE="${CI_MODE:-false}"  # Default to production mode if not set
 
 # ==============================================================================
 # Functions
