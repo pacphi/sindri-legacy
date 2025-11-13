@@ -13,6 +13,9 @@ fi
 
 # Activate mise if available
 if command -v mise >/dev/null 2>&1; then
+    # SECURITY: Set PROMPT_COMMAND to avoid unbound variable error with set -u
+    # mise activate bash generates code that references PROMPT_COMMAND before using :-
+    export PROMPT_COMMAND="${PROMPT_COMMAND:-}"
     if mise_activation=$(timeout 3 mise activate bash 2>/dev/null); then
         eval "$mise_activation"
     fi

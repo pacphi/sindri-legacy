@@ -432,6 +432,11 @@ EOF
 # This function evaluates mise activation and adds shims/installs to PATH
 activate_mise_environment() {
     if command_exists mise; then
+        # SECURITY: Set PROMPT_COMMAND to avoid unbound variable error with set -u
+        # mise activate bash generates code that references PROMPT_COMMAND before using :-
+        # This is consumed by bash itself (not Sindri code) for automatic environment updates
+        export PROMPT_COMMAND="${PROMPT_COMMAND:-}"
+
         # Activate mise with error capture and timeout protection
         local activation_output
         if activation_output=$(timeout 3 mise activate bash 2>&1); then
