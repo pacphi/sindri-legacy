@@ -48,6 +48,18 @@ inputs:
     description: "Enable CI mode (uses CI manifest, skips heavy installations). Default: false for production safety."
     required: false
     default: "false"
+  vm-memory:
+    description: "VM memory (e.g., '4096mb', '4gb', or '4096'). If empty, uses default from fly.toml."
+    required: false
+    default: ""
+  vm-cpu-kind:
+    description: "CPU kind: 'shared' or 'performance'. If empty, uses default from fly.toml."
+    required: false
+    default: ""
+  vm-cpu-count:
+    description: "Number of CPUs. If empty, uses default from fly.toml."
+    required: false
+    default: ""
 
 outputs:
   deployment-status:
@@ -156,6 +168,20 @@ runs:
         export REGION="${{ inputs.region }}"
         export VOLUME_NAME="${{ inputs.volume-name }}"
         export VOLUME_SIZE="${{ inputs.volume-size }}"
+
+        # Set VM configuration if provided (overrides defaults)
+        if [ -n "${{ inputs.vm-memory }}" ]; then
+          export VM_MEMORY="${{ inputs.vm-memory }}"
+          echo "  VM Memory override: $VM_MEMORY"
+        fi
+        if [ -n "${{ inputs.vm-cpu-kind }}" ]; then
+          export CPU_KIND="${{ inputs.vm-cpu-kind }}"
+          echo "  CPU Kind override: $CPU_KIND"
+        fi
+        if [ -n "${{ inputs.vm-cpu-count }}" ]; then
+          export CPU_COUNT="${{ inputs.vm-cpu-count }}"
+          echo "  CPU Count override: $CPU_COUNT"
+        fi
 
         # Prepare the configuration with CI mode if needed
         if [ "${{ inputs.ci-mode }}" = "true" ]; then

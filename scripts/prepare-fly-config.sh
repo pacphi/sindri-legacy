@@ -35,6 +35,21 @@ CPU_COUNT="${CPU_COUNT:-4}"
 SSH_EXTERNAL_PORT="${SSH_EXTERNAL_PORT:-10022}"
 CI_MODE="false"
 
+# Normalize VM_MEMORY format to include units (mb or gb)
+# Accepts: "4096", "4096mb", "4gb" → Outputs: "4096mb" or "4gb"
+normalize_memory_format() {
+  local memory="$1"
+  # If already has units (mb, gb, MB, GB), use as-is
+  if [[ "$memory" =~ (mb|MB|gb|GB)$ ]]; then
+    echo "$memory"
+  else
+    # No units specified, assume MB
+    echo "${memory}mb"
+  fi
+}
+
+VM_MEMORY=$(normalize_memory_format "$VM_MEMORY")
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -78,6 +93,8 @@ fi
 echo "Preparing fly.toml configuration..."
 echo "  App name: $APP_NAME"
 echo "  Region: $REGION"
+echo "  VM Memory: $VM_MEMORY"
+echo "  CPU: $CPU_COUNT x $CPU_KIND"
 echo "  CI Mode: $CI_MODE"
 
 # Create backup of original fly.toml if not already backed up

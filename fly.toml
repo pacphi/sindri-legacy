@@ -106,11 +106,11 @@ primary_region = "{{REGION}}"
 
 # VM resource allocation
 # Start small and scale up if needed
-[vm]
+[[vm]]
   # CPU and memory settings (adjust based on needs)
   cpu_kind = "{{CPU_KIND}}"    # Options: "shared", "performance"
   cpus = {{CPU_COUNT}}         # Number of CPUs
-  memory = "{{VM_MEMORY}}mb"
+  memory = "{{VM_MEMORY}}"     # Format: "4gb" or "4096mb" (Fly.io accepts both)
   # Swap space for memory pressure relief (2GB)
   swap_size_mb = 2048
 

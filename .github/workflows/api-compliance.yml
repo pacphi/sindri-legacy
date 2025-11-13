@@ -54,51 +54,51 @@ jobs:
         extension:
           # Heavy language runtimes - large toolchain downloads, parallel component installs
           - name: "rust"
-            memory: "8192"
+            memory: "8gb"
             cpu_kind: "performance"
             cpu_count: "4"
             ssh_timeout: "180"
           # Medium language runtimes - moderate downloads, multiple components
           - name: "golang"
-            memory: "6144"
+            memory: "6gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "120"
           - name: "python"
-            memory: "6144"
+            memory: "6gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "120"
           # Light language runtimes - fast npm installs
           - name: "nodejs"
-            memory: "4096"
+            memory: "4gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "120"
           # Complex multi-step installs - apt packages + binary downloads
           - name: "docker"
-            memory: "6144"
+            memory: "6gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "120"
           - name: "monitoring"
-            memory: "6144"
+            memory: "6gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "120"
           # Light utilities
           - name: "tmux-workspace"
-            memory: "4096"
+            memory: "4gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "90"
           - name: "openskills"
-            memory: "4096"
+            memory: "4gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "90"
           - name: "agent-manager"
-            memory: "4096"
+            memory: "4gb"
             cpu_kind: "shared"
             cpu_count: "2"
             ssh_timeout: "90"
@@ -131,6 +131,9 @@ jobs:
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"
+          vm-memory: ${{ matrix.extension.memory }}
+          vm-cpu-kind: ${{ matrix.extension.cpu_kind }}
+          vm-cpu-count: ${{ matrix.extension.cpu_count }}
 
       # NEW: Using composite action for waiting
       - name: Wait for deployment
@@ -193,13 +196,16 @@ jobs:
           # DEFENSIVE: Fail if memory is less than expected
           actual_memory_mb=$(flyctl status -a "$app_name" --json | jq -r '.Machines[0].config.guest.memory_mb // 0')
 
+          # Extract numeric value from expected_memory (handles "4096mb", "4gb", or "4096")
+          expected_memory_numeric=$(echo "$expected_memory" | sed 's/[^0-9]//g')
+
           echo ""
-          if [ "$actual_memory_mb" -lt "$expected_memory" ]; then
-            echo "❌ ERROR: VM has only ${actual_memory_mb} MB, expected ${expected_memory} MB"
+          if [ "$actual_memory_mb" -lt "$expected_memory_numeric" ]; then
+            echo "❌ ERROR: VM has only ${actual_memory_mb} MB, expected ${expected_memory} (${expected_memory_numeric} MB)"
             echo "This will likely cause OOM failures during installation"
             exit 1
           else
-            echo "✅ Memory allocation verified: ${actual_memory_mb} MB"
+            echo "✅ Memory allocation verified: ${actual_memory_mb} MB (expected: ${expected_memory})"
           fi
 
       - name: Validate bash environment

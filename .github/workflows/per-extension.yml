@@ -54,33 +54,37 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
+        # VM resource allocation (aligned with api-compliance.yml):
+        # - Heavy extensions (rust, ruby, jvm, dotnet): 8GB RAM, performance CPUs
+        # - Medium extensions (golang, python, docker, infra-tools, cloud-tools): 6GB RAM
+        # - Light extensions (nodejs, php, utilities): 4GB RAM
         extension:
           # mise-powered language extensions
-          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m" }
-          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m" }
-          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m" }
-          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m" }
-          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs" }
+          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m", memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m", memory: "8gb", cpu_kind: "performance", cpu_count: "4" }
+          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m", memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
           # Claude AI extensions (claude pre-installed in Docker image)
-          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m" }
-          - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs" }
-          # Traditional extensions (unchanged)
-          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2 }
-          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }
-          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m" }
-          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m" }
+          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          # Traditional extensions
+          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2, memory: "8gb", cpu_kind: "performance", cpu_count: "4" }
+          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m", memory: "8gb", cpu_kind: "performance", cpu_count: "4" }
+          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m", memory: "8gb", cpu_kind: "performance", cpu_count: "4" }
           # Infrastructure
-          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
-          - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5 }
-          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5 }
-          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang" }
+          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m", memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5, memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5, memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang", memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
           # Utilities
-          - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5 }
-          - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs" }
-          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5 }
-          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m" }
-          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m" }
-          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m" }
+          - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5, memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs", memory: "6gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5, memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
+          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m", memory: "4gb", cpu_kind: "shared", cpu_count: "2" }
 
     steps:
       - name: Checkout repository
@@ -113,6 +117,9 @@ jobs:
           extension-name: ${{ matrix.extension.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
+          vm-memory: ${{ matrix.extension.memory }}
+          vm-cpu-kind: ${{ matrix.extension.cpu_kind }}
+          vm-cpu-count: ${{ matrix.extension.cpu_count }}
 
       # NEW: Using composite action for deployment
       - name: Deploy test environment
@@ -125,6 +132,9 @@ jobs:
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"
+          vm-memory: ${{ matrix.extension.memory }}
+          vm-cpu-kind: ${{ matrix.extension.cpu_kind }}
+          vm-cpu-count: ${{ matrix.extension.cpu_count }}
 
       # NEW: Using composite action for waiting
       - name: Wait for deployment

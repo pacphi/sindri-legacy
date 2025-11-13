@@ -25,6 +25,33 @@ CI_MODE=true ./scripts/vm-setup.sh --app-name <test-name>
 flyctl deploy --strategy immediate --wait-timeout 60s  # Skip health checks
 ```
 
+### VM Configuration (fly.toml)
+
+**CRITICAL:** VM resource configuration MUST use double brackets `[[vm]]`, not single brackets `[vm]`.
+
+```toml
+# ✅ CORRECT - Double brackets (TOML array of tables)
+[[vm]]
+  cpu_kind = "shared"      # Options: "shared", "performance"
+  cpus = 2                 # Number of CPUs (1-8)
+  memory = "4gb"           # Format: "4096mb" or "4gb"
+  swap_size_mb = 2048
+
+# ❌ WRONG - Single brackets (silently ignored, causes 256MB default!)
+[vm]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "4gb"
+```
+
+**Resource Guidelines:**
+
+- **Light extensions** (nodejs, php, utilities): 4GB RAM, 2 shared CPUs
+- **Medium extensions** (golang, python, docker): 6GB RAM, 2 shared CPUs
+- **Heavy extensions** (rust, ruby, jvm, dotnet): 8GB RAM, 4 performance CPUs
+
+See [docs/FLY_TOML_CONFIG.md](docs/FLY_TOML_CONFIG.md) for complete configuration guide.
+
 ### On-VM Commands
 
 ```bash
