@@ -147,6 +147,8 @@ runs:
 
     - name: Prepare fly.toml configuration
       shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
         echo "Preparing fly.toml configuration..."
         # Set required environment variables for prepare-fly-config.sh
