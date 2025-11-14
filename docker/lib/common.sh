@@ -325,34 +325,13 @@ setup_tool_path() {
 
     print_debug "Setting up PATH for $tool_name"
 
-    # Create /etc/profile.d/ script for login shells (skip in CI mode)
-    if ! is_ci_mode; then
-        local profile_script="/etc/profile.d/${tool_name,,}.sh"
-        if [[ ! -f "$profile_script" ]]; then
-            if {
-                echo "#!/bin/bash"
-                echo "# $tool_name environment configuration"
-                echo "$path_export"
-                [[ -n "$init_command" ]] && echo "$init_command"
-            } | sudo tee "$profile_script" > /dev/null 2>&1; then
-                if sudo chmod +x "$profile_script" 2>/dev/null; then
-                    print_debug "Created profile.d script: $profile_script"
-                else
-                    print_warning "Failed to make profile.d script executable (non-critical)"
-                fi
-            else
-                print_warning "Failed to create profile.d script (non-critical in CI mode)"
-            fi
-        fi
-    else
-        print_debug "CI mode - skipping profile.d script creation for $tool_name"
-    fi
-
-    # Add to SSH environment
+    # Add to SSH environment (for non-interactive sessions)
+    # This provides environment setup for 'flyctl ssh console --command' usage
     add_to_ssh_environment "$path_export" "$tool_name"
     [[ -n "$init_command" ]] && add_to_ssh_environment "$init_command" "$tool_name"
 
-    # Add to ~/.bashrc if not already there (prevent duplicates)
+    # Add to ~/.bashrc if not already there (for interactive sessions)
+    # Prevent duplicates by checking for the marker comment
     if ! grep -q "$tool_name environment configuration" "$HOME/.bashrc" 2>/dev/null; then
         {
             echo ""
@@ -362,6 +341,10 @@ setup_tool_path() {
         } >> "$HOME/.bashrc"
         print_debug "Added to ~/.bashrc"
     fi
+
+    # Note: Removed /etc/profile.d/ creation (required sudo, redundant with bashrc + SSH env)
+    # The combination of ~/.bashrc (interactive) and SSH environment (non-interactive)
+    # provides complete coverage without requiring elevated privileges
 }
 
 # Function to create wrapper script for tools that need environment sourcing
@@ -374,14 +357,16 @@ create_tool_wrapper() {
     local actual_path="$2"
     local mode="${3:-static}"  # "static" (with path) or "dynamic" (via PATH)
     local env_file="/etc/profile.d/00-ssh-environment.sh"
-    local wrapper_path="/usr/local/bin/$tool_name"
+    local wrapper_path="/workspace/bin/$tool_name"
 
     print_debug "Creating wrapper for $tool_name (mode: $mode)"
 
-    # In CI mode, skip wrapper creation (tools work via PATH and mise activation)
-    if is_ci_mode; then
-        print_debug "CI mode - skipping wrapper creation for $tool_name"
-        return 0
+    # Ensure /workspace/bin exists (should already exist from setup)
+    if [[ ! -d "/workspace/bin" ]]; then
+        mkdir -p "/workspace/bin" 2>/dev/null || {
+            print_warning "Failed to create /workspace/bin (may not have permissions yet)"
+            return 0  # Non-fatal, wrapper will be created later if needed
+        }
     fi
 
     # Skip if wrapper already exists
@@ -404,19 +389,17 @@ create_tool_wrapper() {
             "" \
             "# Find and execute command via PATH" \
             "exec $tool_name \"\$@\"" \
-            | sudo tee "$wrapper_path" > /dev/null 2>&1; then
-            if sudo chmod +x "$wrapper_path" 2>/dev/null; then
+            > "$wrapper_path" 2>/dev/null; then
+            if chmod +x "$wrapper_path" 2>/dev/null; then
                 print_success "Created dynamic wrapper: $wrapper_path"
                 return 0
             else
-                print_error "Failed to make wrapper executable: $wrapper_path"
-                print_debug "Check sudo permissions in /etc/sudoers.d/developer"
-                return 1
+                print_warning "Failed to make wrapper executable: $wrapper_path"
+                return 0  # Non-fatal, tool still works via PATH
             fi
         else
-            print_error "Failed to create wrapper: $wrapper_path"
-            print_debug "Check sudo permissions in /etc/sudoers.d/developer"
-            return 1
+            print_warning "Failed to create wrapper: $wrapper_path"
+            return 0  # Non-fatal, tool still works via PATH
         fi
     else
         # Static mode: use explicit path
@@ -440,19 +423,17 @@ create_tool_wrapper() {
             "" \
             "# Execute actual command with all arguments" \
             "exec \"$actual_path\" \"\$@\"" \
-            | sudo tee "$wrapper_path" > /dev/null 2>&1; then
-            if sudo chmod +x "$wrapper_path" 2>/dev/null; then
+            > "$wrapper_path" 2>/dev/null; then
+            if chmod +x "$wrapper_path" 2>/dev/null; then
                 print_debug "Created static wrapper: $wrapper_path -> $actual_path"
                 return 0
             else
-                print_error "Failed to make wrapper executable: $wrapper_path"
-                print_debug "Check sudo permissions in /etc/sudoers.d/developer"
-                return 1
+                print_warning "Failed to make wrapper executable: $wrapper_path"
+                return 0  # Non-fatal, tool still works via PATH
             fi
         else
-            print_error "Failed to create wrapper: $wrapper_path"
-            print_debug "Check sudo permissions in /etc/sudoers.d/developer"
-            return 1
+            print_warning "Failed to create wrapper: $wrapper_path"
+            return 0  # Non-fatal, tool still works via PATH
         fi
     fi
 }
