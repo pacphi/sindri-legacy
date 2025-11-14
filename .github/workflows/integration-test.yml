@@ -56,9 +56,9 @@ jobs:
           extension-name: "integration"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
-          vm-memory: "1024"
+          vm-memory: "4gb"
           vm-cpu-kind: "shared"
-          vm-cpu-count: "1"
+          vm-cpu-count: "2"
           volume-size: "5"
 
       # Using composite action for deployment
@@ -72,6 +72,9 @@ jobs:
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"
+          vm-memory: "4gb"
+          vm-cpu-kind: "shared"
+          vm-cpu-count: "2"
 
       # Using composite action for waiting
       - name: Wait for deployment

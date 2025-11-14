@@ -196,8 +196,20 @@ jobs:
           # DEFENSIVE: Fail if memory is less than expected
           actual_memory_mb=$(flyctl status -a "$app_name" --json | jq -r '.Machines[0].config.guest.memory_mb // 0')
 
-          # Extract numeric value from expected_memory (handles "4096mb", "4gb", or "4096")
-          expected_memory_numeric=$(echo "$expected_memory" | sed 's/[^0-9]//g')
+          # Convert expected_memory to MB for comparison (handles "4096mb", "4gb", or "4096")
+          if [[ "$expected_memory" =~ ([0-9]+)gb$ ]]; then
+            # Convert GB to MB
+            expected_memory_numeric=$((${BASH_REMATCH[1]} * 1024))
+          elif [[ "$expected_memory" =~ ([0-9]+)mb$ ]]; then
+            # Already in MB
+            expected_memory_numeric=${BASH_REMATCH[1]}
+          elif [[ "$expected_memory" =~ ^[0-9]+$ ]]; then
+            # Assume MB if no unit
+            expected_memory_numeric=$expected_memory
+          else
+            echo "❌ ERROR: Invalid memory format: $expected_memory"
+            exit 1
+          fi
 
           echo ""
           if [ "$actual_memory_mb" -lt "$expected_memory_numeric" ]; then

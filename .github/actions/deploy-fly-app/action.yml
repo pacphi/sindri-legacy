@@ -290,6 +290,69 @@ runs:
 
           if eval $DEPLOY_CMD; then
             echo "✅ Deployment successful"
+
+            # Update machine configuration after deployment
+            # This is required when using --image flag as it may not respect fly.toml VM settings
+            if [ -n "${{ inputs.vm-memory }}" ] || [ -n "${{ inputs.vm-cpu-count }}" ]; then
+              echo ""
+              echo "Updating machine configuration..."
+
+              # Get machine ID
+              machine_id=$(flyctl machine list --app ${{ inputs.app-name }} --json | jq -r '.[0].id')
+
+              if [ -n "$machine_id" ] && [ "$machine_id" != "null" ]; then
+                # Build update command with specified resources
+                UPDATE_CMD="flyctl machine update $machine_id --app ${{ inputs.app-name }}"
+
+                # Add memory if specified (convert gb to mb for flyctl)
+                if [ -n "${{ inputs.vm-memory }}" ]; then
+                  memory_value="${{ inputs.vm-memory }}"
+                  # Convert gb to mb if needed (flyctl machine update expects MB)
+                  if [[ "$memory_value" =~ ([0-9]+)gb$ ]]; then
+                    memory_mb=$((${BASH_REMATCH[1]} * 1024))
+                    UPDATE_CMD="$UPDATE_CMD --memory $memory_mb"
+                  elif [[ "$memory_value" =~ ([0-9]+)mb$ ]]; then
+                    memory_mb=${BASH_REMATCH[1]}
+                    UPDATE_CMD="$UPDATE_CMD --memory $memory_mb"
+                  elif [[ "$memory_value" =~ ^[0-9]+$ ]]; then
+                    # Assume MB if no unit
+                    UPDATE_CMD="$UPDATE_CMD --memory $memory_value"
+                  fi
+                fi
+
+                # Add CPUs if specified
+                if [ -n "${{ inputs.vm-cpu-count }}" ]; then
+                  UPDATE_CMD="$UPDATE_CMD --cpus ${{ inputs.vm-cpu-count }}"
+                fi
+
+                # Add CPU kind if specified
+                if [ -n "${{ inputs.vm-cpu-kind }}" ]; then
+                  UPDATE_CMD="$UPDATE_CMD --cpu-kind ${{ inputs.vm-cpu-kind }}"
+                fi
+
+                echo "Running: $UPDATE_CMD"
+                if eval $UPDATE_CMD --yes; then
+                  echo "✅ Machine configuration updated"
+
+                  # Wait for machine to restart with new configuration
+                  echo "Waiting for machine to restart with new configuration..."
+                  sleep 10
+
+                  # Verify the update
+                  echo "Verifying machine configuration..."
+                  flyctl machine status $machine_id --app ${{ inputs.app-name }} --json | jq '{
+                    memory_mb: .config.guest.memory_mb,
+                    cpus: .config.guest.cpus,
+                    cpu_kind: .config.guest.cpu_kind
+                  }'
+                else
+                  echo "⚠️  Failed to update machine configuration, continuing with defaults"
+                fi
+              else
+                echo "⚠️  Could not get machine ID, skipping configuration update"
+              fi
+            fi
+
             echo "status=success" >> $GITHUB_OUTPUT
             exit 0
           else
