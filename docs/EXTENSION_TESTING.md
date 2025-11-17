@@ -599,6 +599,7 @@ Sindri uses a 4-tier resource classification system to optimize VM resources bas
 ### Extension Resource Tier Classifications
 
 **Minimal Tier** (1GB/1CPU):
+
 - tmux-workspace
 - context-loader
 - monitoring
@@ -606,6 +607,7 @@ Sindri uses a 4-tier resource classification system to optimize VM resources bas
 - github-cli
 
 **Standard Tier** (4GB/2CPU):
+
 - nodejs
 - python
 - golang
@@ -616,6 +618,7 @@ Sindri uses a 4-tier resource classification system to optimize VM resources bas
 - playwright
 
 **Heavy Tier** (8GB/4CPU):
+
 - rust (compilation-heavy)
 - ruby (Rails + gems)
 - jvm (multiple JDK versions)
@@ -626,6 +629,7 @@ Sindri uses a 4-tier resource classification system to optimize VM resources bas
 - ai-tools (multiple AI CLIs)
 
 **XHeavy Tier** (16GB/4CPU):
+
 - xfce-ubuntu (desktop environment)
 - guacamole (remote desktop gateway)
 - extension-combinations (multiple extensions simultaneously)

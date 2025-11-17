@@ -26,6 +26,7 @@ Understanding Fly.io's billing model helps optimize Sindri's infrastructure cost
 Sindri uses a 4-tier resource classification system. Here are cost estimates for each tier:
 
 **Minimal Tier** (1x shared-cpu, 1GB RAM, 10GB storage)
+
 - **Use Case**: Lightweight utilities (tmux, monitoring, agent-manager, context-loader, github-cli)
 - VM running 10% time: ~$2.10/month
 - VM running 25% time: ~$3.25/month
@@ -33,6 +34,7 @@ Sindri uses a 4-tier resource classification system. Here are cost estimates for
 - VM running 100% time: ~$10.75/month
 
 **Standard Tier** (2x shared-cpu, 4GB RAM, 20GB storage)
+
 - **Use Case**: Standard packages (nodejs, python, golang, php, playwright, claude-marketplace)
 - VM running 10% time: ~$5.50/month
 - VM running 25% time: ~$10.25/month
@@ -40,12 +42,14 @@ Sindri uses a 4-tier resource classification system. Here are cost estimates for
 - VM running 100% time: ~$36.50/month
 
 **Heavy Tier** (4x performance-cpu, 8GB RAM, 20GB storage)
+
 - **Use Case**: Compilation & containers (rust, ruby, jvm, dotnet, docker, infra-tools, cloud-tools, ai-tools)
 - VM running 25% time: ~$38.75/month
 - VM running 50% time: ~$76.00/month
 - VM running 100% time: ~$150.50/month
 
 **XHeavy Tier** (4x performance-cpu, 16GB RAM, 30GB storage)
+
 - **Use Case**: Desktop environments & multiple extensions (xfce-ubuntu, guacamole, extension-combinations)
 - VM running 25% time: ~$60.50/month
 - VM running 50% time: ~$119.50/month
@@ -61,6 +65,7 @@ Test workflows use resource tiers dynamically based on extension requirements:
 - **XHeavy tier tests**: ~$0.90 per test run (60-90 min)
 
 **Monthly CI estimates** (based on typical usage):
+
 - 100 commits/month with per-extension tests: ~$45-60/month
 - Weekly comprehensive tests (4 runs/month): ~$8-12/month
 - **Total estimated CI costs**: ~$55-75/month
