@@ -1,0 +1,204 @@
+#!/bin/bash
+#
+# Claude Code Authentication Extension
+#
+# Handles authentication for Claude Code CLI using encrypted secrets.
+# Claude Code CLI is pre-installed in the base Docker image.
+# This extension only manages authentication configuration.
+#
+
+# Source common library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/common.sh"
+
+# ==============================================================================
+# Extension Metadata
+# ==============================================================================
+
+EXT_NAME="Claude Code"
+EXT_DESCRIPTION="Claude Code CLI authentication"
+EXT_CATEGORY="ai-dev-tools"
+EXT_REQUIRED_SECRETS="anthropic_api_key"
+EXT_API_VERSION="2.0"
+
+# ==============================================================================
+# Extension API Functions
+# ==============================================================================
+
+prerequisites() {
+    log_section "Checking Claude Code prerequisites"
+
+    # Check if Claude CLI is available
+    if ! command -v claude &>/dev/null; then
+        log_error "Claude Code CLI not found (should be pre-installed in base image)"
+        return 1
+    fi
+
+    log_success "Claude Code CLI found: $(claude --version 2>/dev/null || echo 'installed')"
+
+    # Check for required secrets (warning only)
+    if [ -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        source "$DEVELOPER_HOME/.secrets/lib.sh" 2>/dev/null || return 0
+
+        if ! has_secret "anthropic_api_key"; then
+            log_warn "Required secret 'anthropic_api_key' not found"
+            log_info "Add with: flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>"
+            log_info "Authentication will be skipped"
+        else
+            log_success "API key available in encrypted secrets"
+        fi
+    else
+        log_warn "Secrets library not yet available"
+        log_info "Secrets will be configured during container startup"
+    fi
+
+    return 0
+}
+
+install() {
+    log_section "Installing Claude Code"
+
+    # Claude CLI is pre-installed in the base image
+    log_info "Claude Code CLI is pre-installed in base Docker image"
+    log_success "No installation needed"
+
+    return 0
+}
+
+configure() {
+    log_section "Configuring Claude Code authentication"
+
+    # Check if secrets library exists
+    if [ ! -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        log_warn "Secrets library not found - skipping authentication"
+        log_info "This is normal during extension installation"
+        log_info "Authentication will happen during container startup"
+        return 0
+    fi
+
+    # Load secrets library
+    source "$DEVELOPER_HOME/.secrets/lib.sh"
+
+    # Authenticate if API key available
+    if has_secret "anthropic_api_key"; then
+        log_info "Authenticating Claude Code with API key..."
+
+        # Export API key for claude auth command
+        local api_key
+        api_key=$(get_secret "anthropic_api_key")
+
+        # Authenticate Claude (runs as developer user)
+        if ANTHROPIC_API_KEY="$api_key" claude auth login --non-interactive 2>/dev/null; then
+            log_success "Claude Code authenticated successfully"
+        else
+            # Try without --non-interactive flag
+            if echo "$api_key" | claude auth login 2>/dev/null; then
+                log_success "Claude Code authenticated successfully"
+            else
+                log_warn "Claude authentication may require manual intervention"
+                log_info "Run 'claude' to complete authentication interactively"
+            fi
+        fi
+    else
+        log_warn "No API key found - skipping Claude authentication"
+        log_info "Add API key with: flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>"
+        log_info "Then run: extension-manager configure claude"
+    fi
+
+    return 0
+}
+
+validate() {
+    log_section "Validating Claude Code installation"
+
+    # Check Claude CLI availability
+    if ! command -v claude &>/dev/null; then
+        log_error "Claude Code CLI not available"
+        return 1
+    fi
+
+    log_success "Claude Code CLI is available"
+
+    # Check if authenticated (try to get current user)
+    if claude whoami &>/dev/null; then
+        log_success "Claude Code is authenticated"
+    else
+        log_warn "Claude Code not authenticated"
+        log_info "Authentication happens automatically when API key is available"
+    fi
+
+    return 0
+}
+
+status() {
+    log_section "Claude Code Status"
+
+    # Check CLI availability
+    if command -v claude &>/dev/null; then
+        echo "  CLI:            Available ($(claude --version 2>/dev/null || echo 'installed'))"
+    else
+        echo "  CLI:            Not found (ERROR)"
+    fi
+
+    # Check authentication status
+    if claude whoami &>/dev/null 2>&1; then
+        echo "  Authentication: Authenticated"
+    else
+        echo "  Authentication: Not authenticated"
+    fi
+
+    # Check for API key in secrets
+    if [ -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        source "$DEVELOPER_HOME/.secrets/lib.sh" 2>/dev/null
+
+        if has_secret "anthropic_api_key" 2>/dev/null; then
+            echo "  API Key:        Available (encrypted)"
+        else
+            echo "  API Key:        Not found"
+        fi
+    else
+        echo "  Secrets:        Not configured yet"
+    fi
+
+    return 0
+}
+
+remove() {
+    log_section "Removing Claude Code configuration"
+
+    # Clear authentication
+    if [ -d "$DEVELOPER_HOME/.claude" ]; then
+        log_info "Clearing Claude authentication..."
+        rm -rf "$DEVELOPER_HOME/.claude/auth" 2>/dev/null || true
+        log_success "Authentication cleared"
+    fi
+
+    # Note: We don't remove the CLI binary since it's baked into the base image
+    log_info "Claude Code CLI remains in base image (not removed)"
+
+    return 0
+}
+
+upgrade() {
+    log_section "Upgrading Claude Code"
+
+    # Claude CLI is baked into the Docker image
+    log_info "Claude Code CLI is baked into the Docker base image"
+    log_info "To upgrade, rebuild the Docker image with the latest installer"
+    log_success "No upgrade action needed"
+
+    return 0
+}
+
+# ==============================================================================
+# Extension Entry Point
+# ==============================================================================
+
+# If extension is sourced (not executed), make functions available
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+    export -f prerequisites install configure validate status remove upgrade
+else
+    # If executed directly, show error
+    echo "This extension should be loaded via extension-manager, not executed directly"
+    exit 1
+fi

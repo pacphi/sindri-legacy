@@ -138,6 +138,7 @@ The following components are pre-installed in every Sindri instance:
 - **mise** - Unified tool version manager for Node.js, Python, Rust, Go, Ruby
 - **SSH Environment** - Non-interactive session support for CI/CD workflows
 - **Claude Code** - AI-powered development CLI with global preferences
+- **SOPS + age** - Transparent secrets management with automatic encryption
 
 These are baked into the Docker image for faster startup (~10s vs ~90-120s) and improved reliability.
 
@@ -765,6 +766,93 @@ Store user preferences in `/workspace/developer/.claude/CLAUDE.md`:
 - Coding style preferences
 - Git workflow preferences
 - Testing preferences
+
+## Secrets Management
+
+Sindri uses automatic, transparent secrets management with SOPS + age encryption. Secrets are encrypted at rest and never exposed in environment variables or process lists.
+
+### Adding Secrets
+
+Secrets are automatically synced from Fly.io secrets to an encrypted file on every VM boot:
+
+```bash
+# On host machine - set secrets via Fly.io
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a myapp
+flyctl secrets set GITHUB_TOKEN=ghp_... -a myapp
+flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
+
+# VM restarts automatically
+# Secrets are encrypted and tools are pre-authenticated
+```
+
+**Supported Secrets:**
+
+*AI/Development Tools:*
+- `ANTHROPIC_API_KEY` - Claude Code authentication
+- `GITHUB_TOKEN` - GitHub CLI authentication
+- `PERPLEXITY_API_KEY` - Goalie research assistant
+- `OPENROUTER_API_KEY` - OpenRouter API access
+- `GOOGLE_GEMINI_API_KEY` - Gemini CLI
+- `XAI_API_KEY` - xAI Grok SDK
+
+*Cloud Provider Credentials:*
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` - AWS CLI
+- `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` - Azure CLI
+
+### Using Tools with Secrets
+
+```bash
+# SSH to VM
+ssh developer@myapp.fly.dev -p 10022
+
+# Everything just works - secrets already configured
+claude              # Already authenticated
+gh pr create        # Already authenticated
+goalie "research"   # API key pre-configured
+```
+
+### Advanced: Direct Secret Management
+
+```bash
+# View decrypted secrets
+view-secrets
+
+# Edit secrets without VM restart
+edit-secrets
+
+# Load secrets into current shell (temporary)
+load-secrets
+
+# Run command with secrets loaded
+with-secrets some-command
+```
+
+### Security Features
+
+- **Encrypted at rest**: Secrets stored in `~/.secrets/secrets.enc.yaml` (600 permissions)
+- **age encryption**: Modern cryptography, more secure than PGP
+- **No environment exposure**: Secrets never in `ps aux`, `env`, or shell history
+- **No plaintext**: Secrets not stored in `.bashrc` or configuration files
+- **Automatic cleanup**: Environment variables cleared after encryption
+
+### Workflow Example
+
+```bash
+# 1. On host: Add API key
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-abc123 -a sindri-dev
+
+# 2. VM restarts (automatic or manual)
+flyctl machine restart <machine-id> -a sindri-dev
+
+# 3. SSH to VM
+ssh developer@sindri-dev.fly.dev -p 10022
+
+# 4. Use Claude - already authenticated
+claude
+
+# Secret is encrypted in ~/.secrets/secrets.enc.yaml
+# Never appears in environment or process list
+```
 
 ## Common Operations
 

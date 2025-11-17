@@ -21,6 +21,7 @@ EXT_DESCRIPTION="TypeScript, ESLint, Prettier, and Node.js development tools via
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mise"
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_OPTIONAL_SECRETS="perplexity_api_key"
 
 # Initialize extension environment
 extension_init
@@ -98,6 +99,31 @@ configure() {
   if [[ ! -f "$templates_dir/tsconfig.json" ]]; then
     cat "$(dirname "${BASH_SOURCE[0]}")/nodejs-devtools.tsconfig.template" > "$templates_dir/tsconfig.json"
     print_success "Created TypeScript config template"
+  fi
+
+  # Configure goalie if perplexity_api_key is available
+  if [[ -f "$HOME/.secrets/lib.sh" ]]; then
+    source "$HOME/.secrets/lib.sh"
+
+    if has_secret "perplexity_api_key" 2>/dev/null; then
+      print_status "Configuring goalie with Perplexity API key..."
+
+      local api_key
+      api_key=$(get_secret "perplexity_api_key")
+
+      mkdir -p "$HOME/.config/goalie"
+      cat > "$HOME/.config/goalie/config.json" << EOF
+{
+  "api_key": "$api_key",
+  "model": "llama-3.1-sonar-large-128k-online"
+}
+EOF
+      chmod 600 "$HOME/.config/goalie/config.json"
+      print_success "Goalie configured with API key"
+    else
+      print_status "Perplexity API key not found - goalie requires manual configuration"
+      print_status "Add with: flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a <app-name>"
+    fi
   fi
 
   # Create SSH wrappers for tools

@@ -28,6 +28,7 @@ EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="mixed"  # Binary downloads + apt
 EXT_UPGRADE_STRATEGY="automatic"
 EXT_REQUIRED_DOMAINS="awscli.amazonaws.com aka.ms packages.cloud.google.com github.com api.github.com raw.githubusercontent.com aliyuncli.alicdn.com clis.cloud.ibm.com"
+EXT_OPTIONAL_SECRETS="aws_access_key_id,aws_secret_access_key,aws_session_token,azure_client_id,azure_client_secret,azure_tenant_id"
 
 # Initialize extension environment
 extension_init
@@ -251,6 +252,58 @@ configure() {
   if [[ ! -f "$WORKSPACE_DIR/cloud/README.md" ]]; then
     cat "$(dirname "${BASH_SOURCE[0]}")/cloud-tools.readme.template" > "$WORKSPACE_DIR/cloud/README.md"
     print_success "Cloud workspace README created"
+  fi
+
+  # Configure cloud provider credentials from encrypted secrets if available
+  if [[ -f "$HOME/.secrets/lib.sh" ]]; then
+    source "$HOME/.secrets/lib.sh"
+
+    # Configure AWS credentials if available
+    if has_secret "aws_access_key_id" 2>/dev/null && has_secret "aws_secret_access_key" 2>/dev/null; then
+      print_status "Configuring AWS credentials..."
+
+      local access_key_id secret_access_key session_token
+      access_key_id=$(get_secret "aws_access_key_id")
+      secret_access_key=$(get_secret "aws_secret_access_key")
+
+      mkdir -p "$HOME/.aws"
+      cat > "$HOME/.aws/credentials" << EOF
+[default]
+aws_access_key_id = $access_key_id
+aws_secret_access_key = $secret_access_key
+EOF
+
+      # Add session token if available
+      if has_secret "aws_session_token" 2>/dev/null; then
+        session_token=$(get_secret "aws_session_token")
+        echo "aws_session_token = $session_token" >> "$HOME/.aws/credentials"
+      fi
+
+      chmod 600 "$HOME/.aws/credentials"
+      print_success "AWS credentials configured"
+    fi
+
+    # Configure Azure service principal if available
+    if has_secret "azure_client_id" 2>/dev/null && \
+       has_secret "azure_client_secret" 2>/dev/null && \
+       has_secret "azure_tenant_id" 2>/dev/null; then
+      print_status "Configuring Azure credentials..."
+
+      local client_id client_secret tenant_id
+      client_id=$(get_secret "azure_client_id")
+      client_secret=$(get_secret "azure_client_secret")
+      tenant_id=$(get_secret "azure_tenant_id")
+
+      mkdir -p "$HOME/.azure"
+      cat > "$HOME/.azure/credentials" << EOF
+# Source this file to load Azure credentials: source ~/.azure/credentials
+export AZURE_CLIENT_ID=$client_id
+export AZURE_CLIENT_SECRET=$client_secret
+export AZURE_TENANT_ID=$tenant_id
+EOF
+      chmod 600 "$HOME/.azure/credentials"
+      print_success "Azure credentials configured (source ~/.azure/credentials to use)"
+    fi
   fi
 
   print_success "Cloud provider CLIs configured"

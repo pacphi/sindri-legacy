@@ -167,39 +167,16 @@ setup_workspace_bin() {
 }
 
 # ------------------------------------------------------------------------------
-# setup_environment_variables - Configure environment variables for developer user
+# setup_secrets_infrastructure - Setup transparent secrets management with SOPS + age
 # ------------------------------------------------------------------------------
-setup_environment_variables() {
-    if [ -n "$ANTHROPIC_API_KEY" ]; then
-        echo "🔐 Configuring environment variables..."
-        echo "export ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
-        echo "✅ Environment variables configured"
+setup_secrets_infrastructure() {
+    if [ -f "/docker/scripts/setup-secrets.sh" ]; then
+        bash /docker/scripts/setup-secrets.sh
     fi
 }
 
-# ------------------------------------------------------------------------------
-# setup_github_auth - Configure GitHub authentication (token and gh CLI)
-# ------------------------------------------------------------------------------
-setup_github_auth() {
-    if [ -n "$GITHUB_TOKEN" ]; then
-        echo "🔐 Configuring GitHub authentication..."
-
-        echo "export GITHUB_TOKEN='$GITHUB_TOKEN'" >> "$DEVELOPER_HOME_RUNTIME/.bashrc"
-
-        # Create GitHub CLI config for gh commands
-        sudo -u "$DEVELOPER_USER" mkdir -p "$DEVELOPER_HOME_RUNTIME/.config/gh"
-        cat > "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml" << EOF
-github.com:
-    oauth_token: $GITHUB_TOKEN
-    user: $GITHUB_USER
-    git_protocol: https
-EOF
-        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$DEVELOPER_HOME_RUNTIME/.config/gh"
-        chmod 600 "$DEVELOPER_HOME_RUNTIME/.config/gh/hosts.yml"
-
-        echo "✅ GitHub authentication configured"
-    fi
-}
+# Legacy secret handling functions removed - now using encrypted secrets
+# See setup_secrets_infrastructure() for new implementation
 
 # ------------------------------------------------------------------------------
 # setup_git_config - Configure Git user credentials and credential helper
@@ -315,8 +292,7 @@ main() {
     setup_developer_home
     setup_ssh_keys
     setup_workspace_bin
-    setup_environment_variables
-    setup_github_auth
+    setup_secrets_infrastructure
     setup_git_config
     setup_motd
     start_ssh_daemon

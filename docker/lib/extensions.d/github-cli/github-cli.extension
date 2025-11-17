@@ -29,6 +29,7 @@ EXT_DESCRIPTION="GitHub CLI authentication and workflow configuration"
 EXT_CATEGORY="development"
 EXT_INSTALL_METHOD="native"  # Pre-installed in Docker image
 EXT_UPGRADE_STRATEGY="manual"
+EXT_REQUIRED_SECRETS="github_token"
 
 # Initialize extension environment
 extension_init
@@ -53,14 +54,20 @@ prerequisites() {
   version=$(gh version 2>/dev/null | head -n1 || echo "unknown")
   print_success "GitHub CLI found: $version"
 
-  # Check if GITHUB_TOKEN is set
-  if [[ -z "$GITHUB_TOKEN" ]]; then
-    print_warning "GITHUB_TOKEN environment variable not set"
-    print_status "GitHub CLI will require manual authentication"
-    print_status "To set: flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>"
-    print_status "Or run: gh auth login"
+  # Check for required secrets (warning only)
+  if [[ -f "$HOME/.secrets/lib.sh" ]]; then
+    source "$HOME/.secrets/lib.sh" 2>/dev/null || return 0
+
+    if ! has_secret "github_token" 2>/dev/null; then
+      print_warning "Required secret 'github_token' not found"
+      print_status "Add with: flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>"
+      print_status "Or run: gh auth login"
+    else
+      print_success "GitHub token available in encrypted secrets"
+    fi
   else
-    print_success "GITHUB_TOKEN environment variable is set"
+    print_warning "Secrets library not yet available"
+    print_status "Secrets will be configured during container startup"
   fi
 
   print_success "All prerequisites met"
@@ -91,17 +98,35 @@ install() {
 configure() {
   print_status "Configuring GitHub CLI authentication and aliases..."
 
-  # Configure authentication if GITHUB_TOKEN is available
-  if [[ -n "$GITHUB_TOKEN" ]]; then
-    if configure_github_cli; then
-      print_success "GitHub CLI authenticated successfully"
-    else
-      print_warning "GitHub CLI authentication failed"
-      print_status "You may need to run: gh auth login"
-    fi
+  # Check if secrets library exists
+  if [[ ! -f "$HOME/.secrets/lib.sh" ]]; then
+    print_warning "Secrets library not found - skipping authentication"
+    print_status "This is normal during extension installation"
+    print_status "Authentication will happen during container startup"
   else
-    print_warning "No GITHUB_TOKEN found - skipping automatic authentication"
-    print_status "Run 'gh auth login' to authenticate manually"
+    # Load secrets library
+    source "$HOME/.secrets/lib.sh"
+
+    # Configure authentication if github_token is available
+    if has_secret "github_token"; then
+      print_status "Authenticating GitHub CLI with token from encrypted secrets..."
+
+      # Get token from encrypted secrets
+      local github_token
+      github_token=$(get_secret "github_token")
+
+      # Authenticate using token
+      if echo "$github_token" | gh auth login --with-token 2>/dev/null; then
+        print_success "GitHub CLI authenticated successfully"
+      else
+        print_warning "GitHub CLI authentication failed"
+        print_status "You may need to run: gh auth login"
+      fi
+    else
+      print_warning "No github_token found in encrypted secrets"
+      print_status "Add with: flyctl secrets set GITHUB_TOKEN=ghp_... -a <app-name>"
+      print_status "Or run 'gh auth login' to authenticate manually"
+    fi
   fi
 
   # Setup GitHub CLI aliases

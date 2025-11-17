@@ -38,6 +38,9 @@ RUN /docker/scripts/setup-ssh-environment.sh
 # Install Claude Code CLI and create developer configuration
 RUN /docker/scripts/install-claude.sh
 
+# Install SOPS and age for secrets management
+RUN /docker/scripts/install-sops-age.sh
+
 # Setup MOTD banner (shown on every SSH login)
 RUN /docker/scripts/setup-motd.sh
 
