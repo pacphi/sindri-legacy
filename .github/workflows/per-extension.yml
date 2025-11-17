@@ -56,31 +56,31 @@ jobs:
       matrix:
         extension:
           # mise-powered language extensions
-          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m" }
-          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m" }
-          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m" }
-          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m" }
-          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs" }
+          - { name: "nodejs", commands: "node,npm", key_tool: "node", timeout: "15m", tier: "standard" }
+          - { name: "python", commands: "python3,pip3", key_tool: "python3", timeout: "15m", tier: "standard" }
+          - { name: "rust", commands: "rustc,cargo", key_tool: "rustc", timeout: "20m", tier: "heavy" }
+          - { name: "golang", commands: "go", key_tool: "go", timeout: "20m", tier: "standard" }
+          - { name: "nodejs-devtools", commands: "tsc,eslint,prettier", key_tool: "tsc", timeout: "15m", depends_on: "nodejs", tier: "standard" }
           # Claude AI extensions (claude pre-installed in Docker image)
-          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m" }
-          - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs" }
+          - { name: "claude-marketplace", commands: "claude", key_tool: "claude-marketplace", timeout: "15m", tier: "standard" }
+          - { name: "openskills", commands: "openskills", key_tool: "openskills", timeout: "15m", depends_on: "nodejs", tier: "standard" }
           # Traditional extensions (unchanged)
-          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2 }
-          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m" }
-          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m" }
-          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m" }
+          - { name: "ruby", commands: "ruby,gem,bundle", key_tool: "ruby", timeout: "30m", status_timeout: 2, tier: "heavy" }
+          - { name: "php", commands: "php,composer", key_tool: "php", timeout: "30m", tier: "standard" }
+          - { name: "jvm", commands: "java,sdk", key_tool: "java", timeout: "30m", tier: "heavy" }
+          - { name: "dotnet", commands: "dotnet", key_tool: "dotnet", timeout: "30m", tier: "heavy" }
           # Infrastructure
-          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m" }
-          - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5 }
-          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5 }
-          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang" }
+          - { name: "docker", commands: "docker", key_tool: "docker", timeout: "30m", tier: "heavy" }
+          - { name: "infra-tools", commands: "terraform,ansible", key_tool: "terraform", timeout: "30m", status_timeout: 5, tier: "heavy" }
+          - { name: "cloud-tools", commands: "aws,az,gcloud", key_tool: "aws", timeout: "30m", status_timeout: 5, tier: "heavy" }
+          - { name: "ai-tools", commands: "codex,gemini,hector", key_tool: "codex", timeout: "30m", depends_on: "nodejs,golang", tier: "heavy" }
           # Utilities
-          - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5 }
-          - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs" }
-          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5 }
-          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m" }
-          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m" }
-          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m" }
+          - { name: "playwright", commands: "playwright", key_tool: "playwright", timeout: "25m", depends_on: "nodejs", key_test_timeout: 5, tier: "standard" }
+          - { name: "monitoring", commands: "claude-monitor,uv", key_tool: "claude-monitor", timeout: "20m", depends_on: "python,nodejs", tier: "minimal" }
+          - { name: "tmux-workspace", commands: "tmux", key_tool: "tmux", timeout: "15m", key_test_timeout: 5, tier: "minimal" }
+          - { name: "agent-manager", commands: "agent-manager", key_tool: "agent-manager", timeout: "15m", tier: "minimal" }
+          - { name: "context-loader", commands: "context-load", key_tool: "echo", timeout: "10m", tier: "minimal" }
+          - { name: "github-cli", commands: "gh", key_tool: "gh", timeout: "15m", tier: "minimal" }
 
     steps:
       - name: Checkout repository
@@ -110,6 +110,7 @@ jobs:
           extension-name: ${{ matrix.extension.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
+          resource-tier: ${{ matrix.extension.tier }}
 
       # NEW: Using composite action for deployment
       - name: Deploy test environment

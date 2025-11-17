@@ -77,6 +77,10 @@ install() {
   # Install Rust via mise using shared helper
   if is_ci_mode; then
     print_status "Installing Rust stable only..."
+    # Set minimal profile for CI to avoid rust-docs (large component that causes installation failures)
+    # Minimal profile includes: rustc, rust-std, cargo (excludes: rust-docs, rustfmt, clippy)
+    export RUSTUP_PROFILE=minimal
+    print_debug "Using RUSTUP_PROFILE=minimal for CI build"
   else
     print_status "Installing Rust stable + cargo tools (ripgrep, fd-find, exa, bat, tokei)..."
     print_warning "Cargo tools may take 10-15 minutes to compile from source"

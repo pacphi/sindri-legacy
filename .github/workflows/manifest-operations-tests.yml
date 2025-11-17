@@ -53,10 +53,7 @@ jobs:
           extension-name: "manifest"
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
-          vm-memory: "2048"
-          vm-cpu-kind: "shared"
-          vm-cpu-count: "1"
-          volume-size: "10"
+          resource-tier: "standard"
 
       # Using composite action for deployment
       - name: Deploy test environment

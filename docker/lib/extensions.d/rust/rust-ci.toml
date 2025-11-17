@@ -9,6 +9,9 @@ rust = "stable"
 RUST_BACKTRACE = "1"
 CARGO_HOME = "$HOME/.cargo"
 CI = "true"
+# Use minimal profile in CI to skip rust-docs (large component that causes installation failures)
+# Minimal profile includes: rustc, rust-std, cargo (excludes: rust-docs, rustfmt, clippy)
+RUSTUP_PROFILE = "minimal"
 
 [settings]
 experimental = true

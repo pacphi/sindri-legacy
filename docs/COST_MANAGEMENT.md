@@ -21,31 +21,60 @@ Understanding Fly.io's billing model helps optimize Sindri's infrastructure cost
 
 ## Cost Estimates
 
-### Configuration Examples
+### Resource Tier-Based Estimates
 
-**Minimal Development** (1x shared-cpu, 256MB RAM, 10GB storage)
+Sindri uses a 4-tier resource classification system. Here are cost estimates for each tier:
 
-- VM running 10% time: ~$1.70/month
-- VM running 25% time: ~$2.50/month
-- VM running 50% time: ~$4.50/month
+**Minimal Tier** (1x shared-cpu, 1GB RAM, 10GB storage)
+- **Use Case**: Lightweight utilities (tmux, monitoring, agent-manager, context-loader, github-cli)
+- VM running 10% time: ~$2.10/month
+- VM running 25% time: ~$3.25/month
+- VM running 50% time: ~$5.75/month
+- VM running 100% time: ~$10.75/month
 
-**Standard Development** (1x shared-cpu, 4GB RAM, 20GB storage)
+**Standard Tier** (2x shared-cpu, 4GB RAM, 20GB storage)
+- **Use Case**: Standard packages (nodejs, python, golang, php, playwright, claude-marketplace)
+- VM running 10% time: ~$5.50/month
+- VM running 25% time: ~$10.25/month
+- VM running 50% time: ~$19.00/month
+- VM running 100% time: ~$36.50/month
 
-- VM running 10% time: ~$4.25/month
-- VM running 25% time: ~$7.75/month
-- VM running 50% time: ~$14.25/month
+**Heavy Tier** (4x performance-cpu, 8GB RAM, 20GB storage)
+- **Use Case**: Compilation & containers (rust, ruby, jvm, dotnet, docker, infra-tools, cloud-tools, ai-tools)
+- VM running 25% time: ~$38.75/month
+- VM running 50% time: ~$76.00/month
+- VM running 100% time: ~$150.50/month
 
-**Heavy Development** (2x shared-cpu, 8GB RAM, 30GB storage)
+**XHeavy Tier** (4x performance-cpu, 16GB RAM, 30GB storage)
+- **Use Case**: Desktop environments & multiple extensions (xfce-ubuntu, guacamole, extension-combinations)
+- VM running 25% time: ~$60.50/month
+- VM running 50% time: ~$119.50/month
+- VM running 100% time: ~$237.50/month
 
-- VM running 25% time: ~$16.20/month
-- VM running 50% time: ~$30.90/month
-- VM running 100% time: ~$60.30/month
+### CI/CD Testing Costs
 
-**Performance Workloads** (4x performance-cpu, 16GB RAM, 50GB storage)
+Test workflows use resource tiers dynamically based on extension requirements:
 
-- VM running 25% time: ~$48.50/month
-- VM running 50% time: ~$95.50/month
-- VM running 100% time: ~$189.00/month
+- **Minimal tier tests**: ~$0.05 per test run (15-20 min)
+- **Standard tier tests**: ~$0.12 per test run (15-25 min)
+- **Heavy tier tests**: ~$0.45 per test run (20-30 min)
+- **XHeavy tier tests**: ~$0.90 per test run (60-90 min)
+
+**Monthly CI estimates** (based on typical usage):
+- 100 commits/month with per-extension tests: ~$45-60/month
+- Weekly comprehensive tests (4 runs/month): ~$8-12/month
+- **Total estimated CI costs**: ~$55-75/month
+
+### Cost Optimization Benefits
+
+Using resource tiers provides significant cost savings:
+
+- **Minimal tier** (5 extensions): 87% cheaper than heavy tier
+- **Standard tier** (8 extensions): 75% cheaper than heavy tier
+- **Heavy tier** (8 extensions): Right-sized for compilation/containers
+- **XHeavy tier** (3 extensions): Reserved for desktop environments only
+
+**Estimated monthly CI savings**: ~40-50% compared to using heavy tier for all extensions
 
 _Estimates include compute + storage + egress. Actual costs may vary based on usage patterns and region._
 

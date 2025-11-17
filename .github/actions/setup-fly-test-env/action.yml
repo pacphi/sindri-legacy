@@ -12,16 +12,20 @@ inputs:
   fly-api-token:
     description: "Fly.io API token"
     required: true
+  resource-tier:
+    description: "Resource tier (minimal/standard/heavy/xheavy). If specified, overrides individual resource parameters."
+    required: false
+    default: ""
   vm-memory:
-    description: "VM memory in MB"
+    description: "VM memory in MB (ignored if resource-tier is set)"
     required: false
     default: "8192"
   vm-cpu-kind:
-    description: "CPU kind (performance or shared)"
+    description: "CPU kind (performance or shared) (ignored if resource-tier is set)"
     required: false
     default: "performance"
   vm-cpu-count:
-    description: "Number of CPUs"
+    description: "Number of CPUs (ignored if resource-tier is set)"
     required: false
     default: "4"
   volume-name:
@@ -29,7 +33,7 @@ inputs:
     required: false
     default: "test_data"
   volume-size:
-    description: "Volume size in GB"
+    description: "Volume size in GB (ignored if resource-tier is set)"
     required: false
     default: "20"
   region:
@@ -77,6 +81,66 @@ runs:
         chmod 644 test_key.pub
         echo "✅ SSH key pair created"
 
+    - name: Determine resource configuration
+      id: resources
+      shell: bash
+      run: |
+        TIER="${{ inputs.resource-tier }}"
+
+        # If resource tier is specified, set resources based on tier
+        # Otherwise, use individual parameters (backward compatible)
+        if [ -n "$TIER" ]; then
+          echo "Using resource tier: $TIER"
+          case "$TIER" in
+            minimal)
+              VM_MEMORY="1024"
+              CPU_KIND="shared"
+              CPU_COUNT="1"
+              VOLUME_SIZE="10"
+              echo "📦 Minimal tier: 1GB RAM, 1 shared CPU, 10GB disk"
+              ;;
+            standard)
+              VM_MEMORY="4096"
+              CPU_KIND="shared"
+              CPU_COUNT="2"
+              VOLUME_SIZE="20"
+              echo "📦 Standard tier: 4GB RAM, 2 shared CPUs, 20GB disk"
+              ;;
+            heavy)
+              VM_MEMORY="8192"
+              CPU_KIND="performance"
+              CPU_COUNT="4"
+              VOLUME_SIZE="20"
+              echo "📦 Heavy tier: 8GB RAM, 4 performance CPUs, 20GB disk"
+              ;;
+            xheavy)
+              VM_MEMORY="16384"
+              CPU_KIND="performance"
+              CPU_COUNT="4"
+              VOLUME_SIZE="30"
+              echo "📦 XHeavy tier: 16GB RAM, 4 performance CPUs, 30GB disk"
+              ;;
+            *)
+              echo "❌ Invalid resource tier: $TIER"
+              echo "Valid tiers: minimal, standard, heavy, xheavy"
+              exit 1
+              ;;
+          esac
+        else
+          echo "Using individual resource parameters (backward compatible mode)"
+          VM_MEMORY="${{ inputs.vm-memory }}"
+          CPU_KIND="${{ inputs.vm-cpu-kind }}"
+          CPU_COUNT="${{ inputs.vm-cpu-count }}"
+          VOLUME_SIZE="${{ inputs.volume-size }}"
+          echo "📦 Custom: ${VM_MEMORY}MB RAM, ${CPU_COUNT} ${CPU_KIND} CPUs, ${VOLUME_SIZE}GB disk"
+        fi
+
+        # Export to GITHUB_OUTPUT for use in subsequent steps
+        echo "vm_memory=$VM_MEMORY" >> $GITHUB_OUTPUT
+        echo "cpu_kind=$CPU_KIND" >> $GITHUB_OUTPUT
+        echo "cpu_count=$CPU_COUNT" >> $GITHUB_OUTPUT
+        echo "volume_size=$VOLUME_SIZE" >> $GITHUB_OUTPUT
+
     - name: Prepare fly.toml for testing
       shell: bash
       env:
@@ -84,10 +148,10 @@ runs:
         APP_NAME: ${{ steps.generate-app-name.outputs.app_name }}
         REGION: ${{ inputs.region }}
         VOLUME_NAME: ${{ inputs.volume-name }}
-        VOLUME_SIZE: ${{ inputs.volume-size }}
-        VM_MEMORY: ${{ inputs.vm-memory }}
-        CPU_KIND: ${{ inputs.vm-cpu-kind }}
-        CPU_COUNT: ${{ inputs.vm-cpu-count }}
+        VOLUME_SIZE: ${{ steps.resources.outputs.volume_size }}
+        VM_MEMORY: ${{ steps.resources.outputs.vm_memory }}
+        CPU_KIND: ${{ steps.resources.outputs.cpu_kind }}
+        CPU_COUNT: ${{ steps.resources.outputs.cpu_count }}
         CI_MODE: "true"
       run: |
         ./scripts/prepare-fly-config.sh --ci-mode

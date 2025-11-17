@@ -585,19 +585,64 @@ gh workflow run extension-tests.yml \
 
 ## Resource Requirements
 
-### VM Specifications
+### Resource Tier System
 
-Different test jobs use different VM sizes:
+Sindri uses a 4-tier resource classification system to optimize VM resources based on extension requirements:
 
-| Test Type           | Memory | CPUs | Disk | Timeout |
-| ------------------- | ------ | ---- | ---- | ------- |
-| Per-Extension       | 8GB    | 4    | 20GB | 60 min  |
-| Extension API Tests | 4GB    | 2    | 20GB | 45 min  |
-| Base System Tests   | 2GB    | 1    | 10GB | 40 min  |
-| Cleanup Extensions  | 2GB    | 1    | 10GB | 35 min  |
-| Manifest Operations | 2GB    | 1    | 10GB | 35 min  |
-| Dependency Chain    | 4GB    | 2    | 15GB | 50 min  |
-| Combinations        | 16GB   | 4    | 20GB | 90 min  |
+| Tier       | Memory | CPUs | CPU Kind    | Disk | Use Case                                      |
+| ---------- | ------ | ---- | ----------- | ---- | --------------------------------------------- |
+| **Minimal**    | 1GB    | 1    | shared      | 10GB | Lightweight utilities, simple installations   |
+| **Standard**   | 4GB    | 2    | shared      | 20GB | Standard packages, mise-managed runtimes      |
+| **Heavy**      | 8GB    | 4    | performance | 20GB | Compilation, containers, multiple runtimes    |
+| **XHeavy**     | 16GB   | 4    | performance | 30GB | Desktop environments, multiple extensions     |
+
+### Extension Resource Tier Classifications
+
+**Minimal Tier** (1GB/1CPU):
+- tmux-workspace
+- context-loader
+- monitoring
+- agent-manager
+- github-cli
+
+**Standard Tier** (4GB/2CPU):
+- nodejs
+- python
+- golang
+- nodejs-devtools
+- claude-marketplace
+- openskills
+- php
+- playwright
+
+**Heavy Tier** (8GB/4CPU):
+- rust (compilation-heavy)
+- ruby (Rails + gems)
+- jvm (multiple JDK versions)
+- dotnet (.NET SDK)
+- docker (container runtime)
+- infra-tools (Terraform, Ansible, kubectl)
+- cloud-tools (AWS, Azure, GCP CLIs)
+- ai-tools (multiple AI CLIs)
+
+**XHeavy Tier** (16GB/4CPU):
+- xfce-ubuntu (desktop environment)
+- guacamole (remote desktop gateway)
+- extension-combinations (multiple extensions simultaneously)
+
+### Test Job VM Specifications
+
+| Test Type           | Tier     | Memory | CPUs | Disk | Timeout |
+| ------------------- | -------- | ------ | ---- | ---- | ------- |
+| Per-Extension       | Variable | Variable | Variable | Variable | 60 min  |
+| Extension API Tests | Variable | Variable | Variable | Variable | 45 min  |
+| Base System Tests   | Minimal  | 1GB    | 1    | 10GB | 40 min  |
+| Cleanup Extensions  | Minimal  | 1GB    | 1    | 10GB | 35 min  |
+| Manifest Operations | Standard | 4GB    | 2    | 20GB | 35 min  |
+| Dependency Chain    | Standard | 4GB    | 2    | 20GB | 50 min  |
+| Combinations        | XHeavy   | 16GB   | 4    | 30GB | 90 min  |
+
+> **Note**: Per-Extension and Extension API Tests use resource tiers dynamically based on the extension being tested.
 
 ### Cost Considerations
 

@@ -143,6 +143,40 @@ jobs:
           echo "extension_file=$EXT_FILE" >> $GITHUB_OUTPUT
           echo "✅ Extension validated"
 
+      - name: Determine resource tier
+        id: tier
+        run: |
+          EXT_NAME="${{ inputs.extension_name }}"
+          echo "Determining resource tier for extension: $EXT_NAME"
+
+          # Resource tier classification based on extension resource requirements
+          case "$EXT_NAME" in
+            # Minimal tier (1GB/1CPU) - Lightweight utilities
+            tmux-workspace|context-loader|monitoring|agent-manager|github-cli)
+              TIER="minimal"
+              ;;
+            # Standard tier (4GB/2CPU) - Standard installations
+            nodejs|python|golang|nodejs-devtools|claude-marketplace|openskills|php|playwright)
+              TIER="standard"
+              ;;
+            # Heavy tier (8GB/4CPU) - Compilation, containers, multiple runtimes
+            rust|ruby|jvm|dotnet|docker|infra-tools|cloud-tools|ai-tools)
+              TIER="heavy"
+              ;;
+            # XHeavy tier (16GB/4CPU) - Desktop environments, multiple extensions
+            xfce-ubuntu|guacamole)
+              TIER="xheavy"
+              ;;
+            # Default to heavy tier for unknown extensions (reliability priority)
+            *)
+              TIER="heavy"
+              echo "⚠️  Unknown extension, defaulting to heavy tier for reliability"
+              ;;
+          esac
+
+          echo "tier=$TIER" >> $GITHUB_OUTPUT
+          echo "✅ Resource tier: $TIER"
+
       - name: Setup test environment
         uses: ./.github/actions/setup-fly-test-env
         with:
@@ -150,6 +184,7 @@ jobs:
           extension-name: ${{ inputs.extension_name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
+          resource-tier: ${{ steps.tier.outputs.tier }}
 
       - name: Deploy test VM
         id: deploy
