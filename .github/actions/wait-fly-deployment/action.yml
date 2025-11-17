@@ -22,13 +22,13 @@ inputs:
     required: true
   expected-status:
     description: |
-      Expected machine status (started or running).
+      Expected machine status. Should always be 'started' for Fly.io machines.
 
-      **Important:** In CI_MODE=true deployments (no health checks), machines
-      remain in 'started' state and never transition to 'running'. Always use
-      'started' for CI workflows.
+      **Important:** Fly.io machines use 'started' state when running and
+      network-accessible. There is no separate 'running' state, regardless
+      of health check configuration.
 
-      Use 'running' only for production deployments with health checks enabled.
+      See: https://fly.io/docs/machines/machine-states/
     required: false
     default: "started"
 

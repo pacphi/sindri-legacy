@@ -2,6 +2,25 @@
 # Common retry utilities for CI workflows
 # Provides retry logic with exponential backoff for flaky operations
 
+# ============================================================================
+# CONFIGURABLE TIMEOUTS
+# ============================================================================
+# These can be overridden via environment variables in workflows
+# Increased from 45s to 600s to handle long-running extension installations
+# (Rust toolchains, Docker Engine, UV/pipx can take 3-5 minutes)
+
+: "${SSH_COMMAND_TIMEOUT:=600}"      # Main SSH commands (default: 10 minutes)
+: "${SSH_SFTP_TIMEOUT:=120}"         # SFTP file transfers (default: 2 minutes)
+: "${SSH_CHMOD_TIMEOUT:=60}"         # chmod operations (default: 1 minute)
+: "${SSH_MKDIR_TIMEOUT:=60}"         # mkdir operations (default: 1 minute)
+: "${SSH_READY_TIMEOUT:=15}"         # Readiness checks (default: 15 seconds)
+
+export SSH_COMMAND_TIMEOUT SSH_SFTP_TIMEOUT SSH_CHMOD_TIMEOUT SSH_MKDIR_TIMEOUT SSH_READY_TIMEOUT
+
+# ============================================================================
+# RETRY UTILITIES
+# ============================================================================
+
 # Generic retry with exponential backoff
 # NOTE: This is the CI/automation version optimized for GitHub Actions.
 #       A similar function exists in docker/lib/common.sh for VM use
@@ -115,7 +134,7 @@ ssh_command_retry() {
     echo "▶️  SSH attempt $attempt of $max_attempts..."
 
     # Execute command with smart PATH handling
-    if timeout 45s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
+    if timeout ${SSH_COMMAND_TIMEOUT}s flyctl ssh console -a "$app_name" --user developer -C "$command"; then
       echo "✅ SSH command succeeded"
       return 0
     else
@@ -152,7 +171,7 @@ sftp_put_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SFTP upload attempt $attempt of $max_attempts: $local_file -> $remote_path"
 
-    if timeout 30s flyctl ssh sftp put "$local_file" "$remote_path" --app "$app_name" 2>&1; then
+    if timeout ${SSH_SFTP_TIMEOUT}s flyctl ssh sftp put "$local_file" "$remote_path" --app "$app_name" 2>&1; then
       echo "✅ SFTP upload succeeded"
       return 0
     else
@@ -183,7 +202,7 @@ sftp_shell_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SFTP shell attempt $attempt of $max_attempts..."
 
-    if timeout 30s flyctl ssh sftp shell --app "$app_name" <<< "$sftp_commands" 2>&1; then
+    if timeout ${SSH_SFTP_TIMEOUT}s flyctl ssh sftp shell --app "$app_name" <<< "$sftp_commands" 2>&1; then
       echo "✅ SFTP shell session succeeded"
       return 0
     else
@@ -216,7 +235,7 @@ ssh_chmod_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SSH chmod attempt $attempt of $max_attempts..."
 
-    if timeout 30s flyctl ssh console --app "$app_name" --command "chmod $permissions $files" 2>&1; then
+    if timeout ${SSH_CHMOD_TIMEOUT}s flyctl ssh console --app "$app_name" --command "chmod $permissions $files" 2>&1; then
       echo "✅ SSH chmod succeeded"
       return 0
     else
@@ -247,7 +266,7 @@ ssh_mkdir_retry() {
   while [ $attempt -le $max_attempts ]; do
     echo "▶️  SSH mkdir attempt $attempt of $max_attempts..."
 
-    if timeout 30s flyctl ssh console --app "$app_name" --user developer --command "mkdir -p $directory" 2>&1; then
+    if timeout ${SSH_MKDIR_TIMEOUT}s flyctl ssh console --app "$app_name" --user developer --command "mkdir -p $directory" 2>&1; then
       echo "✅ SSH mkdir succeeded"
       return 0
     else
@@ -287,7 +306,7 @@ wait_for_machine_ready() {
       sleep 15
 
       # Additional check: can we execute a simple command?
-      if timeout 15s flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc 'echo ready'" &>/dev/null; then
+      if timeout ${SSH_READY_TIMEOUT}s flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc 'echo ready'" &>/dev/null; then
         echo "✅ Machine is responsive"
         return 0
       else
