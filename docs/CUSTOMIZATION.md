@@ -68,9 +68,11 @@ While not protected, these are highly recommended:
 
 #### Claude AI
 
-- **claude** - Claude Code CLI with developer configuration
+Note: Claude Code CLI is pre-installed in the base Docker image.
+
+- **claude-auth-with-api-key** - API key authentication for Claude Code (optional - only for API key users, not Pro/Max)
 - **claude-marketplace** - Plugin installer for https://claudecodemarketplace.com/
-  (depends on claude, git)
+  (depends on claude-auth-with-api-key or manual auth, git)
 - **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
   (depends on nodejs 20.6+, git)
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)

@@ -369,7 +369,7 @@ test_extension_secret_metadata() {
 
     # Check extensions that should have secret metadata
     local expected_extensions=(
-        "claude/claude.extension:EXT_REQUIRED_SECRETS"
+        "claude-auth-with-api-key/claude-auth-with-api-key.extension:EXT_REQUIRED_SECRETS"
         "github-cli/github-cli.extension:EXT_REQUIRED_SECRETS"
         "nodejs-devtools/nodejs-devtools.extension:EXT_OPTIONAL_SECRETS"
         "ai-tools/ai-tools.extension:EXT_OPTIONAL_SECRETS"

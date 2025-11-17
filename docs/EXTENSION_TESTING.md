@@ -41,7 +41,7 @@ The test suite is designed to:
 - **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0, 7/7 v2.1)
 - **Feature Coverage**: 96%
 - **Test Fixtures**: 3 manifest test files
-- **Base System Components**: 4 (mise, workspace, SSH, Claude) - pre-installed and always available
+- **Base System Components**: 4 (mise, workspace, SSH, Claude Code CLI) - pre-installed and always available
 
 ---
 
@@ -60,7 +60,7 @@ The following components are baked into the Docker image and always available:
 - **workspace-structure** - `/workspace` directory layout
 - **mise** - Unified tool version manager
 - **ssh-environment** - Non-interactive SSH session support
-- **claude** - Claude Code CLI
+- **claude-auth-with-api-key** - Claude Code API key authentication (optional)
 
 **Benefits**: ~10-12 second startup vs ~90-120 seconds with extension-based installation.
 
@@ -121,13 +121,13 @@ When the container starts, entrypoint.sh copies the extension library to the per
 ```text
 Docker Build
     │
-    ├─→ Installs base system (workspace, mise, ssh, claude)
+    ├─→ Installs base system (workspace, mise, ssh, Claude Code CLI)
     ├─→ Includes active-extensions.ci.conf (template)
     │
     ▼
 Container Startup (entrypoint.sh)
     │
-    ├─→ Base system: ✓ Already available (mise, workspace, SSH, Claude)
+    ├─→ Base system: ✓ Already available (mise, workspace, SSH, Claude Code CLI)
     │
     ├─→ Check: First boot? (/workspace/.system/lib missing?)
     │   │
@@ -139,7 +139,7 @@ Container Startup (entrypoint.sh)
     ▼
 Container Ready
     │
-    ├─→ Base system: ✓ Available (mise, workspace, SSH, Claude)
+    ├─→ Base system: ✓ Available (mise, workspace, SSH, Claude Code CLI)
     └─→ Optional: Tests install additional extensions as needed
 ```
 
@@ -230,7 +230,7 @@ For complete Extension API specification, see [EXTENSIONS.md - Extension API Spe
 
 #### Tested Extensions (21 Total)
 
-**Note**: The base system (workspace-structure, mise, ssh-environment, claude) is pre-installed in the
+**Note**: The base system (workspace-structure, mise, ssh-environment, Claude Code CLI) is pre-installed in the
 Docker image and not tested as extensions.
 
 | Extension                    | Key Tools          | Dependencies        | Test Focus               |
@@ -377,7 +377,7 @@ Tests common extension combinations for conflicts using manifest-based activatio
 
 Each combination activates multiple extensions in `active-extensions.conf`:
 
-**Note**: Base system (workspace, mise, ssh, claude) is pre-installed and not included in manifest.
+**Note**: Base system (workspace, mise, ssh, Claude Code CLI) is pre-installed and not included in manifest.
 
 - **mise-stack**: nodejs, python, rust, golang (mise-Powered Languages)
 - **full-node**: nodejs, nodejs-devtools (Complete Node.js Development Stack)
@@ -389,7 +389,7 @@ Each combination activates multiple extensions in `active-extensions.conf`:
 #### Validation
 
 - All extensions activate successfully via `extension-manager install-all`
-- Base system (mise, workspace, SSH, Claude) is already available
+- Base system (mise, workspace, SSH, Claude Code CLI) is already available
 - No installation conflicts between extensions
 - Cross-extension functionality works
 - Tools from different extensions coexist
@@ -773,7 +773,7 @@ bash extension-manager.sh deactivate r
 
 #### Job 5-8: Base System/Cleanup/Manifest/Dependencies
 
-- [ ] Base system (mise, workspace, SSH, Claude) remains functional
+- [ ] Base system (mise, workspace, SSH, Claude Code CLI) remains functional
 - [ ] Doesn't interfere with cleanup ordering
 - [ ] Works with manifest comment preservation
 - [ ] Dependencies correctly declared and installed
@@ -841,7 +841,7 @@ The extension testing system continuously evolves:
 ### Recent Enhancements (Completed)
 
 - [x] **Extension API Testing** - All 6 API functions now tested (100% coverage)
-- [x] **Base System Verification** - Pre-installed components (mise, workspace, SSH, Claude) verified
+- [x] **Base System Verification** - Pre-installed components (mise, workspace, SSH, Claude Code CLI) verified
 - [x] **Cleanup Extensions Testing** - Auto-ordering logic verified
 - [x] **Manifest Operations Testing** - Reorder and comment preservation tested
 - [x] **Dependency Chain Testing** - Transitive dependency resolution validated

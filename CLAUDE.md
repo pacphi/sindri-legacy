@@ -149,6 +149,7 @@ These are baked into the Docker image for faster startup (~10s vs ~90-120s) and 
 
 **Claude AI Extensions:**
 
+- `claude-auth-with-api-key` - Claude Code authentication via API key (optional - for API key users only, not Pro/Max)
 - `claude-marketplace` - YAML-based marketplace configuration for Claude Code
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
@@ -270,18 +271,20 @@ Provides:
 - goalie AI research assistant
 - Tools managed via mise npm plugin
 
-**claude** (Recommended):
+**claude-auth-with-api-key** (Optional - API key users only):
 
 ```bash
-extension-manager install claude
+extension-manager install claude-auth-with-api-key
 ```
 
 Provides:
 
-- Claude Code CLI (`claude` command)
-- Global preferences (~/.claude/CLAUDE.md)
-- Auto-formatting hooks (Prettier, TypeScript)
-- Authentication management
+- API key authentication for Claude Code CLI
+- Automatic configuration using encrypted secrets (ANTHROPIC_API_KEY)
+- **Not needed** if you authenticate via Pro or Max subscription
+- **Only for users** who authenticate with an API key
+
+Note: Claude Code CLI is pre-installed in the base image. This extension only handles API key authentication.
 
 **claude-marketplace** (Optional):
 

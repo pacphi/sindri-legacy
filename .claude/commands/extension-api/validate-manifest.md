@@ -4,7 +4,7 @@ description: Validate the extension manifest for dependency order and consistenc
 
 Validate the extension activation manifest at `docker/lib/extensions.d/active-extensions.conf`:
 
-**Note**: Base system components (workspace-structure, mise-config, ssh-environment, claude) are baked into the Docker image and not managed via the manifest.
+**Note**: Base system components (workspace-structure, mise-config, ssh-environment, Claude Code CLI) are baked into the Docker image and not managed via the manifest.
 
 1. **Dependency Order Validation**:
    - Verify dependencies are listed before dependents

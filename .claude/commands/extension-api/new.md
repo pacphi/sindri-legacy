@@ -40,7 +40,7 @@ Create a new extension named "{{args}}" following Sindri's Extension API v2.0 st
 4. **Manifest Integration**:
    - Add entry to `docker/lib/extensions.d/active-extensions.conf` in proper dependency order
    - Dependencies must be ordered correctly (dependents after dependencies)
-   - Base system (workspace, mise, ssh, claude) is already available from Docker image
+   - Base system (workspace, mise, ssh, Claude Code CLI) is already available from Docker image
    - Add clear comments explaining the extension's purpose
 
 5. **Documentation**:

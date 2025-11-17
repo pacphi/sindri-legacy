@@ -163,9 +163,11 @@ extension-manager status <name>     # Check status
 **AI:**
 
 - `ai-tools` - AI coding assistants
-- `claude` - Claude Code CLI
+- `claude-auth-with-api-key` - Claude Code API key authentication (optional - API key users only)
 - `claude-marketplace` - Claude plugin marketplace integration
 - `openskills` - Claude Code skills management
+
+Note: Claude Code CLI is pre-installed in the base image
 
 **Development Tools:**
 

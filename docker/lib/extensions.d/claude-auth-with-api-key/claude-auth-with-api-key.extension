@@ -1,10 +1,11 @@
 #!/bin/bash
 #
-# Claude Code Authentication Extension
+# Claude Code API Key Authentication Extension
 #
-# Handles authentication for Claude Code CLI using encrypted secrets.
+# Handles API key authentication for Claude Code CLI using encrypted secrets.
+# For users who authenticate with ANTHROPIC_API_KEY (not Pro/Max subscriptions).
 # Claude Code CLI is pre-installed in the base Docker image.
-# This extension only manages authentication configuration.
+# This extension only manages API key authentication configuration.
 #
 
 # Source common library
@@ -15,9 +16,10 @@ source "$(dirname "$(dirname "$SCRIPT_DIR")")/common.sh"
 # Extension Metadata
 # ==============================================================================
 
-EXT_NAME="Claude Code"
-EXT_DESCRIPTION="Claude Code CLI authentication"
+EXT_NAME="Claude Code (API Key Auth)"
+EXT_DESCRIPTION="Claude Code CLI authentication via API key (ANTHROPIC_API_KEY)"
 EXT_CATEGORY="ai-dev-tools"
+EXT_VERSION="2.0.0"
 EXT_REQUIRED_SECRETS="anthropic_api_key"
 EXT_API_VERSION="2.0"
 EXT_INSTALL_METHOD="native"
@@ -58,11 +60,40 @@ prerequisites() {
 }
 
 install() {
-    log_section "Installing Claude Code"
+    log_section "Installing Claude Code Authentication"
 
     # Claude CLI is pre-installed in the base image
     log_info "Claude Code CLI is pre-installed in base Docker image"
-    log_success "No installation needed"
+
+    # Install wrapper script for automatic API key authentication
+    local wrapper_source="$SCRIPT_DIR/claude-wrapper.sh"
+    local wrapper_dest="/workspace/bin/claude"
+
+    if [ -f "$wrapper_source" ]; then
+        log_info "Installing Claude wrapper for automatic authentication..."
+
+        # Ensure /workspace/bin exists
+        mkdir -p /workspace/bin
+
+        # Copy wrapper script
+        cp "$wrapper_source" "$wrapper_dest"
+        chmod +x "$wrapper_dest"
+
+        # Ensure /workspace/bin is first in PATH (check .bashrc)
+        if ! grep -q 'export PATH="/workspace/bin:$PATH"' "$DEVELOPER_HOME/.bashrc" 2>/dev/null; then
+            echo '' >> "$DEVELOPER_HOME/.bashrc"
+            echo '# Ensure /workspace/bin is first in PATH (for Claude wrapper)' >> "$DEVELOPER_HOME/.bashrc"
+            echo 'export PATH="/workspace/bin:$PATH"' >> "$DEVELOPER_HOME/.bashrc"
+            log_info "Added /workspace/bin to PATH in .bashrc"
+        fi
+
+        log_success "Claude wrapper installed - authentication will be automatic"
+        log_info "Wrapper location: $wrapper_dest"
+        log_info "Real Claude CLI:  /usr/local/bin/claude"
+    else
+        log_warn "Wrapper script not found: $wrapper_source"
+        log_info "Authentication will require manual loading of secrets"
+    fi
 
     return 0
 }
@@ -72,39 +103,31 @@ configure() {
 
     # Check if secrets library exists
     if [ ! -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
-        log_warn "Secrets library not found - skipping authentication"
-        log_info "This is normal during extension installation"
-        log_info "Authentication will happen during container startup"
+        log_info "Secrets library not yet initialized"
+        log_info "This is normal during initial setup"
+        log_info "Authentication will be available after container restart"
         return 0
     fi
 
     # Load secrets library
     source "$DEVELOPER_HOME/.secrets/lib.sh"
 
-    # Authenticate if API key available
+    # Check if API key is available
     if has_secret "anthropic_api_key"; then
-        log_info "Authenticating Claude Code with API key..."
-
-        # Export API key for claude auth command
-        local api_key
-        api_key=$(get_secret "anthropic_api_key")
-
-        # Authenticate Claude (runs as developer user)
-        if ANTHROPIC_API_KEY="$api_key" claude auth login --non-interactive 2>/dev/null; then
-            log_success "Claude Code authenticated successfully"
-        else
-            # Try without --non-interactive flag
-            if echo "$api_key" | claude auth login 2>/dev/null; then
-                log_success "Claude Code authenticated successfully"
-            else
-                log_warn "Claude authentication may require manual intervention"
-                log_info "Run 'claude' to complete authentication interactively"
-            fi
-        fi
+        log_success "API key found in encrypted secrets"
+        log_info "Claude Code will authenticate automatically when you run 'claude'"
+        log_info "The wrapper script handles authentication transparently"
     else
-        log_warn "No API key found - skipping Claude authentication"
+        log_warn "No API key found in secrets"
         log_info "Add API key with: flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>"
-        log_info "Then run: extension-manager configure claude"
+        log_info "After adding the key, just run 'claude' - authentication is automatic"
+    fi
+
+    # Verify wrapper is installed
+    if [ -f "/workspace/bin/claude" ]; then
+        log_success "Claude wrapper installed and ready"
+    else
+        log_warn "Claude wrapper not found - reinstall extension if needed"
     fi
 
     return 0
@@ -166,17 +189,34 @@ status() {
 }
 
 remove() {
-    log_section "Removing Claude Code configuration"
+    log_section "Removing Claude Code authentication wrapper"
 
-    # Clear authentication
+    # Remove wrapper script
+    if [ -f "/workspace/bin/claude" ]; then
+        log_info "Removing Claude wrapper script..."
+        rm -f "/workspace/bin/claude"
+        log_success "Wrapper script removed"
+        log_info "Real Claude CLI at /usr/local/bin/claude is now accessible"
+    fi
+
+    # Remove PATH modification from .bashrc (optional - leaves other PATH changes intact)
+    if grep -q 'export PATH="/workspace/bin:$PATH".*Claude wrapper' "$DEVELOPER_HOME/.bashrc" 2>/dev/null; then
+        log_info "Cleaning up .bashrc PATH modification..."
+        sed -i '/# Ensure \/workspace\/bin is first in PATH (for Claude wrapper)/d' "$DEVELOPER_HOME/.bashrc"
+        sed -i '/export PATH="\/workspace\/bin:\$PATH"/d' "$DEVELOPER_HOME/.bashrc"
+        log_success ".bashrc cleaned up"
+    fi
+
+    # Clear authentication data
     if [ -d "$DEVELOPER_HOME/.claude" ]; then
-        log_info "Clearing Claude authentication..."
+        log_info "Clearing Claude authentication data..."
         rm -rf "$DEVELOPER_HOME/.claude/auth" 2>/dev/null || true
-        log_success "Authentication cleared"
+        log_success "Authentication data cleared"
     fi
 
     # Note: We don't remove the CLI binary since it's baked into the base image
-    log_info "Claude Code CLI remains in base image (not removed)"
+    log_info "Claude Code CLI remains in base image at /usr/local/bin/claude"
+    log_info "You can still use Claude, but will need to authenticate manually"
 
     return 0
 }

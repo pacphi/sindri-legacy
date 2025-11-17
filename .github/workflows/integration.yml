@@ -164,7 +164,7 @@ jobs:
     needs: [setup-config, build-image, integration-test]
     uses: ./.github/workflows/test-secrets-management.yml
     secrets:
-      FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
   # Notify on Failure
