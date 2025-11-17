@@ -769,7 +769,8 @@ Store user preferences in `/workspace/developer/.claude/CLAUDE.md`:
 
 ## Secrets Management
 
-Sindri uses automatic, transparent secrets management with SOPS + age encryption. Secrets are encrypted at rest and never exposed in environment variables or process lists.
+Sindri uses automatic, transparent secrets management with SOPS + age encryption. Secrets are encrypted at rest
+and never exposed in environment variables or process lists.
 
 ### Adding Secrets
 
@@ -788,6 +789,7 @@ flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
 **Supported Secrets:**
 
 *AI/Development Tools:*
+
 - `ANTHROPIC_API_KEY` - Claude Code authentication
 - `GITHUB_TOKEN` - GitHub CLI authentication
 - `PERPLEXITY_API_KEY` - Goalie research assistant
@@ -796,6 +798,7 @@ flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
 - `XAI_API_KEY` - xAI Grok SDK
 
 *Cloud Provider Credentials:*
+
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` - AWS CLI
 - `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` - Azure CLI
 

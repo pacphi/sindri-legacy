@@ -156,13 +156,24 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
+  # Secrets Management Test
+  # ============================================================================
+
+  secrets-management-test:
+    name: Secrets Management Test
+    needs: [setup-config, build-image, integration-test]
+    uses: ./.github/workflows/test-secrets-management.yml
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+
+  # ============================================================================
   # Notify on Failure
   # ============================================================================
 
   notify-failure:
     name: Notify on Failure
     if: failure()
-    needs: [setup-config, build-image, integration-test, developer-workflow, mise-stack-integration]
+    needs: [setup-config, build-image, integration-test, developer-workflow, mise-stack-integration, secrets-management-test]
     runs-on: ubuntu-latest
 
     steps:

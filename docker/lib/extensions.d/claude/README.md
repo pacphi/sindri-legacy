@@ -4,7 +4,8 @@ Handles authentication for Claude Code CLI using encrypted secrets.
 
 ## Overview
 
-Claude Code CLI is pre-installed in the Sindri base Docker image. This extension only manages authentication configuration using the transparent secrets management system.
+Claude Code CLI is pre-installed in the Sindri base Docker image. This extension only manages authentication
+configuration using the transparent secrets management system.
 
 ## Prerequisites
 
@@ -73,6 +74,7 @@ claude whoami
 ## Troubleshooting
 
 **Claude not authenticated:**
+
 ```bash
 # Check if API key is in secrets
 view-secrets
@@ -85,6 +87,7 @@ extension-manager configure claude
 ```
 
 **Authentication fails:**
+
 ```bash
 # Try manual authentication
 claude
