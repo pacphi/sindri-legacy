@@ -1044,7 +1044,8 @@ sindri/
 
 ### SSH Operation Timeouts
 
-The CI/CD workflows use configurable timeouts for SSH and SFTP operations. These can be overridden via environment variables in workflow files.
+The CI/CD workflows use configurable timeouts for SSH and SFTP operations. These can be overridden via
+environment variables in workflow files.
 
 **Available Timeout Variables:**
 
