@@ -57,6 +57,31 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Prepare fly.toml configuration
+      shell: bash
+      env:
+        APP_NAME: ${{ inputs.app-name }}
+        REGION: ${{ inputs.region }}
+        VOLUME_NAME: ${{ inputs.volume-name }}
+        VOLUME_SIZE: ${{ inputs.volume-size }}
+        VM_MEMORY: "8192"
+        CPU_KIND: "shared"
+        CPU_COUNT: "4"
+        SSH_EXTERNAL_PORT: "10022"
+      run: |
+        echo "Preparing fly.toml configuration..."
+        if [ -f ./scripts/prepare-fly-config.sh ]; then
+          if [ "${{ inputs.ci-mode }}" = "true" ]; then
+            ./scripts/prepare-fly-config.sh --ci-mode
+          else
+            ./scripts/prepare-fly-config.sh
+          fi
+          echo "✅ fly.toml prepared for deployment"
+        else
+          echo "❌ prepare-fly-config.sh not found!"
+          exit 1
+        fi
+
     - name: Create Fly.io app
       shell: bash
       env:
