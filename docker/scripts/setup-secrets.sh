@@ -239,84 +239,107 @@ sync_flyio_secrets() {
     # Source the secrets library
     source "$SECRETS_LIBRARY"
 
-    local secrets_updated=false
+    # Collect all secrets into a temporary plaintext file (batch operation)
+    local temp_secrets=$(mktemp)
+    local secrets_count=0
+
+    # Add header comment
+    echo "# Encrypted secrets managed by SOPS + age" > "$temp_secrets"
 
     # AI/Development Tools
     if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-        set_secret "anthropic_api_key" "$ANTHROPIC_API_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced anthropic_api_key"
+        echo "anthropic_api_key: $ANTHROPIC_API_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected anthropic_api_key"
+        ((secrets_count++))
     fi
 
     if [ -n "${GITHUB_TOKEN:-}" ]; then
-        set_secret "github_token" "$GITHUB_TOKEN"
-        secrets_updated=true
-        echo "  ✓ Synced github_token"
+        echo "github_token: $GITHUB_TOKEN" >> "$temp_secrets"
+        echo "  ✓ Collected github_token"
+        ((secrets_count++))
     fi
 
     if [ -n "${PERPLEXITY_API_KEY:-}" ]; then
-        set_secret "perplexity_api_key" "$PERPLEXITY_API_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced perplexity_api_key"
+        echo "perplexity_api_key: $PERPLEXITY_API_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected perplexity_api_key"
+        ((secrets_count++))
     fi
 
     if [ -n "${OPENROUTER_API_KEY:-}" ]; then
-        set_secret "openrouter_api_key" "$OPENROUTER_API_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced openrouter_api_key"
+        echo "openrouter_api_key: $OPENROUTER_API_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected openrouter_api_key"
+        ((secrets_count++))
     fi
 
     if [ -n "${GOOGLE_GEMINI_API_KEY:-}" ]; then
-        set_secret "google_gemini_api_key" "$GOOGLE_GEMINI_API_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced google_gemini_api_key"
+        echo "google_gemini_api_key: $GOOGLE_GEMINI_API_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected google_gemini_api_key"
+        ((secrets_count++))
     fi
 
     if [ -n "${XAI_API_KEY:-}" ]; then
-        set_secret "xai_api_key" "$XAI_API_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced xai_api_key"
+        echo "xai_api_key: $XAI_API_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected xai_api_key"
+        ((secrets_count++))
     fi
 
     # Cloud Provider Credentials
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
-        set_secret "aws_access_key_id" "$AWS_ACCESS_KEY_ID"
-        secrets_updated=true
-        echo "  ✓ Synced aws_access_key_id"
+        echo "aws_access_key_id: $AWS_ACCESS_KEY_ID" >> "$temp_secrets"
+        echo "  ✓ Collected aws_access_key_id"
+        ((secrets_count++))
     fi
 
     if [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-        set_secret "aws_secret_access_key" "$AWS_SECRET_ACCESS_KEY"
-        secrets_updated=true
-        echo "  ✓ Synced aws_secret_access_key"
+        echo "aws_secret_access_key: $AWS_SECRET_ACCESS_KEY" >> "$temp_secrets"
+        echo "  ✓ Collected aws_secret_access_key"
+        ((secrets_count++))
     fi
 
     if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
-        set_secret "aws_session_token" "$AWS_SESSION_TOKEN"
-        secrets_updated=true
-        echo "  ✓ Synced aws_session_token"
+        echo "aws_session_token: $AWS_SESSION_TOKEN" >> "$temp_secrets"
+        echo "  ✓ Collected aws_session_token"
+        ((secrets_count++))
     fi
 
     if [ -n "${AZURE_CLIENT_ID:-}" ]; then
-        set_secret "azure_client_id" "$AZURE_CLIENT_ID"
-        secrets_updated=true
-        echo "  ✓ Synced azure_client_id"
+        echo "azure_client_id: $AZURE_CLIENT_ID" >> "$temp_secrets"
+        echo "  ✓ Collected azure_client_id"
+        ((secrets_count++))
     fi
 
     if [ -n "${AZURE_CLIENT_SECRET:-}" ]; then
-        set_secret "azure_client_secret" "$AZURE_CLIENT_SECRET"
-        secrets_updated=true
-        echo "  ✓ Synced azure_client_secret"
+        echo "azure_client_secret: $AZURE_CLIENT_SECRET" >> "$temp_secrets"
+        echo "  ✓ Collected azure_client_secret"
+        ((secrets_count++))
     fi
 
     if [ -n "${AZURE_TENANT_ID:-}" ]; then
-        set_secret "azure_tenant_id" "$AZURE_TENANT_ID"
-        secrets_updated=true
-        echo "  ✓ Synced azure_tenant_id"
+        echo "azure_tenant_id: $AZURE_TENANT_ID" >> "$temp_secrets"
+        echo "  ✓ Collected azure_tenant_id"
+        ((secrets_count++))
     fi
 
-    if [ "$secrets_updated" = true ]; then
-        echo "  ✓ Secrets encrypted and stored"
+    if [ $secrets_count -gt 0 ]; then
+        # Encrypt all secrets in one operation (PERFORMANCE OPTIMIZATION)
+        echo "  🔒 Encrypting $secrets_count secrets in batch..."
+
+        # Get age public key for encryption
+        local age_recipient=$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')
+
+        # Single encrypt operation for all secrets
+        if SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" \
+           SOPS_AGE_RECIPIENTS="$age_recipient" \
+           sops --encrypt --age "$age_recipient" "$temp_secrets" > "$SECRETS_FILE" 2>/dev/null; then
+
+            chmod 600 "$SECRETS_FILE"
+            echo "  ✓ All secrets encrypted and stored ($secrets_count total)"
+        else
+            echo "  ⚠️  Warning: Failed to encrypt secrets file"
+        fi
+
+        # Secure cleanup of plaintext file
+        shred -u "$temp_secrets" 2>/dev/null || rm -f "$temp_secrets"
 
         # Clear all secrets from environment
         unset ANTHROPIC_API_KEY GITHUB_TOKEN PERPLEXITY_API_KEY OPENROUTER_API_KEY
@@ -326,6 +349,7 @@ sync_flyio_secrets() {
 
         echo "  ✓ Environment variables cleared (secrets secured)"
     else
+        rm -f "$temp_secrets"
         echo "  ℹ️  No Fly.io secrets found to sync"
     fi
 }
