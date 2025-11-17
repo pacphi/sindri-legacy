@@ -788,7 +788,7 @@ flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
 
 **Supported Secrets:**
 
-*AI/Development Tools:*
+**AI/Development Tools:**
 
 - `ANTHROPIC_API_KEY` - Claude Code authentication
 - `GITHUB_TOKEN` - GitHub CLI authentication
@@ -797,7 +797,7 @@ flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
 - `GOOGLE_GEMINI_API_KEY` - Gemini CLI
 - `XAI_API_KEY` - xAI Grok SDK
 
-*Cloud Provider Credentials:*
+**Cloud Provider Credentials:**
 
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` - AWS CLI
 - `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` - Azure CLI

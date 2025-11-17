@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # Configuration
-SOPS_VERSION="v3.8.1"
+SOPS_VERSION="v3.11.0"
 SOPS_URL="https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
 SOPS_INSTALL_PATH="/usr/local/bin/sops"
 
