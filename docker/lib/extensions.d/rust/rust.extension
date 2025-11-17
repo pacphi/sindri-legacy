@@ -51,6 +51,13 @@ prerequisites() {
 install() {
   print_status "Installing Rust toolchain via mise..."
 
+  # Clean up any corrupted rustup installation before proceeding
+  if [ -d "$HOME/.rustup" ]; then
+    print_status "Cleaning up existing rustup installation to prevent corruption..."
+    rm -rf "$HOME/.rustup/toolchains" "$HOME/.rustup/downloads" "$HOME/.rustup/tmp" 2>/dev/null || true
+    print_debug "Rustup cache cleaned"
+  fi
+
   # Check if already installed
   if command_exists rustc && command_exists cargo; then
     local rust_version

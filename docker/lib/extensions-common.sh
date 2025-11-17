@@ -472,8 +472,8 @@ install_mise_config() {
     print_status "Installing via mise..."
     local install_log="/tmp/mise-install-${ext_name}-$$.log"
 
-    # Run mise install with output capture
-    if timeout 600 mise install 2>&1 | tee "$install_log"; then
+    # Run mise install with output capture (1800s = 30min for heavy compilations like Ruby, JVM)
+    if timeout 1800 mise install 2>&1 | tee "$install_log"; then
         local install_exit_code=${PIPESTATUS[0]}
 
         if [ $install_exit_code -eq 0 ]; then
@@ -498,7 +498,7 @@ install_mise_config() {
             rm -f "$install_log"
             return 0
         elif [ $install_exit_code -eq 124 ]; then
-            print_error "mise install timed out after 600 seconds"
+            print_error "mise install timed out after 1800 seconds (30 minutes)"
             echo "Last 30 lines of output:"
             tail -30 "$install_log"
             rm -f "$install_log"
