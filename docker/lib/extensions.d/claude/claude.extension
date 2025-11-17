@@ -20,6 +20,8 @@ EXT_DESCRIPTION="Claude Code CLI authentication"
 EXT_CATEGORY="ai-dev-tools"
 EXT_REQUIRED_SECRETS="anthropic_api_key"
 EXT_API_VERSION="2.0"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
 
 # ==============================================================================
 # Extension API Functions

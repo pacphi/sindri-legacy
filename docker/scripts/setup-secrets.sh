@@ -15,7 +15,11 @@
 # This is called by entrypoint.sh on every container start.
 #
 
-set -euo pipefail
+set -eo pipefail
+
+# Disable immediate exit for secrets setup - we want to continue even if secrets fail
+# This prevents container crashes when SOPS/age operations fail
+set +e
 
 # ==============================================================================
 # Configuration
@@ -213,7 +217,7 @@ with_secrets() {
         "$@"
     )
 
-    rm "$temp_file"
+    rm "$temp_env"
 }
 
 # Export functions for use in scripts
@@ -366,15 +370,34 @@ BASHRC_EOF
 main() {
     echo "🔒 Setting up secrets infrastructure..."
 
-    setup_age_key
-    create_secrets_library
-    sync_flyio_secrets
-    add_user_commands
+    # Setup with error handling - don't crash container on failures
+    if ! setup_age_key; then
+        echo "⚠️  Warning: Failed to setup age key, secrets management may not work"
+    fi
 
-    # Ensure proper ownership
-    chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$SECRETS_DIR" "$AGE_DIR"
+    if ! create_secrets_library; then
+        echo "⚠️  Warning: Failed to create secrets library"
+    fi
 
-    echo "✅ Secrets infrastructure configured"
+    # Sync secrets (non-critical - VM should start even if this fails)
+    if ! sync_flyio_secrets; then
+        echo "⚠️  Warning: Failed to sync Fly.io secrets"
+    fi
+
+    if ! add_user_commands; then
+        echo "⚠️  Warning: Failed to add user commands to .bashrc"
+    fi
+
+    # Ensure proper ownership (best effort)
+    if [ -d "$SECRETS_DIR" ]; then
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$SECRETS_DIR" 2>/dev/null || true
+    fi
+    if [ -d "$AGE_DIR" ]; then
+        chown -R "$DEVELOPER_USER:$DEVELOPER_USER" "$AGE_DIR" 2>/dev/null || true
+    fi
+
+    echo "✅ Secrets infrastructure setup complete"
+    return 0  # Always return success to prevent container crash
 }
 
 main "$@"
