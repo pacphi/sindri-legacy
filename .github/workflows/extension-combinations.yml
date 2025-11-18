@@ -44,6 +44,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         combination:
           - {
@@ -118,7 +119,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source .github/scripts/common/ssh-helpers.sh
+          source ./.github/scripts/lib/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
           extensions="${{ matrix.combination.extensions }}"
@@ -163,7 +164,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source .github/scripts/common/ssh-helpers.sh
+          source ./.github/scripts/lib/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
 
@@ -187,7 +188,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source .github/scripts/common/ssh-helpers.sh
+          source ./.github/scripts/lib/ssh-helpers.sh
 
           app_name="${{ steps.setup.outputs.app-name }}"
           combination_name="${{ matrix.combination.name }}"

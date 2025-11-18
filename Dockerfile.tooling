@@ -1,0 +1,66 @@
+# ==============================================================================
+# Dockerfile.tooling - Development Tools Layer
+# ==============================================================================
+# This layer contains development tools and environment setup.
+# Rebuild trigger: Tool version updates (mise, Claude CLI, SOPS, age)
+# Build time: ~2-3 minutes
+# Size: ~750MB total (200MB + base layer)
+# Stability: Updated weekly/biweekly
+# ==============================================================================
+
+ARG BASE_IMAGE=registry.fly.io/sindri-registry:base-stable
+FROM ${BASE_IMAGE}
+
+# Copy SSH and sudo configuration files
+COPY docker/config/sshd_config /docker/config/sshd_config
+COPY docker/config/developer-sudoers /docker/config/developer-sudoers
+
+# Copy tooling setup scripts
+COPY docker/scripts/setup-user.sh /docker/scripts/setup-user.sh
+COPY docker/scripts/install-mise.sh /docker/scripts/install-mise.sh
+COPY docker/scripts/setup-ssh-environment.sh /docker/scripts/setup-ssh-environment.sh
+COPY docker/scripts/install-claude.sh /docker/scripts/install-claude.sh
+COPY docker/scripts/install-sops-age.sh /docker/scripts/install-sops-age.sh
+
+# Make scripts executable
+RUN chmod +x /docker/scripts/*.sh
+
+# Create developer user and configure system
+# This creates the developer user with sudo privileges
+RUN /docker/scripts/setup-user.sh
+
+# Configure SSH daemon
+# Sets up SSH server with secure configuration for external access
+RUN mkdir -p /var/run/sshd && \
+    cp /docker/config/sshd_config /etc/ssh/sshd_config && \
+    cp /docker/config/developer-sudoers /etc/sudoers.d/developer
+
+# ==============================================================================
+# BASE SYSTEM TOOLS INSTALLATION
+# ==============================================================================
+
+# Install and configure mise (unified tool version manager)
+# Replaces NVM, pyenv, rbenv, rustup with single tool
+RUN /docker/scripts/install-mise.sh
+
+# Configure SSH environment for non-interactive sessions (CI/CD support)
+# Ensures environment variables are available in SSH sessions
+RUN /docker/scripts/setup-ssh-environment.sh
+
+# Install Claude Code CLI and create developer configuration
+# Pre-installs Claude CLI; authentication happens at runtime via secrets
+RUN /docker/scripts/install-claude.sh
+
+# Install SOPS and age for secrets management
+# Provides transparent encryption/decryption for sensitive data
+RUN /docker/scripts/install-sops-age.sh
+
+# Clean up to reduce layer size
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Label for tracking
+LABEL org.opencontainers.image.title="Sindri Tooling Base"
+LABEL org.opencontainers.image.description="Development tools: mise, Claude CLI, SOPS, age"
+LABEL org.opencontainers.image.vendor="Sindri"
+LABEL sindri.layer="tooling"

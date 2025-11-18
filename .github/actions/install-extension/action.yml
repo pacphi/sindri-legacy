@@ -1,0 +1,97 @@
+name: "Install Extension"
+description: "Install extension with dependencies via manifest and extension-manager install-all"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  extension-name:
+    description: "Extension name to install"
+    required: true
+  dependencies:
+    description: "Space or comma-separated list of dependencies"
+    required: false
+    default: ""
+  user:
+    description: "SSH user"
+    required: false
+    default: "developer"
+
+outputs:
+  status:
+    description: "Installation status (success or failure)"
+    value: ${{ steps.install.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install extension
+      id: install
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        app_name="${{ inputs.app-name }}"
+        extension="${{ inputs.extension-name }}"
+        dependencies="${{ inputs.dependencies }}"
+
+        echo "Installing extension: $extension"
+        if [ -n "$dependencies" ]; then
+          echo "Dependencies: $dependencies"
+        fi
+
+        # Add extension and dependencies to manifest, then install
+        ssh_command_retry "$app_name" "/bin/bash -lc '
+          manifest_file=\"/workspace/.system/manifest/active-extensions.conf\"
+
+          # Create manifest from CI template if it doesn't exist
+          if [ ! -f \"\$manifest_file\" ]; then
+            cp /docker/lib/extensions.d/active-extensions.ci.conf \"\$manifest_file\" 2>/dev/null || touch \"\$manifest_file\"
+          fi
+
+          # Add dependencies first
+          if [ -n \"$dependencies\" ]; then
+            for dep in $dependencies; do
+              dep=\$(echo \"\$dep\" | xargs | tr -d \",\")
+              if ! grep -q \"^\$dep\$\" \"\$manifest_file\" 2>/dev/null; then
+                echo \"\$dep\" >> \"\$manifest_file\"
+                echo \"✅ Dependency \$dep added to manifest\"
+              else
+                echo \"ℹ️  Dependency \$dep already in manifest\"
+              fi
+            done
+          fi
+
+          # Add main extension
+          if ! grep -q \"^$extension\$\" \"\$manifest_file\" 2>/dev/null; then
+            echo \"$extension\" >> \"\$manifest_file\"
+            echo \"✅ $extension added to manifest\"
+          else
+            echo \"ℹ️  $extension already in manifest\"
+          fi
+
+          # Run install-all
+          echo \"\"
+          echo \"Running extension-manager install-all...\"
+          cd /workspace/.system
+          if bash bin/extension-manager install-all; then
+            echo \"✅ Extension installation completed\"
+            exit 0
+          else
+            echo \"❌ Extension installation failed\"
+            exit 1
+          fi
+        '"
+
+        if [ $? -eq 0 ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Extension $extension installed successfully"
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "❌ Extension $extension installation failed"
+          exit 1
+        fi

@@ -3,7 +3,7 @@
 ## Table of Contents
 
 - [Extension System](#extension-system)
-  - [Extension API v1.0](#extension-api-v10)
+  - [Extension API v1.0 & v2.0](#extension-api-v10--v20)
   - [Available Extensions](#available-extensions)
 - [Extension Management](#extension-management)
   - [Managing Extensions](#managing-extensions)
@@ -29,20 +29,21 @@
 Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a
 standardized API (v1.0) with explicit dependency management and activation control.
 
-### Extension API v1.0
+### Extension API v1.0 & v2.0
 
-The Extension API v1.0 provides:
+The Extension API provides:
 
 - **Manifest-based activation**: Control which extensions install via `active-extensions.conf`
-- **Standardized API**: All extensions implement 6 required functions
+- **Standardized API**: All extensions implement 6 required functions (v1.0) or 7 functions (v2.0)
 - **Dependency management**: Explicit prerequisites checking before installation
 - **CLI management**: `extension-manager` tool for activation and installation
 - **Idempotent operations**: Safe to re-run installations
 - **Clean removal**: Proper uninstall with dependency warnings
+- **Upgrade support (v2.0+)**: Extensions can implement `upgrade()` for updating installed tools
 
 **Key Concepts:**
 
-1. **Extension Files**: Located in `docker/lib/extensions.d/` as `.sh.example` files
+1. **Extension Files**: Located in `docker/lib/extensions.d/<name>/<name>.extension` with subdirectory structure
 2. **Activation**: Extensions are activated by adding their name to `active-extensions.conf`
 3. **Installation**: Activated extensions are installed using `extension-manager install`
 4. **Execution Order**: Controlled by line order in the manifest, not file naming
@@ -51,26 +52,29 @@ The Extension API v1.0 provides:
 
 Extensions are organized by category:
 
-#### Core Infrastructure (Protected)
+#### Pre-Installed Base System
 
-These extensions are **protected** and cannot be removed:
+These components are **pre-installed in the Docker image** and are not extensions:
 
-- **workspace-structure** - Creates /workspace directory structure (src, tests, docs, scripts, etc.)
-- **mise-config** - Unified tool version manager for mise-powered extensions
-- **ssh-environment** - Configures SSH daemon for non-interactive sessions (required for CI/CD)
+- **workspace-structure** - Creates /workspace directory structure (projects/, scripts/, config/, etc.)
+- **mise** - Unified tool version manager for mise-powered extensions (pre-installed)
+- **ssh-environment** - Configures SSH wrappers for non-interactive sessions (required for CI/CD)
+- **claude** - Claude Code CLI (pre-installed)
 
 #### Foundational Languages
 
 While not protected, these are highly recommended:
 
-- **nodejs** - Node.js LTS via mise and npm (required by many tools, depends on mise-config)
-- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, depends on mise-config)
+- **nodejs** - Node.js LTS via mise and npm (required by many tools, uses pre-installed mise)
+- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, uses pre-installed mise)
 
 #### Claude AI
 
-- **claude** - Claude Code CLI with developer configuration
+Note: Claude Code CLI is pre-installed in the base Docker image.
+
+- **claude-auth-with-api-key** - API key authentication for Claude Code (optional - only for API key users, not Pro/Max)
 - **claude-marketplace** - Plugin installer for https://claudecodemarketplace.com/
-  (depends on claude, git)
+  (depends on claude-auth-with-api-key or manual auth, git)
 - **openskills** - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace
   (depends on nodejs 20.6+, git)
 - **nodejs-devtools** - TypeScript, ESLint, Prettier, nodemon, goalie (depends on nodejs)
@@ -114,10 +118,10 @@ extension-manager list
 # Example output:
 # Available extensions in docker/lib/extensions.d:
 #
-#   ✓ nodejs (nodejs.sh.example) - activated
-#   ○ rust (rust.sh.example) - not activated
-#   ○ golang (golang.sh.example) - not activated
-#   ✓ docker (docker.sh.example) - activated
+#   ✓ nodejs (nodejs/nodejs.extension) - activated
+#   ○ rust (rust/rust.extension) - not activated
+#   ○ golang (golang/golang.extension) - not activated
+#   ✓ docker (docker/docker.extension) - activated
 ```
 
 **Install extensions (auto-activates):**
@@ -178,27 +182,31 @@ extension-manager reorder python 5
 > listed in `active-extensions.conf`.
 >
 > [!NOTE]
-> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and
-> cannot be removed.
+> The base system components (workspace-structure, mise, ssh-environment, claude) are pre-installed in the Docker
+> image and are not managed as extensions. They are always available and cannot be uninstalled.
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/.system/manifest/active-extensions.conf`.
+Extensions are executed in the order listed in `/workspace/.system/manifest/active-extensions.conf`.
 
 **Example manifest:**
 
 ```conf
-# Protected extensions (required, cannot be removed):
-workspace-structure
-mise-config
-ssh-environment
+# Pre-installed base system (not in manifest):
+# - workspace-structure
+# - mise
+# - ssh-environment
+# - claude
+
+# Foundational languages
+nodejs
+python
 
 # Claude AI tools
-claude
 nodejs-devtools
+openskills
 
 # Language runtimes
-python
 golang
 rust
 
@@ -214,7 +222,7 @@ monitoring
 
 ```bash
 # View current manifest
-cat /workspace/scripts/.system/manifest/active-extensions.conf
+cat /workspace/.system/manifest/active-extensions.conf
 
 # Install extension (auto-activates and adds to manifest)
 extension-manager install <name>
@@ -223,7 +231,7 @@ extension-manager install <name>
 extension-manager deactivate <name>
 
 # Manually edit manifest (for advanced users)
-nano /workspace/scripts/.system/manifest/active-extensions.conf
+nano /workspace/.system/manifest/active-extensions.conf
 ```
 
 ## Creating Custom Extensions
@@ -235,23 +243,27 @@ Extensions follow the Extension API v1.0 specification. All extensions must impl
 **Create a new extension:**
 
 ```bash
-# Use the template as starting point
-cp docker/lib/extensions.d/template.sh.example docker/lib/extensions.d/mycustomtool.sh.example
+# Create extension directory
+mkdir -p docker/lib/extensions.d/mycustomtool
 
-# Edit the extension
-nano docker/lib/extensions.d/mycustomtool.sh.example
+# Copy template
+cp -r docker/lib/extensions.d/template/* docker/lib/extensions.d/mycustomtool/
+
+# Rename and edit the extension
+mv docker/lib/extensions.d/mycustomtool/template.extension docker/lib/extensions.d/mycustomtool/mycustomtool.extension
+nano docker/lib/extensions.d/mycustomtool/mycustomtool.extension
 ```
 
 **Basic extension structure:**
 
 ```bash
 #!/bin/bash
-# mycustomtool.sh.example - Custom tool extension
+# mycustomtool.extension - Custom tool extension
 # Extension API v1.0
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 # ============================================================================
 # METADATA
@@ -368,7 +380,10 @@ remove() {
 
 ### Extension Functions
 
-All extensions must implement these 6 functions:
+All extensions must implement these functions:
+
+- **Extension API v1.0**: 6 required functions
+- **Extension API v2.0**: 7 required functions (adds `upgrade()`)
 
 #### 1. prerequisites()
 
@@ -592,6 +607,53 @@ remove() {
 }
 ```
 
+#### 7. upgrade() (Extension API v2.0+)
+
+Upgrade installed tools to latest versions.
+
+**Returns**: `0` on success, `1` on failure
+
+**Actions**:
+
+- Check for available updates
+- Upgrade packages/tools
+- Verify upgraded versions
+- Handle upgrade failures gracefully
+
+```bash
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Check current version
+  local current_version=$(mytool --version 2>/dev/null || echo "unknown")
+  print_info "Current version: $current_version"
+
+  # Check for updates
+  print_info "Checking for updates..."
+  local latest_version=$(curl -s https://api.example.com/latest-version)
+
+  if [ "$current_version" = "$latest_version" ]; then
+    print_success "Already at latest version"
+    return 0
+  fi
+
+  # Perform upgrade
+  curl -fsSL https://example.com/upgrade.sh | bash
+
+  # Verify upgrade
+  local new_version=$(mytool --version 2>/dev/null)
+  if [ "$new_version" = "$latest_version" ]; then
+    print_success "Successfully upgraded to $new_version"
+    return 0
+  else
+    print_error "Upgrade verification failed"
+    return 1
+  fi
+}
+```
+
+**Note**: The `upgrade()` function is optional for v1.0 extensions but required for v2.0 extensions.
+
 ## Configuration Examples
 
 ### Custom Development Environment
@@ -600,11 +662,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# fullstack-js.sh.example - Full-stack JavaScript development environment
+# fullstack-js.extension - Full-stack JavaScript development environment
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="fullstack-js"
 EXT_VERSION="1.0.0"
@@ -719,11 +781,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# datascience.sh.example - Data science environment with Python
+# datascience.extension - Data science environment with Python
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="datascience"
 EXT_VERSION="1.0.0"
@@ -841,11 +903,11 @@ Customize development workspace layout:
 
 ```bash
 #!/bin/bash
-# custom-tmux.sh.example - Custom tmux workspace configuration
+# custom-tmux.extension - Custom tmux workspace configuration
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="custom-tmux"
 EXT_VERSION="1.0.0"
@@ -1754,11 +1816,11 @@ cp /workspace/templates/common/.gitignore .
 
 ```bash
 #!/bin/bash
-# github-actions.sh.example - GitHub Actions development tools
+# github-actions.extension - GitHub Actions development tools
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="github-actions"
 EXT_VERSION="1.0.0"
@@ -1920,11 +1982,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# kubernetes.sh.example - Kubernetes development tools
+# kubernetes.extension - Kubernetes development tools
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="kubernetes"
 EXT_VERSION="1.0.0"
@@ -2036,11 +2098,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# monitoring-stack.sh.example - Comprehensive monitoring stack
+# monitoring-stack.extension - Comprehensive monitoring stack
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="monitoring-stack"
 EXT_VERSION="1.0.0"

@@ -1,0 +1,168 @@
+name: Cleanup Docker Registry
+
+on:
+  schedule:
+    # Run weekly on Sunday at 3:00 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show what would be deleted without deleting)'
+        required: false
+        default: true
+        type: boolean
+      pr_retention_days:
+        description: 'Delete PR images older than N days'
+        required: false
+        default: 7
+        type: number
+      tooling_versions_to_keep:
+        description: 'Number of tooling versions to keep'
+        required: false
+        default: 3
+        type: number
+      branch_versions_to_keep:
+        description: 'Number of branch versions to keep'
+        required: false
+        default: 10
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Clean Up Old Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Authenticate with Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl auth docker
+
+      - name: List all registry images
+        id: list
+        run: |
+          echo "Fetching all images from registry..."
+
+          # Note: Fly CLI doesn't have a direct registry list command
+          # We'll use Docker registry API v2 to list images
+          # This requires authentication via flyctl auth docker
+
+          # For now, we'll document the manual cleanup process
+          # Future enhancement: Implement via Docker registry API
+
+          echo "## Registry Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ **Note**: Automated cleanup via Fly CLI is limited." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Cleanup Commands" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# List all images" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl registry list sindri-registry" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Delete old PR images (example)" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl registry delete sindri-registry:pr-123-abc123" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Delete old tooling versions (keep last 3)" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl registry delete sindri-registry:tooling-20240101-120000" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup PR images (older than ${{ inputs.pr_retention_days || 7 }} days)
+        run: |
+          echo "🗑️ Cleaning up old PR images..."
+          DRY_RUN="${{ inputs.dry_run || 'true' }}"
+          RETENTION_DAYS="${{ inputs.pr_retention_days || 7 }}"
+
+          # Calculate cutoff date
+          CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%Y%m%d 2>/dev/null || date -v-${RETENTION_DAYS}d +%Y%m%d)
+
+          echo "Retention policy: Delete PR images older than $RETENTION_DAYS days (before $CUTOFF_DATE)"
+
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "🔍 DRY RUN MODE - No images will be deleted"
+          fi
+
+          # Note: Implementation depends on Fly CLI capabilities
+          # For now, this is a placeholder for documentation
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### PR Image Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retention**: $RETENTION_DAYS days" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cutoff Date**: $CUTOFF_DATE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: $([ "$DRY_RUN" == "true" ] && echo "Dry Run" || echo "Live")" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup old tooling versions (keep last ${{ inputs.tooling_versions_to_keep || 3 }})
+        run: |
+          echo "🔧 Cleaning up old tooling versions..."
+          DRY_RUN="${{ inputs.dry_run || 'true' }}"
+          KEEP_COUNT="${{ inputs.tooling_versions_to_keep || 3 }}"
+
+          echo "Retention policy: Keep last $KEEP_COUNT tooling versions"
+
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "🔍 DRY RUN MODE - No images will be deleted"
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tooling Version Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "- **Keep**: Last $KEEP_COUNT versions" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: $([ "$DRY_RUN" == "true" ] && echo "Dry Run" || echo "Live")" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup old branch versions (keep last ${{ inputs.branch_versions_to_keep || 10 }})
+        run: |
+          echo "🌿 Cleaning up old branch versions..."
+          DRY_RUN="${{ inputs.dry_run || 'true' }}"
+          KEEP_COUNT="${{ inputs.branch_versions_to_keep || 10 }}"
+
+          echo "Retention policy: Keep last $KEEP_COUNT branch versions"
+
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "🔍 DRY RUN MODE - No images will be deleted"
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Branch Version Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "- **Keep**: Last $KEEP_COUNT versions" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: $([ "$DRY_RUN" == "true" ] && echo "Dry Run" || echo "Live")" >> $GITHUB_STEP_SUMMARY
+
+      - name: Preserve critical images
+        run: |
+          echo "🔒 Preserving critical images..."
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Protected Images" >> $GITHUB_STEP_SUMMARY
+          echo "The following images are never deleted:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`base-stable\` (current base layer)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tooling-stable\` (current tooling layer)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`latest\` (current application layer)" >> $GITHUB_STEP_SUMMARY
+          echo "- All \`base-*\` versions (rarely updated)" >> $GITHUB_STEP_SUMMARY
+          echo "- Last ${{ inputs.tooling_versions_to_keep || 3 }} \`tooling-*\` versions" >> $GITHUB_STEP_SUMMARY
+          echo "- Last ${{ inputs.branch_versions_to_keep || 10 }} branch commits" >> $GITHUB_STEP_SUMMARY
+
+      - name: Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To perform manual cleanup:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# List all images" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl registry list sindri-registry" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Delete specific image" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl registry delete sindri-registry:<tag>" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ **Note**: Automated cleanup via Fly CLI registry API will be implemented in a future update." >> $GITHUB_STEP_SUMMARY
+          echo "For now, use manual cleanup commands above or contact DevOps for bulk cleanup." >> $GITHUB_STEP_SUMMARY

@@ -5,7 +5,7 @@
 # This extension configures Claude Code marketplaces and plugins via YAML configuration.
 # Converts marketplaces.yml to JSON and merges into ~/.claude/settings.json.
 # Claude Code automatically installs marketplaces and plugins when next invoked.
-# Requires the claude extension to be installed first.
+# Requires Claude Code to be authenticated (via claude-auth-with-api-key extension or manual auth).
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,10 +53,11 @@ MARKETPLACES_FILE="$MARKETPLACES_CONFIG_DIR/$MARKETPLACES_YAML"
 prerequisites() {
   print_status "Checking prerequisites for ${EXT_NAME}..."
 
-  # Hard requirement: claude extension must be installed
+  # Hard requirement: Claude Code CLI must be available (pre-installed in base image)
   if ! command_exists claude; then
-    print_error "Claude CLI is required but not installed"
-    print_status "Install with: extension-manager install claude"
+    print_error "Claude CLI is required but not found (should be pre-installed)"
+    print_status "For API key auth: extension-manager install claude-auth-with-api-key"
+    print_status "Or authenticate manually: claude"
     return 1
   fi
 

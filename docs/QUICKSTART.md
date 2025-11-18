@@ -44,9 +44,11 @@ extension-manager --interactive
 # Or install specific extensions
 extension-manager install nodejs
 extension-manager install python
-extension-manager install claude
 
-# Authenticate Claude Code
+# Optional: API key authentication for Claude Code (only if using API key, not Pro/Max)
+extension-manager install claude-auth-with-api-key
+
+# Authenticate Claude Code (if using Pro/Max subscription, just run this)
 claude
 ```
 

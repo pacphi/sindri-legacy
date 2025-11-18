@@ -1,0 +1,89 @@
+name: "Test Extension Complete"
+description: "Run complete extension test suite: installation, validation, API compliance, functionality, idempotency, and upgrade"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  extension-name:
+    description: "Extension name to test"
+    required: true
+  dependencies:
+    description: "Space or comma-separated list of dependencies"
+    required: false
+    default: ""
+  user:
+    description: "SSH user"
+    required: false
+    default: "developer"
+
+outputs:
+  status:
+    description: "Test status (success or failure)"
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Upload test libraries
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        app_name="${{ inputs.app-name }}"
+
+        echo "Uploading test libraries..."
+        ssh_mkdir_retry "$app_name" /tmp/lib
+
+        sftp_upload_multiple "$app_name" 666 \
+          .github/scripts/lib/test-helpers.sh:/tmp/lib/test-helpers.sh \
+          .github/scripts/lib/assertions.sh:/tmp/lib/assertions.sh \
+          .github/scripts/lib/ssh-helpers.sh:/tmp/lib/ssh-helpers.sh
+
+        echo "✅ Test libraries uploaded"
+
+    - name: Upload test scripts
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        app_name="${{ inputs.app-name }}"
+
+        echo "Uploading extension test scripts..."
+        sftp_upload_multiple "$app_name" 666 \
+          .github/scripts/extensions/test-extension-complete.sh:/tmp/test-extension-complete.sh \
+          .github/scripts/extensions/verify-commands.sh:/tmp/verify-commands.sh \
+          .github/scripts/extensions/test-key-functionality.sh:/tmp/test-key-functionality.sh
+
+        echo "✅ Test scripts uploaded"
+
+    - name: Run complete extension test
+      id: test
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        app_name="${{ inputs.app-name }}"
+        extension="${{ inputs.extension-name }}"
+        dependencies="${{ inputs.dependencies }}"
+
+        echo "Running complete test suite for extension: $extension"
+        if [ -n "$dependencies" ]; then
+          echo "Dependencies: $dependencies"
+        fi
+
+        # Execute the comprehensive test
+        if ssh_command_retry "$app_name" "/bin/bash -lc 'bash /tmp/test-extension-complete.sh $extension $dependencies'"; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Complete extension test passed for $extension"
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "❌ Complete extension test failed for $extension"
+          exit 1
+        fi

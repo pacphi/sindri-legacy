@@ -1,37 +1,12 @@
 name: Integration Tests
 
 on:
+  push:
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
-    paths:
-      # Deployment configuration
-      - "fly.toml"
-      - "Dockerfile"
-      # CI scripts
-      - "scripts/prepare-fly-config.sh"
-      - "scripts/lib/fly-common.sh"
-      # Extension system (core files only)
-      - "docker/lib/extension-manager.sh"
-      - "docker/lib/common.sh"
-      - "docker/lib/extensions-common.sh"
-      # Workflow itself and direct dependencies
-      - ".github/workflows/integration.yml"
-      - ".github/workflows/integration-test.yml"
-      - ".github/workflows/developer-workflow.yml"
-      - ".github/workflows/mise-stack-integration.yml"
-      # Integration-specific scripts
-      - ".github/scripts/integration/**"
-      # Shared actions used by integration workflows
-      - ".github/actions/setup-fly-test-env/**"
-      - ".github/actions/deploy-fly-app/**"
-      - ".github/actions/wait-fly-deployment/**"
-      - ".github/actions/test-ssh-connectivity/**"
-      - ".github/actions/test-vm-configuration/**"
-      - ".github/actions/run-vm-script/**"
-
   schedule:
     - cron: '0 2 * * 6'  # Weekly on Saturday at 2:00 AM UTC
-
   workflow_dispatch:
     inputs:
       test_region:
@@ -40,7 +15,6 @@ on:
         default: "sjc"
         type: choice
         options:
-          # North America
           - sjc  # San Jose, California (US)
           - lax  # Los Angeles, California (US)
           - dfw  # Dallas, Texas (US)
@@ -48,20 +22,16 @@ on:
           - iad  # Ashburn, Virginia (US)
           - ewr  # Secaucus, New Jersey (US)
           - yyz  # Toronto, Canada
-          # Europe
           - lhr  # London, United Kingdom
           - ams  # Amsterdam, Netherlands
           - cdg  # Paris, France
           - fra  # Frankfurt, Germany
           - arn  # Stockholm, Sweden
-          # Asia Pacific
           - nrt  # Tokyo, Japan
           - sin  # Singapore
           - syd  # Sydney, Australia
           - bom  # Mumbai, India
-          # South America
           - gru  # São Paulo, Brazil
-          # Africa
           - jnb  # Johannesburg, South Africa
       skip_cleanup:
         description: "Skip cleanup (for debugging)"
@@ -74,11 +44,102 @@ permissions:
 
 jobs:
   # ============================================================================
+  # PHASE 1: Quick Checks (Inline - Fail Fast)
+  # ============================================================================
+
+  quick-checks:
+    name: Quick Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Shellcheck validation
+        run: |
+          echo "=== Running shellcheck validation ==="
+          shellcheck_failed=0
+
+          for script in docker/lib/*.sh docker/scripts/*.sh scripts/*.sh .github/scripts/**/*.sh; do
+            if [ -f "$script" ]; then
+              echo "Checking $script..."
+              if shellcheck -x "$script" 2>&1; then
+                echo "✅ $script passed"
+              else
+                echo "❌ $script failed shellcheck"
+                shellcheck_failed=1
+              fi
+            fi
+          done
+
+          if [ $shellcheck_failed -eq 1 ]; then
+            echo "❌ Shellcheck validation failed"
+            exit 1
+          fi
+
+          echo "✅ All shell scripts passed shellcheck"
+
+      - name: YAML validation
+        run: |
+          echo "=== Running YAML validation ==="
+          yaml_failed=0
+
+          for yaml in .github/workflows/*.yml .github/actions/**/action.yml docker/compose/*.yml; do
+            if [ -f "$yaml" ]; then
+              echo "Checking $yaml..."
+              if python3 -c "import yaml; yaml.safe_load(open('$yaml'))" 2>&1; then
+                echo "✅ $yaml is valid"
+              else
+                echo "❌ $yaml is invalid"
+                yaml_failed=1
+              fi
+            fi
+          done
+
+          if [ $yaml_failed -eq 1 ]; then
+            echo "❌ YAML validation failed"
+            exit 1
+          fi
+
+          echo "✅ All YAML files are valid"
+
+      - name: Extension manager syntax check
+        run: |
+          echo "=== Checking extension-manager syntax ==="
+          if bash -n docker/lib/extension-manager.sh; then
+            echo "✅ extension-manager.sh syntax valid"
+          else
+            echo "❌ extension-manager.sh syntax invalid"
+            exit 1
+          fi
+
+  # ============================================================================
+  # PHASE 2: Extension System Validation (No VM - Fail Fast)
+  # ============================================================================
+
+  manager-validation:
+    name: Extension Manager Validation
+    needs: quick-checks
+    if: success()
+    uses: ./.github/workflows/manager-validation.yml
+
+  manifest-validation:
+    name: Manifest & Extension Validation
+    needs: manager-validation
+    if: success()
+    uses: ./.github/workflows/manifest-validation.yml
+
+  # ============================================================================
   # Setup Configuration
   # ============================================================================
 
   setup-config:
     name: Setup Configuration
+    needs: manifest-validation
+    if: success()
     runs-on: ubuntu-latest
     outputs:
       region: ${{ steps.config.outputs.region }}
@@ -88,7 +149,6 @@ jobs:
       - name: Set configuration
         id: config
         run: |
-          # Define defaults once - handles both workflow_dispatch and push/PR triggers
           echo "region=${{ github.event.inputs.test_region || 'sjc' }}" >> $GITHUB_OUTPUT
           echo "test_app_prefix=sindri-ci-test" >> $GITHUB_OUTPUT
           echo "skip_cleanup=${{ github.event.inputs.skip_cleanup == 'true' }}" >> $GITHUB_OUTPUT
@@ -100,18 +160,24 @@ jobs:
   build-image:
     name: Build Docker Image
     needs: setup-config
+    if: success()
     uses: ./.github/workflows/build-image.yml
+    with:
+      event_name: ${{ github.event_name }}
+      pr_number: ${{ github.event.pull_request.number }}
+      ref_name: ${{ github.ref_name }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
   # ============================================================================
-  # Core Integration Test
+  # PHASE 2.5: Dependency Chain Tests (Runtime - Fail Fast)
   # ============================================================================
 
-  integration-test:
-    name: Integration Test
+  dependency-chain:
+    name: Dependency Chain Tests
     needs: [setup-config, build-image]
-    uses: ./.github/workflows/integration-test.yml
+    if: success()
+    uses: ./.github/workflows/dependency-chain-tests.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
@@ -122,13 +188,14 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
-  # Developer Workflow Test
+  # PHASE 3: Infrastructure Tests (1 VM - Fail Fast)
   # ============================================================================
 
-  developer-workflow:
-    name: Developer Workflow
-    needs: [setup-config, build-image, integration-test]
-    uses: ./.github/workflows/developer-workflow.yml
+  infrastructure:
+    name: Infrastructure Tests
+    needs: [setup-config, build-image, dependency-chain]
+    if: success()
+    uses: ./.github/workflows/infrastructure-tests.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
@@ -139,13 +206,14 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
-  # Mise Stack Integration Test
+  # PHASE 4: Individual Extension Tests (N VMs, 3 Max Concurrent)
   # ============================================================================
 
-  mise-stack-integration:
-    name: Mise Stack Integration
-    needs: [setup-config, build-image, integration-test]
-    uses: ./.github/workflows/mise-stack-integration.yml
+  individual-extensions:
+    name: Per-Extension Tests
+    needs: [setup-config, build-image, infrastructure]
+    if: success()
+    uses: ./.github/workflows/per-extension-tests.yml
     with:
       test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
       region: ${{ needs.setup-config.outputs.region }}
@@ -156,19 +224,59 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ============================================================================
-  # Notify on Failure
+  # PHASE 5: Extension Combinations (N VMs, 3 Max Concurrent)
   # ============================================================================
 
-  notify-failure:
-    name: Notify on Failure
-    if: failure()
-    needs: [setup-config, build-image, integration-test, developer-workflow, mise-stack-integration]
+  extension-combinations:
+    name: Extension Combinations
+    needs: [setup-config, build-image, individual-extensions]
+    if: success()
+    uses: ./.github/workflows/extension-combinations.yml
+    with:
+      test_app_prefix: ${{ needs.setup-config.outputs.test_app_prefix }}
+      region: ${{ needs.setup-config.outputs.region }}
+      skip_cleanup: ${{ fromJSON(needs.setup-config.outputs.skip_cleanup) }}
+      pre_built_image: ${{ needs.build-image.outputs.image-url }}
+    secrets:
+      FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # ============================================================================
+  # Summary
+  # ============================================================================
+
+  summary:
+    name: Test Summary
+    if: always()
+    needs: [quick-checks, manager-validation, manifest-validation, dependency-chain, infrastructure, individual-extensions, extension-combinations]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Report failure
+      - name: Report results
         run: |
-          echo "❌ Integration tests failed"
-          echo "## ❌ Integration Tests Failed" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔍 Integration Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "One or more integration tests failed. Please check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
+          echo "| Phase | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Quick Checks | ${{ needs.quick-checks.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manager Validation | ${{ needs.manager-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manifest Validation | ${{ needs.manifest-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Chain | ${{ needs.dependency-chain.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Infrastructure Tests | ${{ needs.infrastructure.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Individual Extensions | ${{ needs.individual-extensions.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension Combinations | ${{ needs.extension-combinations.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quick-checks.result }}" != "success" ] || \
+             [ "${{ needs.manager-validation.result }}" != "success" ] || \
+             [ "${{ needs.manifest-validation.result }}" != "success" ] || \
+             [ "${{ needs.dependency-chain.result }}" != "success" ] || \
+             [ "${{ needs.infrastructure.result }}" != "success" ] || \
+             [ "${{ needs.individual-extensions.result }}" != "success" ] || \
+             [ "${{ needs.extension-combinations.result }}" != "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **One or more test phases failed. Please check the individual job logs.**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **All integration tests passed!**" >> $GITHUB_STEP_SUMMARY
+          fi

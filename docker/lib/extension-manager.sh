@@ -47,7 +47,7 @@ elif [[ -f "/docker/lib/upgrade-history.sh" ]]; then
     source "/docker/lib/upgrade-history.sh"
 fi
 
-# Base system (workspace-structure, mise-config, ssh-environment, claude)
+# Base system (workspace-structure, mise-config, ssh-environment, Claude Code CLI)
 # is pre-installed in the Docker image
 
 # ============================================================================

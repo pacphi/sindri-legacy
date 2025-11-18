@@ -41,7 +41,7 @@ flyctl.toml.local
 .Trashes
 ehthumbs.db
 Thumbs.db
-.archive/
+.archives/
 
 # IDE and Editor Files
 .vscode/settings.json

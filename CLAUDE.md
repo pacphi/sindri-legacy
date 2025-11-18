@@ -138,6 +138,7 @@ The following components are pre-installed in every Sindri instance:
 - **mise** - Unified tool version manager for Node.js, Python, Rust, Go, Ruby
 - **SSH Environment** - Non-interactive session support for CI/CD workflows
 - **Claude Code** - AI-powered development CLI with global preferences
+- **SOPS + age** - Transparent secrets management with automatic encryption
 
 These are baked into the Docker image for faster startup (~10s vs ~90-120s) and improved reliability.
 
@@ -148,6 +149,7 @@ These are baked into the Docker image for faster startup (~10s vs ~90-120s) and 
 
 **Claude AI Extensions:**
 
+- `claude-auth-with-api-key` - Claude Code authentication via API key (optional - for API key users only, not Pro/Max)
 - `claude-marketplace` - YAML-based marketplace configuration for Claude Code
 - `openskills` - OpenSkills CLI for managing Claude Code skills from Anthropic's marketplace (requires nodejs, git)
 - `nodejs-devtools` - TypeScript, ESLint, Prettier, nodemon, goalie (requires nodejs)
@@ -269,18 +271,20 @@ Provides:
 - goalie AI research assistant
 - Tools managed via mise npm plugin
 
-**claude** (Recommended):
+**claude-auth-with-api-key** (Optional - API key users only):
 
 ```bash
-extension-manager install claude
+extension-manager install claude-auth-with-api-key
 ```
 
 Provides:
 
-- Claude Code CLI (`claude` command)
-- Global preferences (~/.claude/CLAUDE.md)
-- Auto-formatting hooks (Prettier, TypeScript)
-- Authentication management
+- API key authentication for Claude Code CLI
+- Automatic configuration using encrypted secrets (ANTHROPIC_API_KEY)
+- **Not needed** if you authenticate via Pro or Max subscription
+- **Only for users** who authenticate with an API key
+
+Note: Claude Code CLI is pre-installed in the base image. This extension only handles API key authentication.
 
 **claude-marketplace** (Optional):
 
@@ -528,70 +532,134 @@ Always run project-specific linting/formatting before commits.
 
 ## CI/CD & GitHub Actions
 
-Sindri uses GitHub Actions for automated testing and validation with a multi-tier testing strategy for faster feedback loops.
+Sindri uses a unified GitHub Actions workflow for automated testing with a sequential, fail-fast testing strategy.
 
-### Multi-Tier Testing Strategy
+### Unified Integration Testing Architecture
 
-#### Tier 1: Quick Checks (2-5 minutes, always runs)
+**Single Entry Point**: All CI/CD testing flows through `integration.yml`, which
+orchestrates 6 sequential phases with controlled concurrency (max 3 jobs).
 
-- Fast validation on every commit
-- Skips tests entirely for docs-only changes
-- Runs shellcheck and YAML validation
-- Detects changed extensions for targeted testing
-- Location: `.github/workflows/quick-checks.yml`
+**Sequential Execution Flow**:
 
-#### Tier 2: Selective Full Testing (12-15 minutes, core changes only)
+```text
+quick-checks (inline, fail-fast ✗)
+    ↓
+manifest-validation (static, fail-fast ✗)
+    ↓
+dependency-chain (3 VMs, fail-fast ✗)
+    ↓
+infrastructure (1 VM, fail-fast ✗)
+    ↓
+individual-extensions (N VMs, 3 max concurrent, fail-after-all-complete ⚠)
+    ↓
+extension-combinations (N VMs, 3 max concurrent, fail-after-all-complete ⚠)
+```
 
-- Full test suite runs only for core system changes
-- Weekly scheduled runs on Sundays at 2:00 AM UTC
-- Manual workflow dispatch available for on-demand testing
-- Restricted to `main` branch pushes (not `develop`)
+**Legend**:
 
-#### Tier 3: Single Extension Testing (2-4 minutes, focused testing)
+- ✗ = Fail immediately, stop entire workflow
+- ⚠ = Let all running jobs complete, then fail workflow
 
-- Tests individual extensions in isolation
-- Manual workflow dispatch with extension selection
-- Validates installation, API compliance, and idempotency
-- Location: `.github/workflows/single-extension-test.yml`
+### Testing Phases
 
-### Available Workflows
+#### Phase 1: Quick Checks (2-5 minutes, inline)
 
-**Quick Checks (`quick-checks.yml`)**
+- Shellcheck validation for all shell scripts
+- YAML syntax validation for workflows and actions
+- Extension manager syntax check
+- Fails immediately on any validation error
 
-- Fast validation and change detection (NEW)
-- Skips all tests for documentation-only changes
-- Identifies changed extensions for targeted testing
-- Runs shellcheck, YAML validation, and extension manager checks
-- Provides intelligent routing to appropriate test workflows
-- Location: `.github/workflows/quick-checks.yml`
+#### Phase 2: Manifest Validation (2 minutes, no VM)
 
-**Single Extension Test (`single-extension-test.yml`)**
+- Static validation of extension syntax
+- Static dependency chain verification (files exist)
+- Manifest template validation
+- Extension metadata validation
+- Fails immediately if validation errors found
 
-- Focused testing for individual extensions (NEW)
-- Manual workflow dispatch with dropdown selection of extensions
-- Tests installation, validation, API compliance, and idempotency
-- Faster feedback for extension-specific changes (~2-4 minutes)
-- Location: `.github/workflows/single-extension-test.yml`
+#### Phase 2.5: Dependency Chain Tests (3-5 minutes, max 3 VMs)
 
-**Extension Testing (`extension-tests.yml`)**
+- Runtime testing of automatic dependency resolution
+- Tests: nodejs-devtools→nodejs, openskills→nodejs+git, playwright→nodejs
+- Verifies extension manager automatically installs dependencies
+- Fails immediately if dependency resolution broken
 
-- Comprehensive Extension API v1.0 and v2.0 testing (OPTIMIZED)
-- Runs weekly on Sundays at 2:00 AM UTC (scheduled)
-- Triggers only on core system changes (not individual extensions)
-- Restricted to `main` branch pushes, PR checks remain for both branches
-- Tests individual extensions in parallel
-- Verifies upgrade functionality
-- Location: `.github/workflows/extension-tests.yml`
+#### Phase 3: Infrastructure Tests (5-7 minutes, 1 VM)
 
-**Integration Testing (`integration.yml`)**
+- VM deployment and configuration (minimal tier: 1GB/1CPU)
+- SSH connectivity verification
+- Volume mount and persistence testing
+- Auto-suspend functionality
+- Secrets management (SOPS + age)
+- Basic developer workflow validation
+- Fails immediately if infrastructure issues found
 
-- End-to-end VM deployment tests (OPTIMIZED)
-- Runs weekly on Sundays at 2:00 AM UTC (scheduled)
-- Triggers only on core system changes
-- Restricted to `main` branch pushes, PR checks remain for both branches
-- Developer workflow validation
-- mise-powered stack integration
+#### Phase 4: Individual Extensions (15-20 minutes, N VMs, 3 max concurrent)
+
+- Matrix of all 20+ extensions
+- Each extension runs complete test suite:
+  - Installation with dependencies
+  - Validation
+  - API compliance (validate, status functions)
+  - Key functionality testing
+  - Idempotency verification
+  - Upgrade functionality (API v2.0+)
+- Tier-based resources (minimal/standard/heavy/xheavy)
+- **Fail behavior**: Let all running jobs complete before failing
+
+#### Phase 5: Extension Combinations (10-12 minutes, N VMs, 3 max concurrent)
+
+- Multi-extension scenario testing
+- Common stacks: mise-stack, full-node, fullstack, systems, enterprise, ai-dev
+- Performance tier resources (16GB/4CPU)
+- **Fail behavior**: Let all running jobs complete before failing
+
+### Main Workflow
+
+**Integration Tests (`integration.yml`)**
+
+- Single entry point for all CI/CD testing
+- Runs on: push to main/develop, pull requests, weekly schedule (Saturday 2:00 AM UTC)
+- Orchestrates 5 sequential phases with controlled concurrency
+- Provides comprehensive test summary at the end
 - Location: `.github/workflows/integration.yml`
+
+### Reusable workflow_call Workflows
+
+**Manifest Validation (`manifest-validation.yml`)**
+
+- Static validation without VM deployment
+- Called by integration.yml after quick-checks
+- Location: `.github/workflows/manifest-validation.yml`
+
+**Dependency Chain Tests (`dependency-chain-tests.yml`)**
+
+- Runtime testing of automatic dependency resolution
+- Tests 3 representative dependency chains with max 3 concurrent VMs
+- Verifies extension manager auto-installs dependencies
+- Called by integration.yml after manifest-validation
+- Location: `.github/workflows/dependency-chain-tests.yml`
+
+**Infrastructure Tests (`infrastructure-tests.yml`)**
+
+- Single VM for infrastructure validation
+- Consolidates: VM deployment, SSH, volumes, persistence, secrets, mise-stack
+- Called by integration.yml after manifest-validation
+- Location: `.github/workflows/infrastructure-tests.yml`
+
+**Per-Extension Tests (`per-extension-tests.yml`)**
+
+- Matrix of all extensions with complete test suite
+- Max 3 concurrent extension tests
+- Called by integration.yml after infrastructure tests
+- Location: `.github/workflows/per-extension-tests.yml`
+
+**Extension Combinations (`extension-combinations.yml`)**
+
+- Multi-extension scenario testing
+- Max 3 concurrent combinations
+- Called by integration.yml after individual extensions
+- Location: `.github/workflows/extension-combinations.yml`
 
 **Validation (`validate.yml`)**
 
@@ -623,30 +691,26 @@ Sindri uses GitHub Actions for automated testing and validation with a multi-tie
 - Enables ~75% faster CI/CD by reusing images
 - Location: `.github/workflows/build-image.yml`
 
-### Workflow Optimization Summary
+### Concurrency Control
 
-**Before Optimization:**
+**Maximum 3 Jobs Concurrent**:
 
-- Every push to `main` or `develop` triggered full test suite
-- Average CI time: ~16 minutes per commit
-- All 20+ extensions tested on any change
+- Quick checks, manifest validation, infrastructure: Run sequentially (1 job at a time)
+- Individual extensions: Max 3 extensions tested concurrently
+- Extension combinations: Max 3 combinations tested concurrently
+- **Result**: Controlled resource usage, predictable cost
 
-**After Phase 1 & 2 Optimization:**
+**Fail-Fast Behavior**:
 
-- Docs-only changes: **0 minutes** (skipped entirely)
-- Single extension changes: **2-4 minutes** (targeted testing)
-- Core system changes: **12-15 minutes** (full suite, as intended)
-- Develop branch: PR checks only (no automatic full suite)
-- **Overall reduction: 60-75% faster for most commits**
+- Early phases (quick-checks, manifest-validation, infrastructure): Stop immediately on failure
+- Extension phases (individual-extensions, extension-combinations): Let all running jobs
+  complete before failing
+- **Benefit**: Save CI time on early failures, get complete results for extension testing
 
 ### Weekly Scheduled Testing
 
-Both comprehensive test workflows run weekly on Sundays at 2:00 AM UTC:
-
-- `extension-tests.yml` - Full extension system validation
-- `integration.yml` - Complete integration test suite
-
-This ensures regular quality gates without slowing down daily development.
+The unified integration workflow runs weekly on Saturday at 2:00 AM UTC, ensuring regular
+quality gates without slowing down daily development.
 
 ### Pre-Built Docker Images
 
@@ -687,22 +751,61 @@ flyctl apps create sindri-registry --org personal
 
 Reusable workflow components in `.github/actions/`:
 
+**Infrastructure Actions:**
+
 - `setup-fly-test-env/` - Complete test environment setup
 - `deploy-fly-app/` - Fly.io app deployment with retry logic and pre-built image support
 - `build-push-image/` - Build and push Docker images to Fly registry
 - `wait-fly-deployment/` - Wait for deployment completion
 - `cleanup-fly-app/` - Cleanup test resources
 
+**Test Actions:**
+
+- `test-ssh-connectivity/` - Verify SSH access via Fly.io hallpass
+- `test-vm-configuration/` - Validate VM setup and resources
+- `test-volume-mount/` - Verify volume mount and permissions
+- `test-volume-persistence/` - Validate data persistence across restarts
+- `test-machine-lifecycle/` - Test auto-suspend/resume functionality
+
+**Extension Test Actions (NEW):**
+
+- `test-extension-complete/` - Complete extension test suite (API + integration)
+- `install-extension/` - Install extension with dependencies
+- `upload-test-libs/` - Upload shared test libraries to VM
+
+**Utilities:**
+
+- `run-vm-script/` - Execute scripts on VM via SSH
+
 ### Test Scripts
 
-Reusable test scripts in `.github/scripts/extension-tests/`:
+Organized by concern in `.github/scripts/`:
 
-- `verify-commands.sh` - Verify command availability
-- `test-key-functionality.sh` - Test primary tool functionality
-- `test-api-compliance.sh` - Validate Extension API compliance
-- `test-idempotency.sh` - Test idempotent installation
-- `lib/test-helpers.sh` - Shared utility functions (20+)
-- `lib/assertions.sh` - Test assertion library (10+)
+**Shared Libraries (`lib/`):**
+
+- `test-helpers.sh` - 20+ utility functions (environment, commands, extension manager)
+- `assertions.sh` - 10+ test assertion functions
+- `ssh-helpers.sh` - SSH/SFTP utilities with retry logic
+- `retry-utils.sh` - Retry and backoff utilities
+
+**Infrastructure Tests (`infrastructure/`):**
+
+- `test-vm-deployment.sh` - VM, SSH, volumes, extension system (consolidated)
+- `test-secrets-management.sh` - SOPS + age encryption testing
+- `verify-volume.sh` - Volume mount verification
+
+**Extension Tests (`extensions/`):**
+
+- `test-extension-complete.sh` - Complete test suite (API + integration + idempotency)
+- `verify-commands.sh` - Command availability checks
+- `test-key-functionality.sh` - Tool-specific functionality tests (30+ tools)
+
+**Validation (`validation/`):**
+
+- `verify-manifest.sh` - Manifest validation
+- `check-syntax.sh` - Extension syntax validation
+- `verify-dependencies.sh` - Dependency chain validation
+- `setup-manifest.sh` - Manifest setup utilities
 
 ### Documentation
 
@@ -765,6 +868,96 @@ Store user preferences in `/workspace/developer/.claude/CLAUDE.md`:
 - Coding style preferences
 - Git workflow preferences
 - Testing preferences
+
+## Secrets Management
+
+Sindri uses automatic, transparent secrets management with SOPS + age encryption. Secrets are encrypted at rest
+and never exposed in environment variables or process lists.
+
+### Adding Secrets
+
+Secrets are automatically synced from Fly.io secrets to an encrypted file on every VM boot:
+
+```bash
+# On host machine - set secrets via Fly.io
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a myapp
+flyctl secrets set GITHUB_TOKEN=ghp_... -a myapp
+flyctl secrets set PERPLEXITY_API_KEY=pplx-... -a myapp
+
+# VM restarts automatically
+# Secrets are encrypted and tools are pre-authenticated
+```
+
+**Supported Secrets:**
+
+**AI/Development Tools:**
+
+- `ANTHROPIC_API_KEY` - Claude Code authentication
+- `GITHUB_TOKEN` - GitHub CLI authentication
+- `PERPLEXITY_API_KEY` - Goalie research assistant
+- `OPENROUTER_API_KEY` - OpenRouter API access
+- `GOOGLE_GEMINI_API_KEY` - Gemini CLI
+- `XAI_API_KEY` - xAI Grok SDK
+
+**Cloud Provider Credentials:**
+
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` - AWS CLI
+- `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` - Azure CLI
+
+### Using Tools with Secrets
+
+```bash
+# SSH to VM
+ssh developer@myapp.fly.dev -p 10022
+
+# Everything just works - secrets already configured
+claude              # Already authenticated
+gh pr create        # Already authenticated
+goalie "research"   # API key pre-configured
+```
+
+### Advanced: Direct Secret Management
+
+```bash
+# View decrypted secrets
+view-secrets
+
+# Edit secrets without VM restart
+edit-secrets
+
+# Load secrets into current shell (temporary)
+load-secrets
+
+# Run command with secrets loaded
+with-secrets some-command
+```
+
+### Security Features
+
+- **Encrypted at rest**: Secrets stored in `~/.secrets/secrets.enc.yaml` (600 permissions)
+- **age encryption**: Modern cryptography, more secure than PGP
+- **No environment exposure**: Secrets never in `ps aux`, `env`, or shell history
+- **No plaintext**: Secrets not stored in `.bashrc` or configuration files
+- **Automatic cleanup**: Environment variables cleared after encryption
+
+### Workflow Example
+
+```bash
+# 1. On host: Add API key
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-abc123 -a sindri-dev
+
+# 2. VM restarts (automatic or manual)
+flyctl machine restart <machine-id> -a sindri-dev
+
+# 3. SSH to VM
+ssh developer@sindri-dev.fly.dev -p 10022
+
+# 4. Use Claude - already authenticated
+claude
+
+# Secret is encrypted in ~/.secrets/secrets.enc.yaml
+# Never appears in environment or process list
+```
 
 ## Common Operations
 

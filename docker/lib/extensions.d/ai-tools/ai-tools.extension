@@ -23,6 +23,7 @@ EXT_DESCRIPTION="AI CLI tools and coding assistants (hybrid: native + mise-manag
 EXT_CATEGORY="ai-tools"
 EXT_INSTALL_METHOD="mixed"  # Native + mise
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_OPTIONAL_SECRETS="google_gemini_api_key,xai_api_key"
 
 # Initialize extension environment
 extension_init
@@ -371,6 +372,43 @@ configure() {
   if [[ ! -f "$WORKSPACE_DIR/ai-tools/README.md" ]]; then
     cat "$(dirname "${BASH_SOURCE[0]}")/ai-tools.readme.template" > "$WORKSPACE_DIR/ai-tools/README.md"
     print_success "AI tools README created"
+  fi
+
+  # Configure API keys from encrypted secrets if available
+  if [[ -f "$HOME/.secrets/lib.sh" ]]; then
+    source "$HOME/.secrets/lib.sh"
+
+    # Configure Gemini CLI if API key available
+    if has_secret "google_gemini_api_key" 2>/dev/null; then
+      print_status "Configuring Gemini CLI with API key..."
+
+      local api_key
+      api_key=$(get_secret "google_gemini_api_key")
+
+      mkdir -p "$HOME/.config/gemini"
+      cat > "$HOME/.config/gemini/config.json" << EOF
+{
+  "api_key": "$api_key"
+}
+EOF
+      chmod 600 "$HOME/.config/gemini/config.json"
+      print_success "Gemini CLI configured with API key"
+    fi
+
+    # Configure xAI Grok SDK if API key available
+    if has_secret "xai_api_key" 2>/dev/null; then
+      print_status "Configuring xAI Grok SDK with API key..."
+
+      local api_key
+      api_key=$(get_secret "xai_api_key")
+
+      mkdir -p "$HOME/.config/xai"
+      cat > "$HOME/.config/xai/credentials" << EOF
+XAI_API_KEY=$api_key
+EOF
+      chmod 600 "$HOME/.config/xai/credentials"
+      print_success "xAI Grok SDK configured with API key"
+    fi
   fi
 
   print_success "AI CLI tools configured"

@@ -594,7 +594,6 @@ mise current python rust       # Check specific tools
 mise ls-remote <tool>          # List all available versions
 mise ls-remote node            # List available Node.js versions
 mise ls-remote python          # List available Python versions
-mise ls-remote --limit 20      # Limit results
 
 # Examples:
 mise ls-remote node           # See all Node versions
@@ -1040,6 +1039,86 @@ sindri/
 - `PERPLEXITY_API_KEY` - Perplexity API key for Goalie research assistant
 - `GIT_USER_NAME` - Git user name
 - `GIT_USER_EMAIL` - Git user email
+
+## CI/CD Configuration
+
+### SSH Operation Timeouts
+
+The CI/CD workflows use configurable timeouts for SSH and SFTP operations. These can be overridden via
+environment variables in workflow files.
+
+**Available Timeout Variables:**
+
+```bash
+# Main SSH commands (default: 600s / 10 minutes)
+# Used for: extension installations, long-running operations
+SSH_COMMAND_TIMEOUT=600
+
+# SFTP file transfers (default: 120s / 2 minutes)
+# Used for: uploading test scripts, copying files
+SSH_SFTP_TIMEOUT=120
+
+# chmod operations (default: 60s / 1 minute)
+# Used for: setting file permissions after upload
+SSH_CHMOD_TIMEOUT=60
+
+# mkdir operations (default: 60s / 1 minute)
+# Used for: creating directories before upload
+SSH_MKDIR_TIMEOUT=60
+
+# Readiness checks (default: 15s)
+# Used for: quick health checks, VM responsiveness
+SSH_READY_TIMEOUT=15
+```
+
+**Why These Values:**
+
+- **SSH_COMMAND_TIMEOUT (600s)**: Long timeout for heavy operations like:
+  - Rust toolchain installation (~4 minutes)
+  - Docker Engine installation (~3 minutes)
+  - UV/pipx package installations (~3 minutes)
+  - Network variance and retry overhead
+
+- **SSH_SFTP_TIMEOUT (120s)**: Allows for larger file uploads over variable network conditions
+
+- **SSH_CHMOD_TIMEOUT/SSH_MKDIR_TIMEOUT (60s)**: Conservative timeout for typically fast operations
+
+- **SSH_READY_TIMEOUT (15s)**: Quick checks should be fast; longer indicates issues
+
+**Overriding in Workflows:**
+
+```yaml
+# In .github/workflows/*.yml
+jobs:
+  test:
+    env:
+      # Increase timeout for slow extension installations
+      SSH_COMMAND_TIMEOUT: 1200  # 20 minutes for JVM/Ruby compilation
+
+      # Reduce timeout for faster failure detection
+      SSH_READY_TIMEOUT: 10      # 10 seconds for readiness
+```
+
+**When to Adjust:**
+
+- **Increase SSH_COMMAND_TIMEOUT** if extensions consistently timeout during installation
+- **Increase SSH_SFTP_TIMEOUT** if large file uploads fail
+- **Decrease SSH_READY_TIMEOUT** for faster failure detection in quick operations
+
+**Troubleshooting Timeout Issues:**
+
+```bash
+# Check recent timeout failures in workflow logs
+gh run list --status failure | grep timeout
+
+# View specific job logs
+gh run view <run-id> --log-failed | grep "timeout\|forcibly closed"
+
+# Common patterns:
+# "Error: ssh shell: session forcibly closed" → SSH_COMMAND_TIMEOUT too short
+# "timeout 45s" in logs → Old timeout value, update needed
+# "mise install" killed → Extension installation needs more time
+```
 
 ## Performance and Scaling
 

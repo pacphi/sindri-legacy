@@ -1,0 +1,313 @@
+name: Manifest Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    name: Static Manifest & Extension Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate extension syntax
+        run: |
+          echo "=== Extension Syntax Validation ==="
+          failed_extensions=()
+
+          # Check all extension files
+          for ext_file in docker/lib/extensions.d/*/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            echo ""
+            echo "Checking $ext_name..."
+
+            # Run syntax validation
+            if bash .github/scripts/validation/check-syntax.sh "$ext_file"; then
+              echo "✅ $ext_name syntax valid"
+            else
+              echo "❌ $ext_name syntax invalid"
+              failed_extensions+=("$ext_name")
+            fi
+          done
+
+          echo ""
+          if [ ${#failed_extensions[@]} -eq 0 ]; then
+            echo "✅ All extension syntax checks passed"
+          else
+            echo "❌ Failed syntax checks: ${failed_extensions[*]}"
+            exit 1
+          fi
+
+      - name: Validate dependency chains
+        run: |
+          echo "=== Dependency Chain Validation ==="
+          failed_deps=()
+
+          # Check extensions with dependencies
+          for ext_file in docker/lib/extensions.d/*/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            # Check if extension has dependencies
+            if grep -q "^EXT_DEPENDS_ON=" "$ext_file"; then
+              echo ""
+              echo "Checking dependencies for $ext_name..."
+
+              if bash .github/scripts/validation/verify-dependencies.sh "$ext_name"; then
+                echo "✅ $ext_name dependencies valid"
+              else
+                echo "❌ $ext_name dependencies invalid"
+                failed_deps+=("$ext_name")
+              fi
+            fi
+          done
+
+          echo ""
+          if [ ${#failed_deps[@]} -eq 0 ]; then
+            echo "✅ All dependency chains valid"
+          else
+            echo "❌ Failed dependency checks: ${failed_deps[*]}"
+            exit 1
+          fi
+
+      - name: Validate manifest templates
+        run: |
+          echo "=== Manifest Template Validation ==="
+
+          # Check CI manifest template
+          ci_manifest="docker/lib/extensions.d/active-extensions.ci.conf"
+          if [ -f "$ci_manifest" ]; then
+            echo "✅ CI manifest template exists"
+
+            # Verify all referenced extensions exist
+            while IFS= read -r ext; do
+              # Skip comments and empty lines
+              if [[ "$ext" =~ ^#.*$ ]] || [ -z "$ext" ]; then
+                continue
+              fi
+
+              ext_file="docker/lib/extensions.d/${ext}/${ext}.extension"
+              if [ -f "$ext_file" ]; then
+                echo "  ✅ $ext exists"
+              else
+                echo "  ❌ $ext referenced in CI manifest but extension file not found"
+                exit 1
+              fi
+            done < "$ci_manifest"
+          else
+            echo "❌ CI manifest template not found"
+            exit 1
+          fi
+
+          # Check dev manifest template
+          dev_manifest="docker/lib/extensions.d/active-extensions.conf.example"
+          if [ -f "$dev_manifest" ]; then
+            echo "✅ Dev manifest template exists"
+          else
+            echo "⚠️  Dev manifest template not found (non-fatal)"
+          fi
+
+          echo ""
+          echo "✅ Manifest template validation passed"
+
+      - name: Validate extension metadata
+        run: |
+          echo "=== Extension Metadata Validation ==="
+          missing_metadata=()
+
+          for ext_file in docker/lib/extensions.d/*/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            echo ""
+            echo "Checking metadata for $ext_name..."
+
+            # Check for required metadata
+            has_name=$(grep -q "^EXT_NAME=" "$ext_file" && echo "yes" || echo "no")
+            has_desc=$(grep -q "^EXT_DESCRIPTION=" "$ext_file" && echo "yes" || echo "no")
+
+            if [ "$has_name" = "yes" ] && [ "$has_desc" = "yes" ]; then
+              echo "✅ $ext_name has required metadata"
+            else
+              echo "❌ $ext_name missing metadata (NAME: $has_name, DESC: $has_desc)"
+              missing_metadata+=("$ext_name")
+            fi
+          done
+
+          echo ""
+          if [ ${#missing_metadata[@]} -eq 0 ]; then
+            echo "✅ All extensions have required metadata"
+          else
+            echo "❌ Extensions missing metadata: ${missing_metadata[*]}"
+            exit 1
+          fi
+
+      - name: Comprehensive shellcheck validation
+        run: |
+          echo "=== Comprehensive Extension Shellcheck Validation ==="
+
+          failed_scripts=()
+
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
+            # Skip if file doesn't exist (in case no .sh files)
+            [[ ! -f "$script" ]] && continue
+
+            echo "Checking $script..."
+            if ! shellcheck -x "$script"; then
+              failed_scripts+=("$script")
+            fi
+          done
+
+          if [[ ${#failed_scripts[@]} -gt 0 ]]; then
+            echo "❌ Shellcheck failed for:"
+            printf '%s\n' "${failed_scripts[@]}"
+            exit 1
+          fi
+
+          echo "✅ All extension scripts pass shellcheck"
+
+      - name: Verify common.sh sourcing
+        run: |
+          echo "=== Verifying extensions source common.sh ==="
+
+          missing_source=()
+
+          for script in docker/lib/extensions.d/*/*.extension; do
+            [[ ! -f "$script" ]] && continue
+
+            # Check if script sources common.sh
+            if ! grep -q "source.*common\.sh" "$script"; then
+              missing_source+=("$script")
+            fi
+          done
+
+          if [[ ${#missing_source[@]} -gt 0 ]]; then
+            echo "⚠️  Extensions missing common.sh source:"
+            printf '%s\n' "${missing_source[@]}"
+            echo "This is a warning - extensions may have alternative sourcing"
+          else
+            echo "✅ All extensions properly source common.sh"
+          fi
+
+      - name: Verify shebang presence
+        run: |
+          echo "=== Verifying proper shebangs ==="
+
+          missing_shebang=()
+
+          for script in docker/lib/extensions.d/*/*.extension docker/lib/extensions.d/*/*.sh; do
+            [[ ! -f "$script" ]] && continue
+
+            # Check for shebang on first line
+            if ! head -n 1 "$script" | grep -q "^#!/bin/bash"; then
+              missing_shebang+=("$script")
+            fi
+          done
+
+          if [[ ${#missing_shebang[@]} -gt 0 ]]; then
+            echo "❌ Extensions missing proper shebang:"
+            printf '%s\n' "${missing_shebang[@]}"
+            exit 1
+          fi
+
+          echo "✅ All extensions have proper shebang"
+
+      - name: Verify Extension API v1.0 functions
+        run: |
+          echo "=== Extension API v1.0 Function Validation ==="
+
+          failed_extensions=()
+          required_functions=("prerequisites" "install" "configure" "validate" "status" "remove")
+
+          # Skip template as it may have different requirements
+          skip_patterns="template.extension"
+
+          for script in docker/lib/extensions.d/*/*.extension; do
+            [[ ! -f "$script" ]] && continue
+
+            script_name=$(basename "$script")
+
+            # Skip special cases
+            if echo "$script_name" | grep -qE "$skip_patterns"; then
+              echo "⏭️  Skipping $script_name (special extension)"
+              continue
+            fi
+
+            echo ""
+            echo "Checking $script_name..."
+
+            missing_functions=()
+            for func in "${required_functions[@]}"; do
+              # Check if function is defined
+              if grep -qE "^[[:space:]]*${func}\(\)[[:space:]]*\{" "$script" || \
+                 grep -qE "^[[:space:]]*function[[:space:]]+${func}[[:space:]]*\{" "$script"; then
+                echo "  ✅ $func() found"
+              else
+                echo "  ❌ $func() missing"
+                missing_functions+=("$func")
+              fi
+            done
+
+            if [[ ${#missing_functions[@]} -gt 0 ]]; then
+              echo "  ❌ Missing functions in $script_name: ${missing_functions[*]}"
+              failed_extensions+=("$script_name")
+            else
+              echo "  ✅ All Extension API v1.0 functions present"
+            fi
+          done
+
+          echo ""
+          if [[ ${#failed_extensions[@]} -gt 0 ]]; then
+            echo "❌ Extensions with missing API functions:"
+            printf '%s\n' "${failed_extensions[@]}"
+            echo ""
+            echo "⚠️  All extensions should implement Extension API v1.0:"
+            echo "   - prerequisites()"
+            echo "   - install()"
+            echo "   - configure()"
+            echo "   - validate()"
+            echo "   - status()"
+            echo "   - remove()"
+            exit 1
+          else
+            echo "✅ All extensions implement Extension API v1.0 correctly"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "Comprehensive Extension Validation Complete"
+          echo "=========================================="
+          echo "✅ Extension syntax validated (basic)"
+          echo "✅ Dependency chains validated"
+          echo "✅ Manifest templates validated"
+          echo "✅ Extension metadata validated"
+          echo "✅ Shellcheck validation (comprehensive)"
+          echo "✅ Common.sh sourcing verified"
+          echo "✅ Shebang presence verified"
+          echo "✅ Extension API v1.0 functions validated"
+          echo "=========================================="

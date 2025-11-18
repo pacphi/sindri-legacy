@@ -1,16 +1,6 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "Dockerfile"
-      - "docker/**"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "Dockerfile"
-      - "docker/**"
   workflow_call:
     inputs:
       tag:
@@ -22,6 +12,18 @@ on:
         required: false
         default: false
         type: boolean
+      event_name:
+        description: "Event name (push, pull_request, etc.)"
+        required: false
+        type: string
+      pr_number:
+        description: "Pull request number (for PR builds)"
+        required: false
+        type: string
+      ref_name:
+        description: "Branch or tag name"
+        required: false
+        type: string
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true
@@ -48,9 +50,148 @@ permissions:
   contents: read
 
 jobs:
-  build-push:
-    name: Build & Push to Fly Registry
+  detect-changes:
+    name: Detect Layer Changes
     runs-on: ubuntu-latest
+    outputs:
+      base-changed: ${{ steps.filter.outputs.base }}
+      tooling-changed: ${{ steps.filter.outputs.tooling }}
+      application-changed: ${{ steps.filter.outputs.application }}
+      build-base: ${{ steps.decide.outputs.build-base }}
+      build-tooling: ${{ steps.decide.outputs.build-tooling }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Check for file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            base:
+              - 'Dockerfile.base'
+              - 'docker/lib/registry-retry.sh'
+              - 'docker/scripts/install-packages.sh'
+            tooling:
+              - 'Dockerfile.tooling'
+              - 'docker/config/sshd_config'
+              - 'docker/config/developer-sudoers'
+              - 'docker/scripts/setup-user.sh'
+              - 'docker/scripts/install-mise.sh'
+              - 'docker/scripts/setup-ssh-environment.sh'
+              - 'docker/scripts/install-claude.sh'
+              - 'docker/scripts/install-sops-age.sh'
+            application:
+              - 'Dockerfile'
+              - 'docker/lib/**'
+              - 'docker/scripts/**'
+              - 'docker/config/**'
+
+      - name: Decide what to build
+        id: decide
+        run: |
+          # If base changes, rebuild base and tooling
+          if [ "${{ steps.filter.outputs.base }}" == "true" ]; then
+            echo "build-base=true" >> $GITHUB_OUTPUT
+            echo "build-tooling=true" >> $GITHUB_OUTPUT
+            echo "📦 Base layer changed - will rebuild base + tooling layers"
+          # If tooling changes, rebuild tooling only
+          elif [ "${{ steps.filter.outputs.tooling }}" == "true" ]; then
+            echo "build-base=false" >> $GITHUB_OUTPUT
+            echo "build-tooling=true" >> $GITHUB_OUTPUT
+            echo "🔧 Tooling layer changed - will rebuild tooling layer"
+          # Otherwise, use existing base layers
+          else
+            echo "build-base=false" >> $GITHUB_OUTPUT
+            echo "build-tooling=false" >> $GITHUB_OUTPUT
+            echo "📱 Application layer only - using existing base images"
+          fi
+
+  build-base:
+    name: Build Base Layer
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.build-base == 'true'
+    outputs:
+      image-url: ${{ steps.build.outputs.image-url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and push base image
+        id: build
+        uses: ./.github/actions/build-push-image
+        with:
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          dockerfile: Dockerfile.base
+          tag: base-${{ github.sha }}
+
+      - name: Tag as base-stable
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl auth docker
+          docker pull ${{ steps.build.outputs.image-url }}
+          docker tag ${{ steps.build.outputs.image-url }} registry.fly.io/sindri-registry:base-stable
+          docker push registry.fly.io/sindri-registry:base-stable
+          echo "✅ Tagged as base-stable"
+
+  build-tooling:
+    name: Build Tooling Layer
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-base]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.build-tooling == 'true' &&
+      (needs.build-base.result == 'success' || needs.build-base.result == 'skipped')
+    outputs:
+      image-url: ${{ steps.build.outputs.image-url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Authenticate with Fly Docker registry
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: flyctl auth docker
+
+      - name: Determine base image
+        id: base
+        run: |
+          if [ "${{ needs.build-base.result }}" == "success" ]; then
+            BASE_IMAGE="${{ needs.build-base.outputs.image-url }}"
+          else
+            BASE_IMAGE="registry.fly.io/sindri-registry:base-stable"
+          fi
+          echo "image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
+          echo "Using base image: ${BASE_IMAGE}"
+
+      - name: Build and push tooling image
+        id: build
+        uses: ./.github/actions/build-push-image
+        with:
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          dockerfile: Dockerfile.tooling
+          tag: tooling-${{ github.sha }}
+          base-image: ${{ steps.base.outputs.image }}
+
+      - name: Tag as tooling-stable
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: |
+          flyctl auth docker
+          docker pull ${{ steps.build.outputs.image-url }}
+          docker tag ${{ steps.build.outputs.image-url }} registry.fly.io/sindri-registry:tooling-stable
+          docker push registry.fly.io/sindri-registry:tooling-stable
+          echo "✅ Tagged as tooling-stable"
+
+  build-push:
+    name: Build Application Layer
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-base, build-tooling]
+    if: always() && (needs.build-base.result == 'success' || needs.build-base.result == 'skipped') && (needs.build-tooling.result == 'success' || needs.build-tooling.result == 'skipped')
     permissions:
       contents: read
     outputs:
@@ -61,21 +202,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Authenticate with Fly Docker registry
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
+        run: flyctl auth docker
+
       - name: Generate image tag
         id: generate-tag
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            # Manual workflow dispatch with custom tag
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            # PR builds: pr-<number>-<sha>
-            PR_NUMBER="${{ github.event.pull_request.number }}"
+          elif [ "${{ inputs.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ inputs.pr_number || github.event.pull_request.number }}"
             SHA_SHORT=${GITHUB_SHA:0:7}
             TAG="pr-${PR_NUMBER}-${SHA_SHORT}"
           else
-            # Push builds: <branch>-<sha>
-            BRANCH=${GITHUB_REF#refs/heads/}
-            BRANCH=${BRANCH//\//-}  # Replace / with -
+            BRANCH="${{ inputs.ref_name || github.ref_name }}"
+            BRANCH=${BRANCH//\//-}
             SHA_SHORT=${GITHUB_SHA:0:7}
             TAG="${BRANCH}-${SHA_SHORT}"
           fi
@@ -83,13 +231,25 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Generated tag: ${TAG}"
 
-      - name: Build and push image
+      - name: Determine tooling image
+        id: tooling
+        run: |
+          if [ "${{ needs.build-tooling.result }}" == "success" ]; then
+            TOOLING_IMAGE="${{ needs.build-tooling.outputs.image-url }}"
+          else
+            TOOLING_IMAGE="registry.fly.io/sindri-registry:tooling-stable"
+          fi
+          echo "image=${TOOLING_IMAGE}" >> $GITHUB_OUTPUT
+          echo "Using tooling image: ${TOOLING_IMAGE}"
+
+      - name: Build and push application image
         id: build
         uses: ./.github/actions/build-push-image
         with:
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           tag: ${{ steps.generate-tag.outputs.tag }}
           registry-app: "sindri-registry"
+          tooling-image: ${{ steps.tooling.outputs.image }}
 
       - name: Tag as latest (main branch or manual request)
         if: github.ref == 'refs/heads/main' || github.event.inputs.push_latest == 'true'
@@ -110,10 +270,34 @@ jobs:
 
       - name: Output summary
         run: |
-          echo "## 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐳 Docker Images Built (Layered)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image URL:** \`${{ steps.build.outputs.image-url }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** \`${{ steps.build.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+
+          # Base layer summary
+          if [ "${{ needs.build-base.result }}" == "success" ]; then
+            echo "✅ **Base Layer**: Rebuilt" >> $GITHUB_STEP_SUMMARY
+            echo "   - Image: \`${{ needs.build-base.outputs.image-url }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Base Layer**: Using cached \`base-stable\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Tooling layer summary
+          if [ "${{ needs.build-tooling.result }}" == "success" ]; then
+            echo "✅ **Tooling Layer**: Rebuilt" >> $GITHUB_STEP_SUMMARY
+            echo "   - Image: \`${{ needs.build-tooling.outputs.image-url }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Tooling Layer**: Using cached \`tooling-stable\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Application layer summary
+          echo "✅ **Application Layer**: Built" >> $GITHUB_STEP_SUMMARY
+          echo "   - Image: \`${{ steps.build.outputs.image-url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "   - Tag: \`${{ steps.build.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.event.inputs.push_latest }}" = "true" ]; then

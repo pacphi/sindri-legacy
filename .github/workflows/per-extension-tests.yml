@@ -1,0 +1,121 @@
+name: Per-Extension Tests
+
+on:
+  workflow_call:
+    inputs:
+      test_app_prefix:
+        description: "Test app prefix"
+        required: false
+        default: "ext-test"
+        type: string
+      region:
+        description: "Fly.io region"
+        required: false
+        default: "sjc"
+        type: string
+      skip_cleanup:
+        description: "Skip cleanup for debugging"
+        required: false
+        default: false
+        type: boolean
+      pre_built_image:
+        description: "Pre-built Docker image URL (optional)"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      FLYIO_AUTH_TOKEN:
+        required: true
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-extension:
+    name: Test ${{ matrix.extension.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false  # Let all extensions complete before failing
+      max-parallel: 3   # Only 3 extensions tested concurrently
+      matrix:
+        extension:
+          # Minimal tier (1GB/1CPU/10GB)
+          - { name: "tmux-workspace", tier: "minimal", depends: "" }
+          - { name: "context-loader", tier: "minimal", depends: "" }
+          - { name: "monitoring", tier: "minimal", depends: "" }
+          - { name: "agent-manager", tier: "minimal", depends: "" }
+          - { name: "github-cli", tier: "minimal", depends: "" }
+
+          # Standard tier (4GB/2CPU/20GB)
+          - { name: "nodejs", tier: "standard", depends: "" }
+          - { name: "python", tier: "standard", depends: "" }
+          - { name: "golang", tier: "standard", depends: "" }
+          - { name: "nodejs-devtools", tier: "standard", depends: "nodejs" }
+          - { name: "claude-marketplace", tier: "standard", depends: "" }
+          - { name: "openskills", tier: "standard", depends: "nodejs git" }
+          - { name: "php", tier: "standard", depends: "" }
+          - { name: "playwright", tier: "standard", depends: "nodejs" }
+
+          # Heavy tier (8GB/4CPU/20GB)
+          - { name: "rust", tier: "heavy", depends: "" }
+          - { name: "ruby", tier: "heavy", depends: "" }
+          - { name: "jvm", tier: "heavy", depends: "" }
+          - { name: "dotnet", tier: "heavy", depends: "" }
+          - { name: "docker", tier: "heavy", depends: "" }
+          - { name: "infra-tools", tier: "heavy", depends: "" }
+          - { name: "cloud-tools", tier: "heavy", depends: "" }
+          - { name: "ai-tools", tier: "heavy", depends: "" }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Fly.io test environment
+        id: setup
+        uses: ./.github/actions/setup-fly-test-env
+        with:
+          app-prefix: ${{ inputs.test_app_prefix }}
+          extension-name: ${{ matrix.extension.name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          region: ${{ inputs.region }}
+          resource-tier: ${{ matrix.extension.tier }}
+
+      - name: Deploy test environment
+        uses: ./.github/actions/deploy-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          region: ${{ inputs.region }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          deploy-timeout: "600"
+          pre-built-image: ${{ inputs.pre_built_image }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ci-mode: "true"
+
+      - name: Wait for deployment
+        uses: ./.github/actions/wait-fly-deployment
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          timeout-seconds: "420"
+          expected-status: "started"
+
+      - name: Run complete extension test suite
+        uses: ./.github/actions/test-extension-complete
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          extension-name: ${{ matrix.extension.name }}
+          dependencies: ${{ matrix.extension.depends }}
+
+      - name: Cleanup test resources
+        if: always() && !inputs.skip_cleanup
+        uses: ./.github/actions/cleanup-fly-app
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}

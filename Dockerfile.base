@@ -1,0 +1,43 @@
+# ==============================================================================
+# Dockerfile.base - System Base Layer
+# ==============================================================================
+# This layer contains rarely-changing system packages and dependencies.
+# Rebuild trigger: Ubuntu base updates, system package additions
+# Build time: ~3-4 minutes
+# Size: ~550MB
+# Stability: Updated monthly or less
+# ==============================================================================
+
+FROM ubuntu:24.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set locale to prevent locale warnings
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Copy only what's needed for package installation
+COPY docker/lib/registry-retry.sh /docker/lib/registry-retry.sh
+COPY docker/scripts/install-packages.sh /docker/scripts/install-packages.sh
+
+# Make scripts executable
+RUN chmod +x /docker/lib/registry-retry.sh /docker/scripts/install-packages.sh
+
+# Install system packages
+# This layer includes:
+# - Build tools (build-essential, pkg-config)
+# - System utilities (curl, git, jq, vim, etc.)
+# - PostgreSQL and Redis clients
+# - Development libraries (libssl-dev, zlib1g-dev, etc.)
+RUN /docker/scripts/install-packages.sh
+
+# Clean up to reduce layer size
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Label for tracking
+LABEL org.opencontainers.image.title="Sindri Base System"
+LABEL org.opencontainers.image.description="Ubuntu 24.04 with system packages"
+LABEL org.opencontainers.image.vendor="Sindri"
+LABEL sindri.layer="base"

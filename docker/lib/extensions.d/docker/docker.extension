@@ -79,6 +79,13 @@ prerequisites() {
 install() {
   print_status "Installing Docker development tools..."
 
+  # Fix any interrupted dpkg operations before proceeding
+  if ! sudo dpkg --configure -a 2>/dev/null; then
+    print_warning "dpkg --configure -a failed, but continuing..."
+  else
+    print_debug "dpkg state verified"
+  fi
+
   # Install Docker Engine if not already installed
   if command_exists docker; then
     print_warning "Docker Engine already installed: $(docker --version)"

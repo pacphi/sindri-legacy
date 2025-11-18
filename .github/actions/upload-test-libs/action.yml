@@ -1,0 +1,51 @@
+name: "Upload Test Libraries"
+description: "Upload test helper libraries (test-helpers.sh, assertions.sh, ssh-helpers.sh) to VM"
+
+inputs:
+  app-name:
+    description: "Fly.io app name"
+    required: true
+  fly-api-token:
+    description: "Fly.io API token"
+    required: true
+  target-dir:
+    description: "Target directory on VM"
+    required: false
+    default: "/tmp/lib"
+  user:
+    description: "SSH user"
+    required: false
+    default: "developer"
+
+outputs:
+  status:
+    description: "Upload status (success or failure)"
+    value: ${{ steps.upload.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Upload test libraries
+      id: upload
+      shell: bash
+      env:
+        FLY_API_TOKEN: ${{ inputs.fly-api-token }}
+      run: |
+        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        app_name="${{ inputs.app-name }}"
+        target_dir="${{ inputs.target-dir }}"
+
+        echo "Uploading test libraries to $target_dir..."
+
+        # Create target directory
+        ssh_mkdir_retry "$app_name" "$target_dir"
+
+        # Upload all library files
+        sftp_upload_multiple "$app_name" 666 \
+          .github/scripts/lib/test-helpers.sh:$target_dir/test-helpers.sh \
+          .github/scripts/lib/assertions.sh:$target_dir/assertions.sh \
+          .github/scripts/lib/ssh-helpers.sh:$target_dir/ssh-helpers.sh \
+          .github/scripts/lib/retry-utils.sh:$target_dir/retry-utils.sh
+
+        echo "status=success" >> $GITHUB_OUTPUT
+        echo "✅ Test libraries uploaded to $target_dir"

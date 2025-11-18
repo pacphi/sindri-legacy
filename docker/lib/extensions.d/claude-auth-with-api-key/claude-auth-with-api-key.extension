@@ -1,0 +1,246 @@
+#!/bin/bash
+#
+# Claude Code API Key Authentication Extension
+#
+# Handles API key authentication for Claude Code CLI using encrypted secrets.
+# For users who authenticate with ANTHROPIC_API_KEY (not Pro/Max subscriptions).
+# Claude Code CLI is pre-installed in the base Docker image.
+# This extension only manages API key authentication configuration.
+#
+
+# Source common library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/common.sh"
+
+# ==============================================================================
+# Extension Metadata
+# ==============================================================================
+
+EXT_NAME="Claude Code (API Key Auth)"
+EXT_DESCRIPTION="Claude Code CLI authentication via API key (ANTHROPIC_API_KEY)"
+EXT_CATEGORY="ai-dev-tools"
+EXT_VERSION="2.0.0"
+EXT_REQUIRED_SECRETS="anthropic_api_key"
+EXT_API_VERSION="2.0"
+EXT_INSTALL_METHOD="native"
+EXT_UPGRADE_STRATEGY="manual"
+
+# ==============================================================================
+# Extension API Functions
+# ==============================================================================
+
+prerequisites() {
+    log_section "Checking Claude Code prerequisites"
+
+    # Check if Claude CLI is available
+    if ! command -v claude &>/dev/null; then
+        log_error "Claude Code CLI not found (should be pre-installed in base image)"
+        return 1
+    fi
+
+    log_success "Claude Code CLI found: $(claude --version 2>/dev/null || echo 'installed')"
+
+    # Check for required secrets (warning only)
+    if [ -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        source "$DEVELOPER_HOME/.secrets/lib.sh" 2>/dev/null || return 0
+
+        if ! has_secret "anthropic_api_key"; then
+            log_warn "Required secret 'anthropic_api_key' not found"
+            log_info "Add with: flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>"
+            log_info "Authentication will be skipped"
+        else
+            log_success "API key available in encrypted secrets"
+        fi
+    else
+        log_warn "Secrets library not yet available"
+        log_info "Secrets will be configured during container startup"
+    fi
+
+    return 0
+}
+
+install() {
+    log_section "Installing Claude Code Authentication"
+
+    # Claude CLI is pre-installed in the base image
+    log_info "Claude Code CLI is pre-installed in base Docker image"
+
+    # Install wrapper script for automatic API key authentication
+    local wrapper_source="$SCRIPT_DIR/claude-wrapper.sh"
+    local wrapper_dest="/workspace/bin/claude"
+
+    if [ -f "$wrapper_source" ]; then
+        log_info "Installing Claude wrapper for automatic authentication..."
+
+        # Ensure /workspace/bin exists
+        mkdir -p /workspace/bin
+
+        # Copy wrapper script
+        cp "$wrapper_source" "$wrapper_dest"
+        chmod +x "$wrapper_dest"
+
+        # Ensure /workspace/bin is first in PATH (check .bashrc)
+        if ! grep -q 'export PATH="/workspace/bin:$PATH"' "$DEVELOPER_HOME/.bashrc" 2>/dev/null; then
+            echo '' >> "$DEVELOPER_HOME/.bashrc"
+            echo '# Ensure /workspace/bin is first in PATH (for Claude wrapper)' >> "$DEVELOPER_HOME/.bashrc"
+            echo 'export PATH="/workspace/bin:$PATH"' >> "$DEVELOPER_HOME/.bashrc"
+            log_info "Added /workspace/bin to PATH in .bashrc"
+        fi
+
+        log_success "Claude wrapper installed - authentication will be automatic"
+        log_info "Wrapper location: $wrapper_dest"
+        log_info "Real Claude CLI:  /usr/local/bin/claude"
+    else
+        log_warn "Wrapper script not found: $wrapper_source"
+        log_info "Authentication will require manual loading of secrets"
+    fi
+
+    return 0
+}
+
+configure() {
+    log_section "Configuring Claude Code authentication"
+
+    # Check if secrets library exists
+    if [ ! -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        log_info "Secrets library not yet initialized"
+        log_info "This is normal during initial setup"
+        log_info "Authentication will be available after container restart"
+        return 0
+    fi
+
+    # Load secrets library
+    source "$DEVELOPER_HOME/.secrets/lib.sh"
+
+    # Check if API key is available
+    if has_secret "anthropic_api_key"; then
+        log_success "API key found in encrypted secrets"
+        log_info "Claude Code will authenticate automatically when you run 'claude'"
+        log_info "The wrapper script handles authentication transparently"
+    else
+        log_warn "No API key found in secrets"
+        log_info "Add API key with: flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... -a <app-name>"
+        log_info "After adding the key, just run 'claude' - authentication is automatic"
+    fi
+
+    # Verify wrapper is installed
+    if [ -f "/workspace/bin/claude" ]; then
+        log_success "Claude wrapper installed and ready"
+    else
+        log_warn "Claude wrapper not found - reinstall extension if needed"
+    fi
+
+    return 0
+}
+
+validate() {
+    log_section "Validating Claude Code installation"
+
+    # Check Claude CLI availability
+    if ! command -v claude &>/dev/null; then
+        log_error "Claude Code CLI not available"
+        return 1
+    fi
+
+    log_success "Claude Code CLI is available"
+
+    # Check if authenticated (try to get current user)
+    if claude whoami &>/dev/null; then
+        log_success "Claude Code is authenticated"
+    else
+        log_warn "Claude Code not authenticated"
+        log_info "Authentication happens automatically when API key is available"
+    fi
+
+    return 0
+}
+
+status() {
+    log_section "Claude Code Status"
+
+    # Check CLI availability
+    if command -v claude &>/dev/null; then
+        echo "  CLI:            Available ($(claude --version 2>/dev/null || echo 'installed'))"
+    else
+        echo "  CLI:            Not found (ERROR)"
+    fi
+
+    # Check authentication status
+    if claude whoami &>/dev/null 2>&1; then
+        echo "  Authentication: Authenticated"
+    else
+        echo "  Authentication: Not authenticated"
+    fi
+
+    # Check for API key in secrets
+    if [ -f "$DEVELOPER_HOME/.secrets/lib.sh" ]; then
+        source "$DEVELOPER_HOME/.secrets/lib.sh" 2>/dev/null
+
+        if has_secret "anthropic_api_key" 2>/dev/null; then
+            echo "  API Key:        Available (encrypted)"
+        else
+            echo "  API Key:        Not found"
+        fi
+    else
+        echo "  Secrets:        Not configured yet"
+    fi
+
+    return 0
+}
+
+remove() {
+    log_section "Removing Claude Code authentication wrapper"
+
+    # Remove wrapper script
+    if [ -f "/workspace/bin/claude" ]; then
+        log_info "Removing Claude wrapper script..."
+        rm -f "/workspace/bin/claude"
+        log_success "Wrapper script removed"
+        log_info "Real Claude CLI at /usr/local/bin/claude is now accessible"
+    fi
+
+    # Remove PATH modification from .bashrc (optional - leaves other PATH changes intact)
+    if grep -q 'export PATH="/workspace/bin:$PATH".*Claude wrapper' "$DEVELOPER_HOME/.bashrc" 2>/dev/null; then
+        log_info "Cleaning up .bashrc PATH modification..."
+        sed -i '/# Ensure \/workspace\/bin is first in PATH (for Claude wrapper)/d' "$DEVELOPER_HOME/.bashrc"
+        sed -i '/export PATH="\/workspace\/bin:\$PATH"/d' "$DEVELOPER_HOME/.bashrc"
+        log_success ".bashrc cleaned up"
+    fi
+
+    # Clear authentication data
+    if [ -d "$DEVELOPER_HOME/.claude" ]; then
+        log_info "Clearing Claude authentication data..."
+        rm -rf "$DEVELOPER_HOME/.claude/auth" 2>/dev/null || true
+        log_success "Authentication data cleared"
+    fi
+
+    # Note: We don't remove the CLI binary since it's baked into the base image
+    log_info "Claude Code CLI remains in base image at /usr/local/bin/claude"
+    log_info "You can still use Claude, but will need to authenticate manually"
+
+    return 0
+}
+
+upgrade() {
+    log_section "Upgrading Claude Code"
+
+    # Claude CLI is baked into the Docker image
+    log_info "Claude Code CLI is baked into the Docker base image"
+    log_info "To upgrade, rebuild the Docker image with the latest installer"
+    log_success "No upgrade action needed"
+
+    return 0
+}
+
+# ==============================================================================
+# Extension Entry Point
+# ==============================================================================
+
+# If extension is sourced (not executed), make functions available
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+    export -f prerequisites install configure validate status remove upgrade
+else
+    # If executed directly, show error
+    echo "This extension should be loaded via extension-manager, not executed directly"
+    exit 1
+fi

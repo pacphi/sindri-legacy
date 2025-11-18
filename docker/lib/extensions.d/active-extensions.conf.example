@@ -15,7 +15,7 @@
 # • workspace-structure - /workspace directory tree
 # • mise - Unified tool version manager
 # • ssh-environment - Non-interactive SSH session support
-# • claude - Claude Code CLI
+# • claude-code-cli - Claude Code CLI (installed but not authenticated)
 #
 # Do not add these to the manifest.
 
@@ -34,7 +34,10 @@ python
 # CLAUDE EXTENSIONS
 # ============================================================================
 
-# Claude marketplace plugin manager (requires claude, git)
+# Claude Code API key authentication (optional - only for API key users, not Pro/Max)
+# claude-auth-with-api-key
+
+# Claude marketplace plugin manager (requires claude-auth-with-api-key or manual auth, git)
 # claude-marketplace
 
 # OpenSkills from Anthropic's marketplace (requires nodejs 20.6+, git)
