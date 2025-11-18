@@ -511,6 +511,74 @@ These domains are:
   raw.githubusercontent.com aliyuncli.alicdn.com clis.cloud.ibm.com"`
 - Extensions without external domains: Simply omit `EXT_REQUIRED_DOMAINS` (defaults to empty)
 
+#### API v2.2 Metadata (Automatic Dependency Resolution)
+
+```bash
+EXT_NAME="openskills"
+EXT_VERSION="2.0.0"
+EXT_API_VERSION="2.0"
+EXT_DESCRIPTION="OpenSkills CLI for managing Claude Code skills"
+EXT_CATEGORY="dev-tools"
+EXT_INSTALL_METHOD="npm"
+EXT_UPGRADE_STRATEGY="automatic"
+EXT_DEPENDENCIES="nodejs git"  # New in v2.2: Space-separated list of required extensions
+```
+
+The `EXT_DEPENDENCIES` field (API v2.2+) declares which other extensions must be installed first.
+
+**How It Works:**
+
+1. System extracts `EXT_DEPENDENCIES` from extension metadata
+2. Builds dependency graph with cycle detection (DFS algorithm)
+3. Performs topological sort (Kahn's algorithm) to determine install order
+4. Automatically adds dependencies to manifest in correct order
+5. Installs dependencies first, then the target extension
+
+**Benefits:**
+
+- Zero manual dependency management required
+- Prevents "prerequisite not met" errors
+- Ensures correct installation order
+- Updates manifest automatically
+
+**Examples:**
+
+```bash
+# Automatic dependency resolution
+extension-manager install openskills
+# → Auto-installs nodejs first
+# → Auto-installs git
+# → Installs openskills
+
+# Show dependency tree without installing
+extension-manager resolve playwright
+# Output: nodejs, playwright
+```
+
+**Current Dependencies:**
+
+- `openskills` → nodejs, git
+- `monitoring` → python
+- `playwright` → nodejs
+- `nodejs-devtools` → nodejs
+
+**Circular Dependency Detection:**
+
+The system detects circular dependencies and aborts with a clear error message:
+
+```
+❌ Circular dependency detected involving: ext-a
+Cannot resolve dependencies.
+```
+
+**Best Practices:**
+
+- Always declare runtime dependencies (required extensions)
+- Avoid circular dependencies
+- Keep dependency chains shallow (< 3 levels recommended)
+- Test with `extension-manager resolve <name>`
+- Extensions without dependencies: Omit `EXT_DEPENDENCIES` field
+
 ### Installation Methods (API v2.0)
 
 Valid values for `EXT_INSTALL_METHOD`:

@@ -22,6 +22,7 @@ EXT_DESCRIPTION="Claude monitoring and usage tracking tools"
 EXT_CATEGORY="infrastructure"
 EXT_INSTALL_METHOD="apt"
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_DEPENDENCIES="python"  # Requires Python for monitoring tools
 
 # Initialize extension environment
 extension_init

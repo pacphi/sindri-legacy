@@ -22,6 +22,7 @@ EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mise"
 EXT_UPGRADE_STRATEGY="automatic"
 EXT_OPTIONAL_SECRETS="perplexity_api_key"
+EXT_DEPENDENCIES="nodejs"  # Requires Node.js
 
 # Initialize extension environment
 extension_init

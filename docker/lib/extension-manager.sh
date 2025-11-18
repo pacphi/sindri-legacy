@@ -547,9 +547,225 @@ migrate_all_extensions() {
     print_success "All extensions migrated"
 }
 
+# ============================================================================
+# DEPENDENCY RESOLUTION FUNCTIONS (Extension API v2.2)
+# ============================================================================
+
+# Extract dependencies from extension metadata
+# Usage: get_extension_dependencies "extension-name"
+# Returns: Space-separated list of dependencies
+get_extension_dependencies() {
+    local ext_name="$1"
+    local ext_file
+
+    ext_file=$(find_extension_file "$ext_name")
+    if [[ -z "$ext_file" ]] || [[ ! -f "$ext_file" ]]; then
+        return 0
+    fi
+
+    # Extract EXT_DEPENDENCIES from extension file
+    grep "^EXT_DEPENDENCIES=" "$ext_file" 2>/dev/null | sed -E 's/^EXT_DEPENDENCIES=["'"'"']([^"'"'"']*)["'"'"'].*/\1/'
+}
+
+# Build dependency graph for extensions (recursive with cycle detection)
+# Usage: build_dependency_graph <result_array_name> <extension1> <extension2> ...
+# Returns: 0 on success, 1 if circular dependency detected
+build_dependency_graph() {
+    local -n dep_graph=$1
+    shift
+    local extensions=("$@")
+    local -A visited
+    local -A in_progress
+
+    # Recursive DFS to build graph and detect cycles
+    build_graph_recursive() {
+        local ext="$1"
+
+        # Skip if already processed
+        [[ -n "${visited[$ext]}" ]] && return 0
+
+        # Cycle detection
+        if [[ -n "${in_progress[$ext]}" ]]; then
+            print_error "Circular dependency detected involving: $ext"
+            return 1
+        fi
+
+        in_progress[$ext]=1
+
+        # Get dependencies for this extension
+        local deps
+        deps=$(get_extension_dependencies "$ext")
+
+        if [[ -n "$deps" ]]; then
+            dep_graph[$ext]="$deps"
+
+            # Recursively process dependencies
+            for dep in $deps; do
+                if ! build_graph_recursive "$dep"; then
+                    return 1
+                fi
+            done
+        fi
+
+        unset "in_progress[$ext]"
+        visited[$ext]=1
+        return 0
+    }
+
+    # Build graph for all input extensions
+    for ext in "${extensions[@]}"; do
+        if ! build_graph_recursive "$ext"; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# Resolve dependencies using topological sort (Kahn's algorithm)
+# Usage: resolve_dependencies "ext1" "ext2" ...
+# Returns: Ordered list of extensions (dependencies first), one per line
+resolve_dependencies() {
+    local extensions=("$@")
+
+    print_debug "Resolving dependencies for: ${extensions[*]}"
+
+    # Build dependency graph
+    local -A dep_graph
+    if ! build_dependency_graph dep_graph "${extensions[@]}"; then
+        print_error "Failed to build dependency graph (circular dependency detected)"
+        return 1
+    fi
+
+    # If no dependencies, just return the input
+    if [[ ${#dep_graph[@]} -eq 0 ]]; then
+        printf '%s\n' "${extensions[@]}"
+        return 0
+    fi
+
+    # Build list of all nodes (extensions and their dependencies)
+    local -A all_nodes
+    for ext in "${extensions[@]}"; do
+        all_nodes[$ext]=1
+        local deps="${dep_graph[$ext]}"
+        for dep in $deps; do
+            all_nodes[$dep]=1
+        done
+    done
+
+    # Calculate in-degrees and build adjacency list
+    local -A in_degree
+    local -A adj_list
+
+    # Initialize in-degrees to 0
+    for node in "${!all_nodes[@]}"; do
+        in_degree[$node]=0
+    done
+
+    # Build adjacency list and calculate in-degrees
+    for node in "${!dep_graph[@]}"; do
+        local deps="${dep_graph[$node]}"
+        for dep in $deps; do
+            # Edge: dep -> node
+            adj_list[$dep]+="$node "
+            ((in_degree[$node]++))
+        done
+    done
+
+    # Initialize queue with zero in-degree nodes
+    local queue=()
+    for node in "${!in_degree[@]}"; do
+        [[ ${in_degree[$node]} -eq 0 ]] && queue+=("$node")
+    done
+
+    # Process queue (topological sort)
+    local -a sorted=()
+    while [[ ${#queue[@]} -gt 0 ]]; do
+        local current="${queue[0]}"
+        queue=("${queue[@]:1}")
+        sorted+=("$current")
+
+        # Process neighbors
+        local neighbors="${adj_list[$current]}"
+        for neighbor in $neighbors; do
+            ((in_degree[$neighbor]--))
+            [[ ${in_degree[$neighbor]} -eq 0 ]] && queue+=("$neighbor")
+        done
+    done
+
+    # Check for cycles (sorted length != total nodes)
+    if [[ ${#sorted[@]} -ne ${#all_nodes[@]} ]]; then
+        print_error "Circular dependency detected in extension graph"
+        return 1
+    fi
+
+    # Output sorted extensions
+    printf '%s\n' "${sorted[@]}"
+    return 0
+}
+
+# Install extension with automatic dependency resolution
+# Usage: install_extension_with_dependencies "extension-name"
+install_extension_with_dependencies() {
+    local ext_name="$1"
+
+    print_status "Installing $ext_name with dependency resolution..."
+    echo ""
+
+    # Resolve dependencies
+    local -a install_order
+    if ! mapfile -t install_order < <(resolve_dependencies "$ext_name"); then
+        print_error "Dependency resolution failed for '$ext_name'"
+        return 1
+    fi
+
+    if [[ ${#install_order[@]} -eq 0 ]]; then
+        print_error "Dependency resolution returned empty list for '$ext_name'"
+        return 1
+    fi
+
+    if [[ ${#install_order[@]} -gt 1 ]]; then
+        print_status "Install order: ${install_order[*]}"
+        echo ""
+    fi
+
+    # Add all extensions to manifest (if not already present)
+    for ext in "${install_order[@]}"; do
+        if ! is_in_manifest "$ext"; then
+            print_debug "Adding $ext to manifest"
+            add_to_manifest "$ext"
+        fi
+    done
+
+    # Install each extension in order
+    local failed=0
+    for ext in "${install_order[@]}"; do
+        if is_extension_installed "$ext"; then
+            print_success "$ext already installed (skipping)"
+            echo ""
+        else
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if ! install_extension "$ext" "skip-deps"; then
+                ((failed++))
+                print_error "Failed to install: $ext"
+                echo ""
+            fi
+        fi
+    done
+
+    if [[ $failed -eq 0 ]]; then
+        print_success "Successfully installed $ext_name and all dependencies"
+        return 0
+    else
+        print_error "Failed to install some dependencies for $ext_name"
+        return 1
+    fi
+}
+
 # Function to install an extension (prerequisites + install + configure)
 install_extension() {
     local ext_name="$1"
+    local skip_deps="${2:-}"  # "skip-deps" to skip dependency resolution
 
     print_status "Installing extension: $ext_name"
     echo ""
@@ -558,6 +774,31 @@ install_extension() {
     if is_extension_installed "$ext_name"; then
         print_success "Extension '$ext_name' is already installed (skipping)"
         return 0
+    fi
+
+    # Check for missing dependencies and trigger automatic resolution
+    # Skip this if called from install_extension_with_dependencies (to avoid recursion)
+    if [[ "$skip_deps" != "skip-deps" ]]; then
+        local deps
+        deps=$(get_extension_dependencies "$ext_name")
+
+        if [[ -n "$deps" ]]; then
+            local missing_deps=()
+            for dep in $deps; do
+                if ! is_extension_installed "$dep"; then
+                    missing_deps+=("$dep")
+                fi
+            done
+
+            if [[ ${#missing_deps[@]} -gt 0 ]]; then
+                print_warning "$ext_name requires: ${missing_deps[*]}"
+                print_status "Resolving dependencies automatically..."
+                echo ""
+
+                # Use full dependency resolution
+                return install_extension_with_dependencies "$ext_name"
+            fi
+        fi
     fi
 
     # Auto-activate if needed
@@ -837,8 +1078,40 @@ install_all_extensions() {
         return 0
     fi
 
+    # Phase 1: Resolve dependencies for ALL extensions
+    print_status "Resolving dependencies for ${#active_extensions[@]} extensions..."
+    local -a install_order
+    if ! mapfile -t install_order < <(resolve_dependencies "${active_extensions[@]}"); then
+        print_error "Dependency resolution failed"
+        return 1
+    fi
+
+    # Show resolved order if different from manifest
+    if [[ ${#install_order[@]} -ne ${#active_extensions[@]} ]] || \
+       [[ "${install_order[*]}" != "${active_extensions[*]}" ]]; then
+        print_status "Install order after dependency resolution:"
+        for ext in "${install_order[@]}"; do
+            echo "  - $ext"
+        done
+        echo ""
+
+        # Update manifest with resolved order
+        local temp_file=$(mktemp)
+        # Preserve header comments
+        grep '^#' "$MANIFEST_FILE" > "$temp_file" 2>/dev/null || true
+        # Write resolved order
+        printf '%s\n' "${install_order[@]}" >> "$temp_file"
+        cat "$temp_file" > "$MANIFEST_FILE"
+        rm -f "$temp_file"
+        print_status "Manifest updated with resolved dependency order"
+        echo ""
+    else
+        print_success "Dependencies already in correct order"
+        echo ""
+    fi
+
     # Phase 2: Pre-flight DNS checks
-    print_status "Running pre-flight checks for ${#active_extensions[@]} extensions..."
+    print_status "Running pre-flight checks for ${#install_order[@]} extensions..."
     local required_domains
     required_domains=$(aggregate_required_domains)
 
@@ -868,10 +1141,11 @@ install_all_extensions() {
     local installed_count=0
     local failed_count=0
 
-    # Install all extensions in manifest order
-    for ext_name in "${active_extensions[@]}"; do
+    # Install all extensions in resolved dependency order
+    for ext_name in "${install_order[@]}"; do
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        if install_extension "$ext_name"; then
+        # Pass "skip-deps" to avoid re-resolution (dependencies already resolved)
+        if install_extension "$ext_name" "skip-deps"; then
             ((installed_count++))
         else
             ((failed_count++))
@@ -1606,10 +1880,11 @@ Extension API v1.0
 Commands:
   list                     List all extensions with manifest status
 
-  install <name>           Install extension (auto-activates if needed)
+  install <name>           Install extension (auto-activates if needed, resolves dependencies)
   install-all              Install all extensions listed in manifest
   --interactive            Interactive installation with prompts
   uninstall <name>         Uninstall extension (remove packages and config)
+  resolve <name>           Show dependency tree for an extension (without installing)
 
   validate <name>          Run extension validation tests
   validate-all             Validate all active extensions
@@ -1646,6 +1921,9 @@ Examples:
 
   # Install all extensions listed in manifest
   $(basename "$0") install-all
+
+  # Show dependency tree without installing
+  $(basename "$0") resolve openskills
 
   # Check status and validate
   $(basename "$0") status rust
@@ -1778,6 +2056,25 @@ main() {
             ;;
         status-diff)
             status_diff_extensions "$1"
+            ;;
+        resolve)
+            if [[ -z "$1" ]]; then
+                print_error "Extension name required"
+                echo "Usage: extension-manager resolve <extension-name>"
+                exit 1
+            fi
+            print_status "Resolving dependencies for: $1"
+            echo ""
+            local -a deps
+            mapfile -t deps < <(resolve_dependencies "$1")
+            if [[ $? -eq 0 ]] && [[ ${#deps[@]} -gt 0 ]]; then
+                print_success "Install order: ${deps[*]}"
+                echo ""
+                print_status "Dependency tree:"
+                for ext in "${deps[@]}"; do
+                    echo "  → $ext"
+                done
+            fi
             ;;
         install-all)
             install_all_extensions

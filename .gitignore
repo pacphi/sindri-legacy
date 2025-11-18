@@ -176,6 +176,9 @@ docker-compose.local.yml
 .dockerignore.local
 !docker/lib/
 
+# Github workflows
+!.github/workflows/scripts/lib/
+
 # MacOS
 .AppleDouble
 .LSOverride

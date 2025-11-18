@@ -128,6 +128,41 @@ extension-manager check-updates          # Check for updates
 extension-manager upgrade-history        # View upgrade history
 ```
 
+### Automatic Dependency Resolution (Extension API v2.2)
+
+Extensions automatically install their dependencies without manual intervention:
+
+```bash
+# Example: Install openskills (requires nodejs + git)
+extension-manager install openskills
+# → Auto-installs nodejs first
+# → Auto-installs git
+# → Installs openskills
+
+# Show dependency tree without installing
+extension-manager resolve playwright
+# Output: nodejs, playwright
+```
+
+**Dependency Graph:**
+- `openskills` → nodejs, git
+- `monitoring` → python
+- `playwright` → nodejs
+- `nodejs-devtools` → nodejs
+
+**How It Works:**
+1. System detects `EXT_DEPENDENCIES` metadata from extension files
+2. Builds dependency graph with cycle detection
+3. Performs topological sort to determine install order
+4. Adds all dependencies to manifest in correct order
+5. Installs dependencies first, then target extension
+
+**Benefits:**
+- No manual dependency management required
+- Prevents "missing prerequisite" errors
+- Ensures correct installation order
+- Automatically updates manifest
+
 ### Available Extensions
 
 **Baked Base System (Pre-installed in Docker Image):**

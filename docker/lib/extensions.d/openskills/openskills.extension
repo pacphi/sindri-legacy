@@ -21,6 +21,7 @@ EXT_DESCRIPTION="OpenSkills CLI for managing Claude Code skills from Anthropic's
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="npm"
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_DEPENDENCIES="nodejs git"  # Requires Node.js and git
 
 # Initialize extension environment
 extension_init

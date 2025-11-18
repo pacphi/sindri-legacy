@@ -102,11 +102,30 @@ Phase 5: extension-combinations (N VMs, 3 max concurrent, fail-after-all-complet
 
 #### Phase 2.5: Dependency Chain Tests (3-5 minutes)
 
-- Runtime testing of automatic dependency resolution
-- Tests 3 representative chains: nodejs-devtools→nodejs, openskills→nodejs+git, playwright→nodejs
-- Verifies extension manager auto-installs transitive dependencies
-- Max 3 concurrent VM deployments
-- **Fail behavior**: Stop immediately on error
+Tests automatic dependency resolution (Extension API v2.2):
+
+**Test Cases:**
+1. `nodejs-devtools → nodejs` - TypeScript tools auto-install Node.js
+2. `openskills → nodejs + git` - OpenSkills auto-installs Node.js and git
+3. `playwright → nodejs` - Playwright auto-installs Node.js
+
+**Test Flow:**
+1. Create manifest with ONLY top-level extension (e.g., `playwright`)
+2. Run `extension-manager install-all`
+3. Verify dependencies automatically added to manifest
+4. Verify correct install order (dependencies first)
+5. Verify all extensions validated successfully
+
+**What's Tested:**
+- Dependency detection from `EXT_DEPENDENCIES` metadata
+- Topological sort algorithm (correct install order)
+- Manifest auto-update with resolved dependencies
+- Installation in dependency-first order
+- Prevention of "prerequisite not met" errors
+
+**Resources:** Max 3 concurrent VM deployments (standard tier: 4GB/2CPU)
+
+**Fail behavior**: Stop immediately on error
 
 #### Phase 3: Infrastructure Tests (5-7 minutes)
 

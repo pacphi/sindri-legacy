@@ -20,6 +20,7 @@ EXT_DESCRIPTION="Playwright browser automation framework with Chromium"
 EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mise"  # Uses mise npm plugin
 EXT_UPGRADE_STRATEGY="automatic"
+EXT_DEPENDENCIES="nodejs"  # Requires Node.js
 
 # Initialize extension environment
 extension_init
