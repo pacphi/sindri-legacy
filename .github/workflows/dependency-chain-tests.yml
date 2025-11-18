@@ -98,7 +98,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
-          source .github/scripts/lib/retry-utils.sh
+          source ./.github/scripts/lib/retry-utils.sh
           app_name="${{ steps.setup.outputs.app-name }}"
           top_level="${{ matrix.test-case.top_level }}"
           expected_chain="${{ matrix.test-case.expected_chain }}"
