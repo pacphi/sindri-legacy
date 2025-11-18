@@ -597,7 +597,7 @@ build_dependency_graph() {
         deps=$(get_extension_dependencies "$ext")
 
         if [[ -n "$deps" ]]; then
-            dep_graph[$ext]="$deps"
+            dep_graph["$ext"]="$deps"
 
             # Recursively process dependencies
             for dep in $deps; do
@@ -630,15 +630,15 @@ resolve_dependencies() {
 
     print_debug "Resolving dependencies for: ${extensions[*]}"
 
-    # Build dependency graph
-    local -A dep_graph
-    if ! build_dependency_graph dep_graph "${extensions[@]}"; then
+    # Build dependency graph (use _graph to avoid nameref collision)
+    local -A _graph
+    if ! build_dependency_graph _graph "${extensions[@]}"; then
         print_error "Failed to build dependency graph (circular dependency detected)"
         return 1
     fi
 
     # If no dependencies, just return the input
-    if [[ ${#dep_graph[@]} -eq 0 ]]; then
+    if [[ ${#_graph[@]} -eq 0 ]]; then
         printf '%s\n' "${extensions[@]}"
         return 0
     fi
@@ -647,7 +647,7 @@ resolve_dependencies() {
     local -A all_nodes
     for ext in "${extensions[@]}"; do
         all_nodes[$ext]=1
-        local deps="${dep_graph[$ext]}"
+        local deps="${_graph[$ext]}"
         for dep in $deps; do
             all_nodes[$dep]=1
         done
@@ -663,8 +663,8 @@ resolve_dependencies() {
     done
 
     # Build adjacency list and calculate in-degrees
-    for node in "${!dep_graph[@]}"; do
-        local deps="${dep_graph[$node]}"
+    for node in "${!_graph[@]}"; do
+        local deps="${_graph[$node]}"
         for dep in $deps; do
             # Edge: dep -> node
             adj_list[$dep]+="$node "
