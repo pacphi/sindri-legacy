@@ -12,6 +12,18 @@ on:
         required: false
         default: false
         type: boolean
+      event_name:
+        description: "Event name (push, pull_request, etc.)"
+        required: false
+        type: string
+      pr_number:
+        description: "Pull request number (for PR builds)"
+        required: false
+        type: string
+      ref_name:
+        description: "Branch or tag name"
+        required: false
+        type: string
     secrets:
       FLYIO_AUTH_TOKEN:
         required: true
@@ -54,17 +66,20 @@ jobs:
       - name: Generate image tag
         id: generate-tag
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
+          if [ -n "${{ inputs.tag }}" ]; then
+            # Custom tag provided (manual workflow dispatch or workflow_call)
+            TAG="${{ inputs.tag }}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
             # Manual workflow dispatch with custom tag
             TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          elif [ "${{ inputs.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
             # PR builds: pr-<number>-<sha>
-            PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_NUMBER="${{ inputs.pr_number || github.event.pull_request.number }}"
             SHA_SHORT=${GITHUB_SHA:0:7}
             TAG="pr-${PR_NUMBER}-${SHA_SHORT}"
           else
             # Push builds: <branch>-<sha>
-            BRANCH=${GITHUB_REF#refs/heads/}
+            BRANCH="${{ inputs.ref_name || github.ref_name }}"
             BRANCH=${BRANCH//\//-}  # Replace / with -
             SHA_SHORT=${GITHUB_SHA:0:7}
             TAG="${BRANCH}-${SHA_SHORT}"

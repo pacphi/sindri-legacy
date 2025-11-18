@@ -162,6 +162,10 @@ jobs:
     needs: setup-config
     if: success()
     uses: ./.github/workflows/build-image.yml
+    with:
+      event_name: ${{ github.event_name }}
+      pr_number: ${{ github.event.pull_request.number }}
+      ref_name: ${{ github.ref_name }}
     secrets:
       FLYIO_AUTH_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
 
