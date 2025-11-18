@@ -67,29 +67,74 @@ Check the workflow run to confirm the image builds and pushes successfully.
 
 ## How It Works
 
+### Layered Build Architecture
+
+Sindri uses a **3-layer base image strategy** to optimize build times:
+
+```text
+Layer 1: SYSTEM BASE (base-stable)
+├─ Ubuntu 24.04 + system packages
+├─ Changes rarely (monthly)
+└─ Build time: ~3-4 minutes
+
+Layer 2: TOOLING BASE (tooling-stable)
+├─ mise, Claude CLI, SOPS + age, SSH config
+├─ Changes occasionally (weekly/biweekly)
+└─ Build time: ~2-3 minutes
+
+Layer 3: APPLICATION (pr-123 or latest)
+├─ Extension definitions, helper scripts
+├─ Changes frequently (daily)
+└─ Build time: ~10-15 seconds
+```
+
 ### Automatic Build Triggers
 
-The system automatically builds Docker images when:
+The system intelligently detects changes and rebuilds only necessary layers:
 
-1. **Dockerfile Changes**: Any modification to `Dockerfile` or `docker/*`
-2. **Pull Requests**: Builds PR-specific images (e.g., `pr-123-a1b2c3d`)
-3. **Main Branch Pushes**: Builds and tags as `latest`
+1. **Base Layer Changes** (Dockerfile.base, install-packages.sh):
+   - Rebuild base → tooling → application
+   - Total time: ~5-6 minutes
+
+2. **Tooling Layer Changes** (Dockerfile.tooling, mise/Claude/SOPS scripts):
+   - Reuse base, rebuild tooling → application
+   - Total time: ~2-3 minutes
+
+3. **Application Layer Changes** (Dockerfile, extensions, scripts):
+   - Reuse base + tooling, rebuild application only
+   - Total time: ~10-15 seconds (**95% faster**)
+
+4. **Pull Requests**: Builds PR-specific application images
+5. **Main Branch Pushes**: Builds and tags as `latest`
 
 ### Image Reuse Logic
 
-Workflows intelligently reuse images:
+Workflows intelligently reuse layers:
 
 ```yaml
-# Integration workflow checks for changes
-- If Dockerfile/docker/* changed → Build new image
-- If no changes → Reuse latest image
+# Integration workflow detects changes automatically
+- If base/tooling files changed → Build affected layers
+- If only application files changed → Rebuild app layer only (~15s)
+- Base and tooling layers are cached and reused
 ```
 
 This happens automatically - no manual intervention needed.
 
 ### Image Naming Convention
 
-Images are tagged based on context:
+Images are tagged by layer and context:
+
+**Base Layer:**
+
+- Versioned: `registry.fly.io/sindri-registry:base-<sha>`
+- Stable: `registry.fly.io/sindri-registry:base-stable`
+
+**Tooling Layer:**
+
+- Versioned: `registry.fly.io/sindri-registry:tooling-<sha>`
+- Stable: `registry.fly.io/sindri-registry:tooling-stable`
+
+**Application Layer:**
 
 - **PR builds**: `registry.fly.io/sindri-registry:pr-<number>-<sha>`
 - **Branch builds**: `registry.fly.io/sindri-registry:<branch>-<sha>`
@@ -133,17 +178,35 @@ flyctl apps create sindri-registry --org personal
 
 **Solution**:
 
-1. See [Image Optimization Guide](./IMAGE_OPTIMIZATION.md)
-2. Use multi-stage builds
-3. Minimize installed packages
-4. Use `.dockerignore`
+1. See [Layered Images Guide](./LAYERED_IMAGES_GUIDE.md) for optimization strategies
+2. Review layer separation (base/tooling/application)
+3. Minimize files copied in each layer
+4. Use `.dockerignore` to exclude unnecessary files
 
 ## Manual Operations
 
-### Build Image Manually
+### Build Base Images Manually
+
+When base system tools need updating (e.g., Ubuntu packages, mise version):
 
 ```bash
-# Trigger via GitHub CLI
+# Build both base and tooling layers
+gh workflow run build-base-images.yml -f layer=both
+
+# Build only base layer
+gh workflow run build-base-images.yml -f layer=base
+
+# Build only tooling layer
+gh workflow run build-base-images.yml -f layer=tooling
+
+# With custom version tag
+gh workflow run build-base-images.yml -f layer=both -f version=v1.0.0
+```
+
+### Build Application Image Manually
+
+```bash
+# Trigger via GitHub CLI (uses existing base layers)
 gh workflow run build-image.yml
 
 # With custom tag
@@ -172,7 +235,7 @@ docker pull registry.fly.io/sindri-registry:latest
 
 ### Delete Old Images
 
-See the [Cleanup Workflow](./.github/workflows/cleanup-images.yml) for automated cleanup, or manually:
+See the [Cleanup Workflow](../.github/workflows/cleanup-registry.yml) for automated cleanup, or manually:
 
 ```bash
 # Delete specific tag (requires Fly CLI with registry access)
@@ -181,7 +244,17 @@ flyctl registry delete sindri-registry:<tag>
 
 ## Performance Metrics
 
-Expected improvements after enabling pre-built images:
+Expected improvements with layered base images:
+
+### Build Time by Change Type
+
+| Change Type            | Before | After (Layered) | Improvement     |
+| ---------------------- | ------ | --------------- | --------------- |
+| Extension scripts only | 5-6min | 10-15 sec       | **95%** faster  |
+| Tooling updates        | 5-6min | 2-3 min         | **50%** faster  |
+| System packages        | 5-6min | 5-6 min         | Same (rare)     |
+
+### Workflow Execution Time
 
 | Workflow             | Before | After   | Improvement    |
 | -------------------- | ------ | ------- | -------------- |
@@ -189,7 +262,14 @@ Expected improvements after enabling pre-built images:
 | Extension Tests      | ~45min | ~12min  | **73%** faster |
 | Per-Extension (each) | ~6min  | ~1.5min | **75%** faster |
 
-**CI Minutes Savings**: ~70-80% reduction in total CI minutes
+### CI Cost Savings
+
+- **Weekly builds**: 30 builds/week × 5.5 min = 165 min/week
+- **With layered images**: ~37 min/week (70% extension changes, 20% tooling, 10% system)
+- **Savings**: ~128 min/week (**78% reduction**)
+- **Monthly cost reduction**: ~$22/month
+
+**Most common scenario (extension changes)**: 70% of changes rebuild in ~15 seconds instead of 5-6 minutes
 
 ## Advanced Usage
 
@@ -230,9 +310,9 @@ pre_built_image: ""
 
 ## Next Steps
 
-- Read [Docker Images Guide](./DOCKER_IMAGES.md) for detailed architecture
-- See [Migration Guide](./MIGRATION_PREBUILT_IMAGES.md) for updating custom workflows
-- Check [Cleanup Strategy](./IMAGE_CLEANUP.md) for managing old images
+- Read [Layered Images Guide](./LAYERED_IMAGES_GUIDE.md) for detailed architecture and best practices
+- Review [GitHub Workflows Guide](./GITHUB_WORKFLOWS.md) for CI/CD integration details
+- Check [Cleanup Registry Workflow](../.github/workflows/cleanup-registry.yml) for managing old images
 
 ## Support
 

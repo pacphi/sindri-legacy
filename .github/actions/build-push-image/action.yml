@@ -20,6 +20,18 @@ inputs:
     description: "Docker build context directory"
     required: false
     default: "."
+  base-image:
+    description: "Base image to use (for layered builds)"
+    required: false
+    default: ""
+  tooling-image:
+    description: "Tooling image to use (for layered builds)"
+    required: false
+    default: ""
+  build-args:
+    description: "Additional build arguments (comma-separated, e.g., 'ARG1=value1,ARG2=value2')"
+    required: false
+    default: ""
 
 outputs:
   image-url:
@@ -43,6 +55,21 @@ runs:
         echo "Authenticating with Fly.io Docker registry..."
         flyctl auth docker
 
+    - name: Pull base images (if specified)
+      shell: bash
+      run: |
+        # Pull base image if specified
+        if [ -n "${{ inputs.base-image }}" ]; then
+          echo "Pulling base image: ${{ inputs.base-image }}"
+          docker pull ${{ inputs.base-image }} || echo "⚠️ Base image not found, will build from scratch"
+        fi
+
+        # Pull tooling image if specified
+        if [ -n "${{ inputs.tooling-image }}" ]; then
+          echo "Pulling tooling image: ${{ inputs.tooling-image }}"
+          docker pull ${{ inputs.tooling-image }} || echo "⚠️ Tooling image not found, will build from scratch"
+        fi
+
     - name: Build and push image
       id: push
       shell: bash
@@ -56,10 +83,38 @@ runs:
         echo "Context: ${{ inputs.build-context }}"
         echo ""
 
+        # Prepare build args
+        BUILD_ARGS=""
+
+        # Add base image if specified
+        if [ -n "${{ inputs.base-image }}" ]; then
+          BUILD_ARGS="${BUILD_ARGS} --build-arg BASE_IMAGE=${{ inputs.base-image }}"
+          echo "Using base image: ${{ inputs.base-image }}"
+        fi
+
+        # Add tooling image if specified
+        if [ -n "${{ inputs.tooling-image }}" ]; then
+          BUILD_ARGS="${BUILD_ARGS} --build-arg TOOLING_IMAGE=${{ inputs.tooling-image }}"
+          echo "Using tooling image: ${{ inputs.tooling-image }}"
+        fi
+
+        # Add additional build args if specified
+        if [ -n "${{ inputs.build-args }}" ]; then
+          # Split comma-separated build args and add them
+          IFS=',' read -ra ARGS <<< "${{ inputs.build-args }}"
+          for arg in "${ARGS[@]}"; do
+            BUILD_ARGS="${BUILD_ARGS} --build-arg ${arg}"
+          done
+          echo "Additional build args: ${{ inputs.build-args }}"
+        fi
+
+        echo ""
+
         # Build image
         docker build \
           -f ${{ inputs.dockerfile }} \
           -t ${IMAGE_URL} \
+          ${BUILD_ARGS} \
           ${{ inputs.build-context }}
 
         echo ""
