@@ -14,6 +14,11 @@ on:
       - "docker/lib/extension-manager.sh"
       - "docker/lib/common.sh"
       - "docker/lib/extensions-common.sh"
+      # Secrets management system
+      - "docker/scripts/setup-secrets.sh"
+      - "docker/scripts/install-sops-age.sh"
+      - ".github/scripts/test-secrets-management.sh"
+      - ".github/workflows/test-secrets-management.yml"
       # Workflow itself and direct dependencies
       - ".github/workflows/integration.yml"
       - ".github/workflows/integration-test.yml"
