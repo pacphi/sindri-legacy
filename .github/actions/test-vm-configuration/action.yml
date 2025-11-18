@@ -55,7 +55,12 @@ runs:
         for tool in "${TOOLS[@]}"; do
           tool=$(echo "$tool" | xargs)  # Trim whitespace
           tool_checks="$tool_checks
-            which $tool || { echo \"❌ $tool not found\"; exit 1; }"
+          if which $tool > /dev/null 2>&1; then
+            echo \"  ✅ $tool found\"
+          else
+            echo \"  ❌ $tool not found\"
+            exit 1
+          fi"
         done
 
         # Build resource verification commands
@@ -64,20 +69,24 @@ runs:
         expected_cpu_kind="${{ inputs.expected-cpu-kind }}"
 
         resource_checks=""
+        if [ -n "$expected_memory" ] || [ -n "$expected_cpus" ] || [ -n "$expected_cpu_kind" ]; then
+          resource_checks="
+          echo \"\"
+          echo \"📊 Verifying VM Resources...\"
+          "
+        fi
+
         if [ -n "$expected_memory" ]; then
           # Allow 10% variance for system overhead
           min_memory=$((expected_memory * 90 / 100))
           resource_checks="$resource_checks
-          echo \"\"
-          echo \"📊 Verifying VM Resources...\"
-          echo \"\"
           actual_memory=\$(free -m | awk '/^Mem:/{print \$2}')
-          echo \"💾 Memory: \${actual_memory}MB (expected ~${expected_memory}MB)\"
+          echo \"  💾 Memory: \${actual_memory}MB (expected ~${expected_memory}MB)\"
           if [ \"\$actual_memory\" -lt \"$min_memory\" ]; then
-            echo \"❌ Memory below minimum threshold (${min_memory}MB)\"
+            echo \"    ❌ Memory below minimum threshold (${min_memory}MB)\"
             exit 1
           else
-            echo \"✅ Memory OK\"
+            echo \"    ✅ Memory OK\"
           fi
           "
         fi
@@ -85,66 +94,73 @@ runs:
         if [ -n "$expected_cpus" ]; then
           resource_checks="$resource_checks
           actual_cpus=\$(nproc)
-          echo \"⚡ CPUs: \${actual_cpus} (expected ${expected_cpus})\"
+          echo \"  ⚡ CPUs: \${actual_cpus} (expected ${expected_cpus})\"
           if [ \"\$actual_cpus\" != \"$expected_cpus\" ]; then
-            echo \"❌ CPU count mismatch\"
+            echo \"    ❌ CPU count mismatch\"
             exit 1
           else
-            echo \"✅ CPU count OK\"
+            echo \"    ✅ CPU count OK\"
           fi
           "
         fi
 
         if [ -n "$expected_cpu_kind" ]; then
           resource_checks="$resource_checks
-          echo \"🔧 CPU kind verification (expected: ${expected_cpu_kind})\"
-          # Note: CPU kind detection is approximate - we check for performance indicators
+          echo \"  🔧 CPU kind: ${expected_cpu_kind}\"
           if [ \"$expected_cpu_kind\" = \"performance\" ]; then
-            # Performance CPUs should show dedicated CPU info
             if grep -q \"Xeon\\|EPYC\" /proc/cpuinfo 2>/dev/null; then
-              echo \"✅ CPU kind appears to be performance (dedicated)\"
+              echo \"    ✅ Detected performance CPU (dedicated)\"
             else
-              echo \"⚠️  Warning: Could not confirm performance CPU type\"
+              echo \"    ⚠️  Could not confirm performance CPU type\"
             fi
           else
-            echo \"ℹ️  CPU kind: ${expected_cpu_kind} (shared CPUs - verification skipped)\"
+            echo \"    ✅ Shared CPU configuration (no validation needed)\"
           fi
           "
         fi
 
         # Test that configuration script and extension system exists
-        if flyctl ssh console --app $app_name --user $user --command "
-          echo \"Testing VM environment...\"
-          echo \"\"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🔍 Testing VM Configuration"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-          # Check extension manager
+        if flyctl ssh console --app $app_name --user $user --command "
+          set -e
+          echo \"\"
+          echo \"📦 Checking Extension System...\"
+
           if [ -f \"/workspace/.system/bin/extension-manager\" ]; then
-            echo \"✅ Extension manager found\"
+            echo \"  ✅ Extension manager found\"
           else
-            echo \"❌ Extension manager missing\"
+            echo \"  ❌ Extension manager missing\"
             exit 1
           fi
 
-          # Check for extension examples
           if [ -d \"/workspace/scripts/lib/extensions.d\" ]; then
             ext_count=\$(ls -1 /workspace/scripts/lib/extensions.d/*.extension 2>/dev/null | wc -l)
-            echo \"✅ Extension directory found with \$ext_count extension examples\"
+            echo \"  ✅ Extension directory found with \$ext_count extension examples\"
           else
-            echo \"❌ Extensions directory missing\"
+            echo \"  ❌ Extensions directory missing\"
             exit 1
           fi
 
-          # Check basic tools
+          echo \"\"
+          echo \"🛠️  Checking Required Tools...\"
           $tool_checks
 
-          # Check workspace directory
-          ls -la /workspace/ || { echo \"❌ workspace directory issue\"; exit 1; }
+          echo \"\"
+          echo \"📁 Checking Workspace Directory...\"
+          if ls -la /workspace/ > /dev/null 2>&1; then
+            echo \"  ✅ Workspace directory accessible\"
+          else
+            echo \"  ❌ Workspace directory issue\"
+            exit 1
+          fi
 
-          # Verify VM resources if expected values provided
           $resource_checks
 
           echo \"\"
-          echo \"✅ All VM tests passed\"
+          echo \"✅ All VM configuration tests passed\"
         "; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -1,0 +1,178 @@
+name: Manifest Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    name: Static Manifest & Extension Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate extension syntax
+        run: |
+          echo "=== Extension Syntax Validation ==="
+          failed_extensions=()
+
+          # Check all extension files
+          for ext_file in docker/lib/extensions.d/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            echo ""
+            echo "Checking $ext_name..."
+
+            # Run syntax validation
+            if bash .github/scripts/validation/check-syntax.sh "$ext_file"; then
+              echo "✅ $ext_name syntax valid"
+            else
+              echo "❌ $ext_name syntax invalid"
+              failed_extensions+=("$ext_name")
+            fi
+          done
+
+          echo ""
+          if [ ${#failed_extensions[@]} -eq 0 ]; then
+            echo "✅ All extension syntax checks passed"
+          else
+            echo "❌ Failed syntax checks: ${failed_extensions[*]}"
+            exit 1
+          fi
+
+      - name: Validate dependency chains
+        run: |
+          echo "=== Dependency Chain Validation ==="
+          failed_deps=()
+
+          # Check extensions with dependencies
+          for ext_file in docker/lib/extensions.d/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            # Check if extension has dependencies
+            if grep -q "^EXT_DEPENDS_ON=" "$ext_file"; then
+              echo ""
+              echo "Checking dependencies for $ext_name..."
+
+              if bash .github/scripts/validation/verify-dependencies.sh "$ext_name"; then
+                echo "✅ $ext_name dependencies valid"
+              else
+                echo "❌ $ext_name dependencies invalid"
+                failed_deps+=("$ext_name")
+              fi
+            fi
+          done
+
+          echo ""
+          if [ ${#failed_deps[@]} -eq 0 ]; then
+            echo "✅ All dependency chains valid"
+          else
+            echo "❌ Failed dependency checks: ${failed_deps[*]}"
+            exit 1
+          fi
+
+      - name: Validate manifest templates
+        run: |
+          echo "=== Manifest Template Validation ==="
+
+          # Check CI manifest template
+          ci_manifest="docker/lib/extensions.d/active-extensions.ci.conf"
+          if [ -f "$ci_manifest" ]; then
+            echo "✅ CI manifest template exists"
+
+            # Verify all referenced extensions exist
+            while IFS= read -r ext; do
+              # Skip comments and empty lines
+              if [[ "$ext" =~ ^#.*$ ]] || [ -z "$ext" ]; then
+                continue
+              fi
+
+              ext_file="docker/lib/extensions.d/${ext}.extension"
+              if [ -f "$ext_file" ]; then
+                echo "  ✅ $ext exists"
+              else
+                echo "  ❌ $ext referenced in CI manifest but extension file not found"
+                exit 1
+              fi
+            done < "$ci_manifest"
+          else
+            echo "❌ CI manifest template not found"
+            exit 1
+          fi
+
+          # Check dev manifest template
+          dev_manifest="docker/lib/extensions.d/active-extensions.conf.example"
+          if [ -f "$dev_manifest" ]; then
+            echo "✅ Dev manifest template exists"
+          else
+            echo "⚠️  Dev manifest template not found (non-fatal)"
+          fi
+
+          echo ""
+          echo "✅ Manifest template validation passed"
+
+      - name: Validate extension metadata
+        run: |
+          echo "=== Extension Metadata Validation ==="
+          missing_metadata=()
+
+          for ext_file in docker/lib/extensions.d/*.extension; do
+            ext_name=$(basename "$ext_file" .extension)
+
+            # Skip template
+            if [ "$ext_name" = "template" ]; then
+              continue
+            fi
+
+            echo ""
+            echo "Checking metadata for $ext_name..."
+
+            # Check for required metadata
+            has_name=$(grep -q "^EXT_NAME=" "$ext_file" && echo "yes" || echo "no")
+            has_desc=$(grep -q "^EXT_DESCRIPTION=" "$ext_file" && echo "yes" || echo "no")
+
+            if [ "$has_name" = "yes" ] && [ "$has_desc" = "yes" ]; then
+              echo "✅ $ext_name has required metadata"
+            else
+              echo "❌ $ext_name missing metadata (NAME: $has_name, DESC: $has_desc)"
+              missing_metadata+=("$ext_name")
+            fi
+          done
+
+          echo ""
+          if [ ${#missing_metadata[@]} -eq 0 ]; then
+            echo "✅ All extensions have required metadata"
+          else
+            echo "❌ Extensions missing metadata: ${missing_metadata[*]}"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "Manifest & Extension Validation Complete"
+          echo "=========================================="
+          echo "✅ Extension syntax validated"
+          echo "✅ Dependency chains validated"
+          echo "✅ Manifest templates validated"
+          echo "✅ Extension metadata validated"
+          echo "=========================================="

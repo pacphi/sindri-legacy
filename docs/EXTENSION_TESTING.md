@@ -3,45 +3,115 @@
 ## Table of Contents
 
 - [Overview](#overview)
+- [Unified Testing Architecture](#unified-testing-architecture)
 - [CI Environment Setup](#ci-environment-setup)
 - [Test Coverage](#test-coverage)
-- [Test Fixtures](#test-fixtures)
 - [Workflow Triggers](#workflow-triggers)
-- [Test Coverage Metrics](#test-coverage-metrics)
 - [Resource Requirements](#resource-requirements)
 - [Interpreting Results](#interpreting-results)
 - [Adding New Extensions](#adding-new-extensions)
 - [Best Practices](#best-practices)
-- [Continuous Improvement](#continuous-improvement)
 
 ---
 
 ## Overview
 
-The extension testing workflow [extension-tests](../.github/workflows/extension-tests.yml) provides automated validation
-and functional testing for all extensions in the `docker/lib/extensions.d/` directory.
+The unified integration testing workflow [integration.yml](../.github/workflows/integration.yml) provides comprehensive
+automated validation for the entire Sindri system, including all extensions in the `docker/lib/extensions.d/` directory.
 
-This comprehensive testing ensures that users can confidently activate and use any extension through the
-`extension-manager` command without encountering issues. Each extension implements the **Extension API** (see
+This testing ensures that users can confidently activate and use any extension through the `extension-manager` command
+without encountering issues. Each extension implements the **Extension API v1.0** or **v2.0** (see
 [EXTENSIONS.md](EXTENSIONS.md#extension-api-specification)) with 6-7 required functions.
 
 ### Testing Philosophy
 
-The test suite is designed to:
+The unified test suite is designed to:
 
 1. **Validate All API Functions** - Test all Extension API functions for compliance
-2. **Test Edge Cases** - Cleanup ordering, dependency chains, manifest operations
+2. **Test Complete Integration** - Each extension runs API compliance AND integration tests
 3. **Ensure Reliability** - Idempotency, error handling, and conflict detection
 4. **Maintain Quality** - Syntax validation, best practices, and documentation
+5. **Controlled Concurrency** - Max 3 jobs concurrent to manage resources
 
 ### Test Statistics
 
-- **Total Test Jobs**: 10
+- **Main Workflow**: 1 (integration.yml - single entry point)
+- **Test Phases**: 6 sequential phases (quick-checks → manifest-validation → dependency-chain →
+  infrastructure → individual-extensions → extension-combinations)
 - **Extensions Tested**: 21 out of 21 (100%)
-- **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0, 7/7 v2.1)
-- **Feature Coverage**: 96%
-- **Test Fixtures**: 3 manifest test files
+- **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0)
+- **Test Type**: Complete (API compliance + integration + idempotency + upgrade)
 - **Base System Components**: 4 (mise, workspace, SSH, Claude Code CLI) - pre-installed and always available
+- **Max Concurrent Jobs**: 3 (controlled resource usage)
+
+---
+
+## Unified Testing Architecture
+
+### Sequential Execution Flow
+
+All testing flows through a single entry point (`integration.yml`) with 6 sequential phases:
+
+```text
+Phase 1: quick-checks (inline, fail-fast)
+    ↓
+Phase 2: manifest-validation (static, no VM, fail-fast)
+    ↓
+Phase 2.5: dependency-chain (3 VMs, max 3 concurrent, fail-fast)
+    ↓
+Phase 3: infrastructure (1 VM, fail-fast)
+    ↓
+Phase 4: individual-extensions (N VMs, 3 max concurrent, fail-after-all-complete)
+    ↓
+Phase 5: extension-combinations (N VMs, 3 max concurrent, fail-after-all-complete)
+```
+
+### Phase Descriptions
+
+#### Phase 1: Quick Checks (2-5 minutes)
+
+- Shellcheck validation for all shell scripts
+- YAML syntax validation
+- Extension manager syntax check
+- **Fail behavior**: Stop immediately on error
+
+#### Phase 2: Manifest Validation (2 minutes)
+
+- Static validation of extension syntax
+- Static dependency chain verification (files exist)
+- Manifest template validation
+- Extension metadata validation
+- **Fail behavior**: Stop immediately on error
+
+#### Phase 2.5: Dependency Chain Tests (3-5 minutes)
+
+- Runtime testing of automatic dependency resolution
+- Tests 3 representative chains: nodejs-devtools→nodejs, openskills→nodejs+git, playwright→nodejs
+- Verifies extension manager auto-installs transitive dependencies
+- Max 3 concurrent VM deployments
+- **Fail behavior**: Stop immediately on error
+
+#### Phase 3: Infrastructure Tests (5-7 minutes)
+
+- VM deployment and configuration (minimal tier: 1GB/1CPU)
+- SSH connectivity, volumes, persistence
+- Secrets management (SOPS + age)
+- Basic developer workflow
+- **Fail behavior**: Stop immediately on error
+
+#### Phase 4: Individual Extensions (15-20 minutes)
+
+- Matrix of all 20+ extensions
+- Each extension runs complete test suite (see below)
+- Max 3 concurrent extension tests
+- **Fail behavior**: Let all running jobs complete, then fail
+
+#### Phase 5: Extension Combinations (10-12 minutes)
+
+- Multi-extension scenario testing
+- Common stacks: mise-stack, full-node, fullstack, systems, enterprise, ai-dev
+- Max 3 concurrent combinations
+- **Fail behavior**: Let all running jobs complete, then fail
 
 ---
 
@@ -195,36 +265,83 @@ which claude
 
 ## Test Coverage
 
-The extension testing workflow includes **10 comprehensive test jobs** covering all aspects of the Extension API:
+### Complete Extension Test Suite
 
-### 1. Extension Manager Validation
+Each extension in the individual-extensions phase runs a **complete test suite** via the
+`test-extension-complete` composite action:
 
-Tests the core extension management system (**Extension API v1.0/v2.0**):
+#### 1. Installation (with Dependencies)
 
-- **Script Syntax**: Validates `extension-manager.sh` with shellcheck
-- **List Command**: Verifies extension listing functionality via `extension-manager list`
-- **Name Extraction**: Tests extraction of extension names from `.extension` files
-- **Manifest Operations**: Tests reading/writing `active-extensions.conf`
-- **Basic Functionality**: Validates core extension-manager operations
+- Adds extension and dependencies to manifest
+- Runs `extension-manager install-all`
+- Verifies installation completed without errors
 
-**When It Runs**: On every push/PR affecting extension files
+#### 2. Validation
 
-### 2. Extension Syntax Validation
+- Executes `extension-manager validate <extension>`
+- Ensures post-install checks pass
 
-Validates all extension scripts for code quality:
+#### 3. API Compliance
 
-- **Shellcheck Analysis**: Static analysis of all `.extension` files
-- **Common.sh Sourcing**: Verifies proper utility function imports
-- **Shebang Verification**: Ensures all scripts have `#!/bin/bash`
-- **Error Handling**: Checks for use of print functions and error handling
-- **Best Practices**: Validates adherence to extension development guidelines
-- **API Compliance**: Verifies all required API functions are defined
+- Tests `validate()` function returns success
+- Tests `status()` function shows required fields (Extension, Status)
+- Verifies extension is in manifest
 
-**When It Runs**: On every push/PR affecting extension files
+#### 4. Key Functionality
 
-### 3. Per-Extension Tests (Matrix)
+- Tests primary tool functionality (tool-specific)
+- Verifies commands are available in PATH
+- Runs basic smoke tests
 
-Comprehensive functional testing for each extension individually using the Extension API.
+#### 5. Idempotency
+
+- Runs `extension-manager install-all` a second time
+- Verifies no errors on re-installation
+- For `claude-marketplace`: Verifies settings.json unchanged
+
+#### 6. Upgrade (API v2.0+)
+
+- Tests `upgrade()` function if present
+- Runs upgrade dry-run
+- Verifies upgrade capability
+
+### Test Script Organization
+
+All test scripts are organized by concern in `.github/scripts/`:
+
+#### Shared Libraries (`lib/`)
+
+- `test-helpers.sh` - 20+ utility functions
+- `assertions.sh` - 10+ test assertions
+- `ssh-helpers.sh` - SSH/SFTP with retry logic
+- `retry-utils.sh` - Backoff and retry utilities
+
+#### Infrastructure Tests (`infrastructure/`)
+
+- `test-vm-deployment.sh` - VM, SSH, volumes, extension system
+- `test-secrets-management.sh` - SOPS + age encryption
+- `verify-volume.sh` - Volume mount verification
+
+#### Extension Tests (`extensions/`)
+
+- `test-extension-complete.sh` - Complete test suite (consolidated)
+- `verify-commands.sh` - Command availability
+- `test-key-functionality.sh` - Tool-specific tests (30+ tools)
+
+#### Validation (`validation/`)
+
+- `verify-manifest.sh` - Manifest validation
+- `check-syntax.sh` - Extension syntax
+- `verify-dependencies.sh` - Dependency chains
+- `setup-manifest.sh` - Manifest utilities
+
+### Composite Actions
+
+New composite actions streamline extension testing:
+
+- **test-extension-complete** - Runs complete test suite for one extension
+- **install-extension** - Installs extension with dependencies
+- **upload-test-libs** - Uploads shared test libraries to VM
 
 For complete Extension API specification, see [EXTENSIONS.md - Extension API Specification](EXTENSIONS.md#extension-api-specification).
 

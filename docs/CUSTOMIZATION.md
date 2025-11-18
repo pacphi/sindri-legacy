@@ -3,7 +3,7 @@
 ## Table of Contents
 
 - [Extension System](#extension-system)
-  - [Extension API v1.0](#extension-api-v10)
+  - [Extension API v1.0 & v2.0](#extension-api-v10--v20)
   - [Available Extensions](#available-extensions)
 - [Extension Management](#extension-management)
   - [Managing Extensions](#managing-extensions)
@@ -29,16 +29,17 @@
 Sindri uses a **manifest-based extension system** to manage development tools and environments. Extensions follow a
 standardized API (v1.0) with explicit dependency management and activation control.
 
-### Extension API v1.0
+### Extension API v1.0 & v2.0
 
-The Extension API v1.0 provides:
+The Extension API provides:
 
 - **Manifest-based activation**: Control which extensions install via `active-extensions.conf`
-- **Standardized API**: All extensions implement 6 required functions
+- **Standardized API**: All extensions implement 6 required functions (v1.0) or 7 functions (v2.0)
 - **Dependency management**: Explicit prerequisites checking before installation
 - **CLI management**: `extension-manager` tool for activation and installation
 - **Idempotent operations**: Safe to re-run installations
 - **Clean removal**: Proper uninstall with dependency warnings
+- **Upgrade support (v2.0+)**: Extensions can implement `upgrade()` for updating installed tools
 
 **Key Concepts:**
 
@@ -370,7 +371,10 @@ remove() {
 
 ### Extension Functions
 
-All extensions must implement these 6 functions:
+All extensions must implement these functions:
+
+- **Extension API v1.0**: 6 required functions
+- **Extension API v2.0**: 7 required functions (adds `upgrade()`)
 
 #### 1. prerequisites()
 
@@ -593,6 +597,53 @@ remove() {
   return 0
 }
 ```
+
+#### 7. upgrade() (Extension API v2.0+)
+
+Upgrade installed tools to latest versions.
+
+**Returns**: `0` on success, `1` on failure
+
+**Actions**:
+
+- Check for available updates
+- Upgrade packages/tools
+- Verify upgraded versions
+- Handle upgrade failures gracefully
+
+```bash
+upgrade() {
+  print_status "Upgrading ${EXT_NAME}..."
+
+  # Check current version
+  local current_version=$(mytool --version 2>/dev/null || echo "unknown")
+  print_info "Current version: $current_version"
+
+  # Check for updates
+  print_info "Checking for updates..."
+  local latest_version=$(curl -s https://api.example.com/latest-version)
+
+  if [ "$current_version" = "$latest_version" ]; then
+    print_success "Already at latest version"
+    return 0
+  fi
+
+  # Perform upgrade
+  curl -fsSL https://example.com/upgrade.sh | bash
+
+  # Verify upgrade
+  local new_version=$(mytool --version 2>/dev/null)
+  if [ "$new_version" = "$latest_version" ]; then
+    print_success "Successfully upgraded to $new_version"
+    return 0
+  else
+    print_error "Upgrade verification failed"
+    return 1
+  fi
+}
+```
+
+**Note**: The `upgrade()` function is optional for v1.0 extensions but required for v2.0 extensions.
 
 ## Configuration Examples
 
