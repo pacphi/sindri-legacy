@@ -62,14 +62,34 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0  # Need full history for workflow_dispatch
+
+      - name: Determine comparison base
+        id: base-ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # For manual triggers, compare against HEAD~1 if it exists, otherwise build all
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              echo "ref=HEAD~1" >> $GITHUB_OUTPUT
+              echo "Using HEAD~1 for workflow_dispatch"
+            else
+              echo "ref=" >> $GITHUB_OUTPUT
+              echo "No parent commit found, will build all layers"
+            fi
+          elif [ -n "${{ github.event.before }}" ]; then
+            echo "ref=${{ github.event.before }}" >> $GITHUB_OUTPUT
+            echo "Using github.event.before: ${{ github.event.before }}"
+          else
+            echo "ref=HEAD~1" >> $GITHUB_OUTPUT
+            echo "Falling back to HEAD~1"
+          fi
 
       - name: Check for file changes
         uses: dorny/paths-filter@v3
         id: filter
+        if: steps.base-ref.outputs.ref != ''
         with:
-          # For workflow_dispatch, use HEAD^ as base since there's no 'before' ref
-          base: ${{ github.event.before || 'HEAD^' }}
+          base: ${{ steps.base-ref.outputs.ref }}
           filters: |
             base:
               - 'Dockerfile.base'
@@ -93,8 +113,13 @@ jobs:
       - name: Decide what to build
         id: decide
         run: |
+          # If no base ref (initial commit), build everything
+          if [ -z "${{ steps.base-ref.outputs.ref }}" ]; then
+            echo "build-base=true" >> $GITHUB_OUTPUT
+            echo "build-tooling=true" >> $GITHUB_OUTPUT
+            echo "🏗️ No comparison base - will rebuild all layers"
           # If base changes, rebuild base and tooling
-          if [ "${{ steps.filter.outputs.base }}" == "true" ]; then
+          elif [ "${{ steps.filter.outputs.base }}" == "true" ]; then
             echo "build-base=true" >> $GITHUB_OUTPUT
             echo "build-tooling=true" >> $GITHUB_OUTPUT
             echo "📦 Base layer changed - will rebuild base + tooling layers"
