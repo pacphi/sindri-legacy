@@ -34,7 +34,7 @@ runs:
       env:
         FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
-        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh" || source "${GITHUB_WORKSPACE}/.github/scripts/lib/retry-utils.sh"
         app_name="${{ inputs.app-name }}"
         extension="${{ inputs.extension-name }}"
         dependencies="${{ inputs.dependencies }}"

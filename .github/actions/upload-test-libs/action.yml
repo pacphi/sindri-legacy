@@ -31,7 +31,7 @@ runs:
       env:
         FLY_API_TOKEN: ${{ inputs.fly-api-token }}
       run: |
-        source .github/scripts/lib/ssh-helpers.sh || source .github/scripts/lib/retry-utils.sh
+        source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh" || source "${GITHUB_WORKSPACE}/.github/scripts/lib/retry-utils.sh"
         app_name="${{ inputs.app-name }}"
         target_dir="${{ inputs.target-dir }}"
 
@@ -42,10 +42,10 @@ runs:
 
         # Upload all library files
         sftp_upload_multiple "$app_name" 666 \
-          .github/scripts/lib/test-helpers.sh:$target_dir/test-helpers.sh \
-          .github/scripts/lib/assertions.sh:$target_dir/assertions.sh \
-          .github/scripts/lib/ssh-helpers.sh:$target_dir/ssh-helpers.sh \
-          .github/scripts/lib/retry-utils.sh:$target_dir/retry-utils.sh
+          ${GITHUB_WORKSPACE}/.github/scripts/lib/test-helpers.sh:$target_dir/test-helpers.sh \
+          ${GITHUB_WORKSPACE}/.github/scripts/lib/assertions.sh:$target_dir/assertions.sh \
+          ${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh:$target_dir/ssh-helpers.sh \
+          ${GITHUB_WORKSPACE}/.github/scripts/lib/retry-utils.sh:$target_dir/retry-utils.sh
 
         echo "status=success" >> $GITHUB_OUTPUT
         echo "✅ Test libraries uploaded to $target_dir"

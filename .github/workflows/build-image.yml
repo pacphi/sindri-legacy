@@ -68,6 +68,8 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          # For workflow_dispatch, use HEAD^ as base since there's no 'before' ref
+          base: ${{ github.event.before || 'HEAD^' }}
           filters: |
             base:
               - 'Dockerfile.base'

@@ -55,7 +55,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source ./.github/scripts/lib/ssh-helpers.sh
+          source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh"
 
           # Execute with retry
           ssh_command_retry "$APP_NAME" "extension-manager install-all"
@@ -65,7 +65,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source ./.github/scripts/lib/ssh-helpers.sh
+          source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh"
 
           # Execute with retry
           ssh_command_retry "$APP_NAME" "extension-manager upgrade-all --dry-run"
@@ -75,7 +75,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source ./.github/scripts/lib/ssh-helpers.sh
+          source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh"
 
           # Execute with retry
           ssh_command_retry "$APP_NAME" "extension-manager upgrade-all"
@@ -85,7 +85,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source ./.github/scripts/lib/ssh-helpers.sh
+          source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh"
 
           # Execute with retry
           ssh_command_retry "$APP_NAME" "extension-manager validate-all"
@@ -95,7 +95,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}
         run: |
           # Source retry utilities
-          source ./.github/scripts/lib/ssh-helpers.sh
+          source "${GITHUB_WORKSPACE}/.github/scripts/lib/ssh-helpers.sh"
 
           # Execute with retry
           ssh_command_retry "$APP_NAME" "extension-manager upgrade-history"
