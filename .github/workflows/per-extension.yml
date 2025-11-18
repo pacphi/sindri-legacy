@@ -133,6 +133,17 @@ jobs:
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           timeout-seconds: "300"
 
+      # Verify VM resources match expected tier configuration
+      - name: Verify VM resources
+        if: steps.should-test.outputs.should_test == 'true'
+        uses: ./.github/actions/test-vm-configuration
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          expected-memory-mb: ${{ steps.setup.outputs.vm-memory }}
+          expected-cpus: ${{ steps.setup.outputs.cpu-count }}
+          expected-cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+
       - name: Verify CI extension manifest
         if: steps.should-test.outputs.should_test == 'true'
         env:

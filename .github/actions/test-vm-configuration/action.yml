@@ -16,6 +16,18 @@ inputs:
     description: "SSH user"
     required: false
     default: "developer"
+  expected-memory-mb:
+    description: "Expected memory in MB (e.g., 1024, 4096, 8192). If provided, will verify actual matches expected."
+    required: false
+    default: ""
+  expected-cpus:
+    description: "Expected number of CPUs (e.g., 1, 2, 4). If provided, will verify actual matches expected."
+    required: false
+    default: ""
+  expected-cpu-kind:
+    description: "Expected CPU kind (shared or performance). If provided, will verify."
+    required: false
+    default: ""
 
 outputs:
   status:
@@ -46,6 +58,60 @@ runs:
             which $tool || { echo \"❌ $tool not found\"; exit 1; }"
         done
 
+        # Build resource verification commands
+        expected_memory="${{ inputs.expected-memory-mb }}"
+        expected_cpus="${{ inputs.expected-cpus }}"
+        expected_cpu_kind="${{ inputs.expected-cpu-kind }}"
+
+        resource_checks=""
+        if [ -n "$expected_memory" ]; then
+          # Allow 10% variance for system overhead
+          min_memory=$((expected_memory * 90 / 100))
+          resource_checks="$resource_checks
+          echo \"\"
+          echo \"📊 Verifying VM Resources...\"
+          echo \"\"
+          actual_memory=\$(free -m | awk '/^Mem:/{print \$2}')
+          echo \"💾 Memory: \${actual_memory}MB (expected ~${expected_memory}MB)\"
+          if [ \"\$actual_memory\" -lt \"$min_memory\" ]; then
+            echo \"❌ Memory below minimum threshold (${min_memory}MB)\"
+            exit 1
+          else
+            echo \"✅ Memory OK\"
+          fi
+          "
+        fi
+
+        if [ -n "$expected_cpus" ]; then
+          resource_checks="$resource_checks
+          actual_cpus=\$(nproc)
+          echo \"⚡ CPUs: \${actual_cpus} (expected ${expected_cpus})\"
+          if [ \"\$actual_cpus\" != \"$expected_cpus\" ]; then
+            echo \"❌ CPU count mismatch\"
+            exit 1
+          else
+            echo \"✅ CPU count OK\"
+          fi
+          "
+        fi
+
+        if [ -n "$expected_cpu_kind" ]; then
+          resource_checks="$resource_checks
+          echo \"🔧 CPU kind verification (expected: ${expected_cpu_kind})\"
+          # Note: CPU kind detection is approximate - we check for performance indicators
+          if [ \"$expected_cpu_kind\" = \"performance\" ]; then
+            # Performance CPUs should show dedicated CPU info
+            if grep -q \"Xeon\\|EPYC\" /proc/cpuinfo 2>/dev/null; then
+              echo \"✅ CPU kind appears to be performance (dedicated)\"
+            else
+              echo \"⚠️  Warning: Could not confirm performance CPU type\"
+            fi
+          else
+            echo \"ℹ️  CPU kind: ${expected_cpu_kind} (shared CPUs - verification skipped)\"
+          fi
+          "
+        fi
+
         # Test that configuration script and extension system exists
         if flyctl ssh console --app $app_name --user $user --command "
           echo \"Testing VM environment...\"
@@ -74,8 +140,11 @@ runs:
           # Check workspace directory
           ls -la /workspace/ || { echo \"❌ workspace directory issue\"; exit 1; }
 
+          # Verify VM resources if expected values provided
+          $resource_checks
+
           echo \"\"
-          echo \"✅ Basic VM tests passed\"
+          echo \"✅ All VM tests passed\"
         "; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

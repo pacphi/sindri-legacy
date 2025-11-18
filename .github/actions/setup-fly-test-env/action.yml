@@ -51,6 +51,18 @@ outputs:
   ssh-pubkey-path:
     description: "Path to generated SSH public key"
     value: "test_key.pub"
+  vm-memory:
+    description: "VM memory in MB"
+    value: ${{ steps.resources.outputs.vm_memory }}
+  cpu-kind:
+    description: "CPU kind (shared or performance)"
+    value: ${{ steps.resources.outputs.cpu_kind }}
+  cpu-count:
+    description: "Number of CPUs"
+    value: ${{ steps.resources.outputs.cpu_count }}
+  volume-size:
+    description: "Volume size in GB"
+    value: ${{ steps.resources.outputs.volume_size }}
 
 runs:
   using: "composite"
