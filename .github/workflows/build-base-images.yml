@@ -38,6 +38,8 @@ jobs:
   detect-changes:
     name: Detect Layer Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       base-changed: ${{ steps.filter.outputs.base }}
       tooling-changed: ${{ steps.filter.outputs.tooling }}
@@ -106,6 +108,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.build-base == 'true'
+    permissions:
+      contents: read
     outputs:
       image-url: ${{ steps.build.outputs.image-url }}
       version-tag: ${{ steps.version.outputs.tag }}
@@ -147,6 +151,8 @@ jobs:
       always() &&
       needs.detect-changes.outputs.build-tooling == 'true' &&
       (needs.build-base.result == 'success' || needs.build-base.result == 'skipped')
+    permissions:
+      contents: read
     outputs:
       image-url: ${{ steps.build.outputs.image-url }}
       version-tag: ${{ steps.version.outputs.tag }}
@@ -206,6 +212,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-base, build-tooling]
     if: always()
+    permissions:
+      contents: read
     steps:
       - name: Generate summary
         run: |
