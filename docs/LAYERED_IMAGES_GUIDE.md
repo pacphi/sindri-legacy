@@ -1,6 +1,7 @@
 # Layered Docker Images - Architecture Guide
 
-This guide explains Sindri's multi-layer base image architecture, design decisions, and best practices for maintaining the build system.
+This guide explains Sindri's multi-layer base image architecture, design decisions, and best practices
+for maintaining the build system.
 
 ## Table of Contents
 
