@@ -36,13 +36,14 @@ The unified test suite is designed to:
 ### Test Statistics
 
 - **Main Workflow**: 1 (integration.yml - single entry point)
-- **Test Phases**: 6 sequential phases (quick-checks → manifest-validation → dependency-chain →
+- **Test Phases**: 6 sequential phases (quick-checks → manager-validation + manifest-validation → dependency-chain →
   infrastructure → individual-extensions → extension-combinations)
 - **Extensions Tested**: 21 out of 21 (100%)
 - **API Functions Coverage**: 100% (6/6 v1.0, 7/7 v2.0)
 - **Test Type**: Complete (API compliance + integration + idempotency + upgrade)
 - **Base System Components**: 4 (mise, workspace, SSH, Claude Code CLI) - pre-installed and always available
 - **Max Concurrent Jobs**: 3 (controlled resource usage)
+- **Validation Workflows**: manager-validation.yml, manifest-validation.yml (comprehensive checks)
 
 ---
 
@@ -55,7 +56,9 @@ All testing flows through a single entry point (`integration.yml`) with 6 sequen
 ```text
 Phase 1: quick-checks (inline, fail-fast)
     ↓
-Phase 2: manifest-validation (static, no VM, fail-fast)
+Phase 2: Extension System Validation (static, no VM, fail-fast)
+    ├─→ manager-validation (extension manager validation)
+    └─→ manifest-validation (comprehensive extension validation)
     ↓
 Phase 2.5: dependency-chain (3 VMs, max 3 concurrent, fail-fast)
     ↓
@@ -75,13 +78,27 @@ Phase 5: extension-combinations (N VMs, 3 max concurrent, fail-after-all-complet
 - Extension manager syntax check
 - **Fail behavior**: Stop immediately on error
 
-#### Phase 2: Manifest Validation (2 minutes)
+#### Phase 2: Extension System Validation (3-4 minutes)
 
-- Static validation of extension syntax
+**Manager Validation (1-2 minutes)**:
+
+- Extension manager script syntax validation
+- Extension name extraction testing
+- Manifest file operations testing
+- Directory-based naming convention verification
+
+**Manifest & Extension Validation (2 minutes)**:
+
+- Static extension syntax validation (basic)
 - Static dependency chain verification (files exist)
 - Manifest template validation
 - Extension metadata validation
-- **Fail behavior**: Stop immediately on error
+- **Comprehensive shellcheck validation** (all .extension and .sh files)
+- **Common.sh sourcing verification**
+- **Shebang presence verification**
+- **Extension API v1.0/v2.0 function validation** (all required functions)
+
+**Fail behavior**: Stop immediately on error
 
 #### Phase 2.5: Dependency Chain Tests (3-5 minutes)
 
@@ -829,12 +846,15 @@ For complete extension development guide, see [EXTENSIONS.md - Creating Extensio
 # Get into extensions directory
 cd docker/lib/extensions.d
 
-# Copy template from docs/templates
-# Example: creating extension for R programming language
-cp ../../../docs/templates/template.extension r.extension
+# Create extension directory
+mkdir -p r
 
-# Implement all required API functions
-vim r.extension
+# Copy template
+cp -r template/* r/
+
+# Rename and edit the extension file
+mv r/template.extension r/r.extension
+vim r/r.extension
 ```
 
 **Required API Functions:**
@@ -1103,5 +1123,6 @@ For issues with extension testing:
 - **Pre-Installed Base System**: [EXTENSIONS.md - Pre-Installed Base System Architecture](EXTENSIONS.md#pre-installed-base-system-architecture)
 - **Extension Manager Script**: `docker/lib/extension-manager.sh`
 - **Integration Testing Workflow**: `.github/workflows/integration.yml`
+- **Manager Validation Workflow**: `.github/workflows/manager-validation.yml`
+- **Manifest Validation Workflow**: `.github/workflows/manifest-validation.yml` (comprehensive checks)
 - **Validation Testing Workflow**: `.github/workflows/validate.yml`
-- **Extension Tests Workflow**: `.github/workflows/extension-tests.yml`

@@ -117,12 +117,18 @@ jobs:
           fi
 
   # ============================================================================
-  # PHASE 2: Manifest Validation (No VM - Fail Fast)
+  # PHASE 2: Extension System Validation (No VM - Fail Fast)
   # ============================================================================
+
+  manager-validation:
+    name: Extension Manager Validation
+    needs: quick-checks
+    if: success()
+    uses: ./.github/workflows/manager-validation.yml
 
   manifest-validation:
     name: Manifest & Extension Validation
-    needs: quick-checks
+    needs: manager-validation
     if: success()
     uses: ./.github/workflows/manifest-validation.yml
 
@@ -238,7 +244,7 @@ jobs:
   summary:
     name: Test Summary
     if: always()
-    needs: [quick-checks, manifest-validation, dependency-chain, infrastructure, individual-extensions, extension-combinations]
+    needs: [quick-checks, manager-validation, manifest-validation, dependency-chain, infrastructure, individual-extensions, extension-combinations]
     runs-on: ubuntu-latest
 
     steps:
@@ -249,6 +255,7 @@ jobs:
           echo "| Phase | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Quick Checks | ${{ needs.quick-checks.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manager Validation | ${{ needs.manager-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Manifest Validation | ${{ needs.manifest-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Dependency Chain | ${{ needs.dependency-chain.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Infrastructure Tests | ${{ needs.infrastructure.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
@@ -256,6 +263,7 @@ jobs:
           echo "| Extension Combinations | ${{ needs.extension-combinations.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.quick-checks.result }}" != "success" ] || \
+             [ "${{ needs.manager-validation.result }}" != "success" ] || \
              [ "${{ needs.manifest-validation.result }}" != "success" ] || \
              [ "${{ needs.dependency-chain.result }}" != "success" ] || \
              [ "${{ needs.infrastructure.result }}" != "success" ] || \

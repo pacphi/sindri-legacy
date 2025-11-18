@@ -43,7 +43,7 @@ The Extension API provides:
 
 **Key Concepts:**
 
-1. **Extension Files**: Located in `docker/lib/extensions.d/` as `.sh.example` files
+1. **Extension Files**: Located in `docker/lib/extensions.d/<name>/<name>.extension` with subdirectory structure
 2. **Activation**: Extensions are activated by adding their name to `active-extensions.conf`
 3. **Installation**: Activated extensions are installed using `extension-manager install`
 4. **Execution Order**: Controlled by line order in the manifest, not file naming
@@ -52,20 +52,21 @@ The Extension API provides:
 
 Extensions are organized by category:
 
-#### Core Infrastructure (Protected)
+#### Pre-Installed Base System
 
-These extensions are **protected** and cannot be removed:
+These components are **pre-installed in the Docker image** and are not extensions:
 
-- **workspace-structure** - Creates /workspace directory structure (src, tests, docs, scripts, etc.)
-- **mise-config** - Unified tool version manager for mise-powered extensions
-- **ssh-environment** - Configures SSH daemon for non-interactive sessions (required for CI/CD)
+- **workspace-structure** - Creates /workspace directory structure (projects/, scripts/, config/, etc.)
+- **mise** - Unified tool version manager for mise-powered extensions (pre-installed)
+- **ssh-environment** - Configures SSH wrappers for non-interactive sessions (required for CI/CD)
+- **claude** - Claude Code CLI (pre-installed)
 
 #### Foundational Languages
 
 While not protected, these are highly recommended:
 
-- **nodejs** - Node.js LTS via mise and npm (required by many tools, depends on mise-config)
-- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, depends on mise-config)
+- **nodejs** - Node.js LTS via mise and npm (required by many tools, uses pre-installed mise)
+- **python** - Python 3.13 with pip, venv, uv (required by monitoring tools, uses pre-installed mise)
 
 #### Claude AI
 
@@ -117,10 +118,10 @@ extension-manager list
 # Example output:
 # Available extensions in docker/lib/extensions.d:
 #
-#   ✓ nodejs (nodejs.sh.example) - activated
-#   ○ rust (rust.sh.example) - not activated
-#   ○ golang (golang.sh.example) - not activated
-#   ✓ docker (docker.sh.example) - activated
+#   ✓ nodejs (nodejs/nodejs.extension) - activated
+#   ○ rust (rust/rust.extension) - not activated
+#   ○ golang (golang/golang.extension) - not activated
+#   ✓ docker (docker/docker.extension) - activated
 ```
 
 **Install extensions (auto-activates):**
@@ -181,27 +182,31 @@ extension-manager reorder python 5
 > listed in `active-extensions.conf`.
 >
 > [!NOTE]
-> Protected extensions (workspace-structure, mise-config, ssh-environment) are automatically installed first and
-> cannot be removed.
+> The base system components (workspace-structure, mise, ssh-environment, claude) are pre-installed in the Docker
+> image and are not managed as extensions. They are always available and cannot be uninstalled.
 
 ### Activation Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/.system/manifest/active-extensions.conf`.
+Extensions are executed in the order listed in `/workspace/.system/manifest/active-extensions.conf`.
 
 **Example manifest:**
 
 ```conf
-# Protected extensions (required, cannot be removed):
-workspace-structure
-mise-config
-ssh-environment
+# Pre-installed base system (not in manifest):
+# - workspace-structure
+# - mise
+# - ssh-environment
+# - claude
+
+# Foundational languages
+nodejs
+python
 
 # Claude AI tools
-claude
 nodejs-devtools
+openskills
 
 # Language runtimes
-python
 golang
 rust
 
@@ -217,7 +222,7 @@ monitoring
 
 ```bash
 # View current manifest
-cat /workspace/scripts/.system/manifest/active-extensions.conf
+cat /workspace/.system/manifest/active-extensions.conf
 
 # Install extension (auto-activates and adds to manifest)
 extension-manager install <name>
@@ -226,7 +231,7 @@ extension-manager install <name>
 extension-manager deactivate <name>
 
 # Manually edit manifest (for advanced users)
-nano /workspace/scripts/.system/manifest/active-extensions.conf
+nano /workspace/.system/manifest/active-extensions.conf
 ```
 
 ## Creating Custom Extensions
@@ -238,23 +243,27 @@ Extensions follow the Extension API v1.0 specification. All extensions must impl
 **Create a new extension:**
 
 ```bash
-# Use the template as starting point
-cp docker/lib/extensions.d/template.sh.example docker/lib/extensions.d/mycustomtool.sh.example
+# Create extension directory
+mkdir -p docker/lib/extensions.d/mycustomtool
 
-# Edit the extension
-nano docker/lib/extensions.d/mycustomtool.sh.example
+# Copy template
+cp -r docker/lib/extensions.d/template/* docker/lib/extensions.d/mycustomtool/
+
+# Rename and edit the extension
+mv docker/lib/extensions.d/mycustomtool/template.extension docker/lib/extensions.d/mycustomtool/mycustomtool.extension
+nano docker/lib/extensions.d/mycustomtool/mycustomtool.extension
 ```
 
 **Basic extension structure:**
 
 ```bash
 #!/bin/bash
-# mycustomtool.sh.example - Custom tool extension
+# mycustomtool.extension - Custom tool extension
 # Extension API v1.0
 
 # Source shared extension library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 # ============================================================================
 # METADATA
@@ -653,11 +662,11 @@ upgrade() {
 
 ```bash
 #!/bin/bash
-# fullstack-js.sh.example - Full-stack JavaScript development environment
+# fullstack-js.extension - Full-stack JavaScript development environment
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="fullstack-js"
 EXT_VERSION="1.0.0"
@@ -772,11 +781,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# datascience.sh.example - Data science environment with Python
+# datascience.extension - Data science environment with Python
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="datascience"
 EXT_VERSION="1.0.0"
@@ -894,11 +903,11 @@ Customize development workspace layout:
 
 ```bash
 #!/bin/bash
-# custom-tmux.sh.example - Custom tmux workspace configuration
+# custom-tmux.extension - Custom tmux workspace configuration
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="custom-tmux"
 EXT_VERSION="1.0.0"
@@ -1807,11 +1816,11 @@ cp /workspace/templates/common/.gitignore .
 
 ```bash
 #!/bin/bash
-# github-actions.sh.example - GitHub Actions development tools
+# github-actions.extension - GitHub Actions development tools
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="github-actions"
 EXT_VERSION="1.0.0"
@@ -1973,11 +1982,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# kubernetes.sh.example - Kubernetes development tools
+# kubernetes.extension - Kubernetes development tools
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="kubernetes"
 EXT_VERSION="1.0.0"
@@ -2089,11 +2098,11 @@ remove() {
 
 ```bash
 #!/bin/bash
-# monitoring-stack.sh.example - Comprehensive monitoring stack
+# monitoring-stack.extension - Comprehensive monitoring stack
 # Extension API v1.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 EXT_NAME="monitoring-stack"
 EXT_VERSION="1.0.0"

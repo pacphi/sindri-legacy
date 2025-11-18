@@ -554,13 +554,33 @@ Use standard categories for consistency:
 
 ## Creating Extensions
 
+### Directory and File Structure
+
+Extensions are organized in subdirectories:
+
+```text
+docker/lib/extensions.d/
+├── nodejs/
+│   ├── nodejs.extension
+│   ├── nodejs.toml
+│   └── nodejs-ci.toml
+├── python/
+│   ├── python.extension
+│   ├── python.toml
+│   └── python-ci.toml
+└── template/
+    ├── template.extension
+    └── template.toml
+```
+
 ### File Naming Conventions
 
-| File Type        | Pattern            | Example            |
-| ---------------- | ------------------ | ------------------ |
-| Extension script | `<name>.extension` | `nodejs.extension` |
-| Development TOML | `<name>.toml`      | `nodejs.toml`      |
-| CI TOML          | `<name>-ci.toml`   | `nodejs-ci.toml`   |
+| File Type        | Pattern                                    | Example                                 |
+| ---------------- | ------------------------------------------ | --------------------------------------- |
+| Extension script | `<name>/<name>.extension`                  | `nodejs/nodejs.extension`               |
+| Development TOML | `<name>/<name>.toml`                       | `nodejs/nodejs.toml`                    |
+| CI TOML          | `<name>/<name>-ci.toml`                    | `nodejs/nodejs-ci.toml`                 |
+| Template         | `template/template.extension`              | Located in `extensions.d/template/`     |
 
 ### Extension Template (API v2.0)
 
@@ -570,7 +590,7 @@ Use standard categories for consistency:
 # Extension API v2.0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$(dirname "$SCRIPT_DIR")/extensions-common.sh"
+source "$(dirname "$(dirname "$SCRIPT_DIR")")/extensions-common.sh"
 
 # ============================================================================
 # METADATA
@@ -1279,7 +1299,7 @@ disable_tools = []
 
 ## Extension Manifest
 
-Extensions are executed in the order listed in `/workspace/scripts/.system/manifest/active-extensions.conf`.
+Extensions are executed in the order listed in `/workspace/.system/manifest/active-extensions.conf`.
 
 ### Example Manifest
 

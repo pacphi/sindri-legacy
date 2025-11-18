@@ -1,16 +1,6 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "Dockerfile"
-      - "docker/**"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "Dockerfile"
-      - "docker/**"
   workflow_call:
     inputs:
       tag:
