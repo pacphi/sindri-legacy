@@ -78,9 +78,18 @@ runs:
       shell: bash
       run: |
         timestamp=$(date +%s)
-        # Sanitize extension name to avoid Fly.io abuse filter (e.g., "github" -> "gh")
+        # Sanitize extension name for Fly.io app naming requirements:
+        # - Only lowercase alphanumeric characters and hyphens
+        # - Replace special characters (→, spaces, etc.) with hyphens
+        # - Avoid abuse filter (e.g., "github" -> "gh")
         extension_name="${{ inputs.extension-name }}"
         extension_name="${extension_name//github/gh}"
+        extension_name="${extension_name//→/-}"          # Replace arrow
+        extension_name="${extension_name// /-}"          # Replace spaces
+        extension_name="${extension_name//+/-}"          # Replace plus signs
+        extension_name=$(echo "$extension_name" | tr -cd 'a-zA-Z0-9-')  # Remove other special chars
+        extension_name=$(echo "$extension_name" | tr '[:upper:]' '[:lower:]')  # Lowercase
+        extension_name=$(echo "$extension_name" | sed 's/-\+/-/g')     # Collapse multiple hyphens
         app_name="${{ inputs.app-prefix }}-${extension_name}-${timestamp}"
         echo "app_name=$app_name" >> $GITHUB_OUTPUT
         echo "Generated test app name: $app_name"
