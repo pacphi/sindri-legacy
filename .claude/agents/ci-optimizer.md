@@ -183,7 +183,7 @@ jobs:
 **npm/Node.js**:
 
 ```yaml
-- uses: actions/setup-node@v4
+- uses: actions/setup-node@v6
   with:
     node-version: "20"
     cache: "npm"

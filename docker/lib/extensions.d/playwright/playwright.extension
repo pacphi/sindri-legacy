@@ -21,6 +21,9 @@ EXT_CATEGORY="dev-tools"
 EXT_INSTALL_METHOD="mise"  # Uses mise npm plugin
 EXT_UPGRADE_STRATEGY="automatic"
 EXT_DEPENDENCIES="nodejs"  # Requires Node.js
+# NOTE: Playwright installation requires significant memory (6GB+ recommended)
+# due to browser binary downloads and extraction. Use 'heavy' or 'xheavy'
+# resource tier in CI environments to avoid OOM during npm install.
 
 # Initialize extension environment
 extension_init

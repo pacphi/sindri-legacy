@@ -258,25 +258,54 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Phase | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Quick Checks | ${{ needs.quick-checks.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Manager Validation | ${{ needs.manager-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Manifest Validation | ${{ needs.manifest-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Chain | ${{ needs.dependency-chain.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Infrastructure Tests | ${{ needs.infrastructure.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Individual Extensions | ${{ needs.individual-extensions.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Extension Combinations | ${{ needs.extension-combinations.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.quick-checks.result }}" != "success" ] || \
-             [ "${{ needs.manager-validation.result }}" != "success" ] || \
-             [ "${{ needs.manifest-validation.result }}" != "success" ] || \
-             [ "${{ needs.dependency-chain.result }}" != "success" ] || \
-             [ "${{ needs.infrastructure.result }}" != "success" ] || \
-             [ "${{ needs.individual-extensions.result }}" != "success" ] || \
-             [ "${{ needs.extension-combinations.result }}" != "success" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
+          # Helper function to get status emoji
+          get_status() {
+            case "$1" in
+              success) echo "✅ Passed" ;;
+              failure) echo "❌ Failed" ;;
+              cancelled) echo "🚫 Cancelled" ;;
+              skipped) echo "⏭️ Skipped" ;;
+              *) echo "❓ Unknown ($1)" ;;
+            esac
+          }
+
+          echo "| Quick Checks | $(get_status "${{ needs.quick-checks.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manager Validation | $(get_status "${{ needs.manager-validation.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manifest Validation | $(get_status "${{ needs.manifest-validation.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Chain | $(get_status "${{ needs.dependency-chain.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Infrastructure Tests | $(get_status "${{ needs.infrastructure.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Individual Extensions | $(get_status "${{ needs.individual-extensions.result }}") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension Combinations | $(get_status "${{ needs.extension-combinations.result }}") |" >> $GITHUB_STEP_SUMMARY
+
+          # Check for actual failures (not cancelled or skipped)
+          has_failure=false
+          has_cancellation=false
+
+          for result in "${{ needs.quick-checks.result }}" \
+                        "${{ needs.manager-validation.result }}" \
+                        "${{ needs.manifest-validation.result }}" \
+                        "${{ needs.dependency-chain.result }}" \
+                        "${{ needs.infrastructure.result }}" \
+                        "${{ needs.individual-extensions.result }}" \
+                        "${{ needs.extension-combinations.result }}"; do
+            if [ "$result" = "failure" ]; then
+              has_failure=true
+            elif [ "$result" = "cancelled" ]; then
+              has_cancellation=true
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$has_failure" = "true" ]; then
             echo "❌ **One or more test phases failed. Please check the individual job logs.**" >> $GITHUB_STEP_SUMMARY
             exit 1
-          else
+          elif [ "$has_cancellation" = "true" ]; then
+            echo "🚫 **One or more test phases were cancelled. This may indicate a timeout or manual cancellation.**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Tip:** Check for hanging tests or network issues. See individual job logs for details." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
             echo "✅ **All integration tests passed!**" >> $GITHUB_STEP_SUMMARY
           fi

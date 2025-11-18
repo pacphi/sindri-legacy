@@ -51,10 +51,10 @@ jobs:
             expected_chain: "nodejs nodejs-devtools"
             description: "TypeScript tools should auto-install Node.js"
 
-          - name: "openskills → nodejs + git"
+          - name: "openskills → nodejs"
             top_level: "openskills"
-            expected_chain: "nodejs git openskills"
-            description: "OpenSkills should auto-install Node.js and git"
+            expected_chain: "nodejs openskills"
+            description: "OpenSkills should auto-install Node.js (git is pre-installed)"
 
           - name: "playwright → nodejs"
             top_level: "playwright"
@@ -73,7 +73,8 @@ jobs:
           extension-name: ${{ matrix.test-case.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
-          resource-tier: "standard"
+          # Use heavy tier for playwright (requires 6GB+ RAM), standard for others
+          resource-tier: ${{ contains(matrix.test-case.name, 'playwright') && 'heavy' || 'standard' }}
 
       - name: Deploy test environment
         uses: ./.github/actions/deploy-fly-app
@@ -132,32 +133,73 @@ jobs:
 
             if timeout 15m bash bin/extension-manager install-all 2>&1 | tee /tmp/install.log; then
               echo \"\"
-              echo \"✅ install-all completed\"
+              echo \"=== install-all command completed ===\"
 
               echo \"\"
               echo \"=== Manifest (after install) ===\"
               cat \$manifest
 
               echo \"\"
+              echo \"=== Checking for installation failures ===\"
+
+              # Check if any extensions failed to install
+              if grep -q \"ERROR.*Failed to install:\" /tmp/install.log; then
+                echo \"\"
+                echo \"❌ One or more extensions failed to install!\"
+                echo \"\"
+                echo \"Failed extensions:\"
+                grep \"ERROR.*Failed to install:\" /tmp/install.log
+                echo \"\"
+                echo \"Installation log (last 50 lines):\"
+                tail -50 /tmp/install.log
+                exit 1
+              fi
+
+              # Check for failed installation count in summary
+              if grep -q \"ERROR.*Failed: [1-9]\" /tmp/install.log; then
+                echo \"\"
+                echo \"❌ Installation summary shows failures!\"
+                grep \"Failed: [1-9]\" /tmp/install.log
+                echo \"\"
+                echo \"Installation log (last 50 lines):\"
+                tail -50 /tmp/install.log
+                exit 1
+              fi
+
+              echo \"✅ No installation failures detected\"
+              echo \"\"
               echo \"Verifying dependency chain was auto-installed...\"
 
               # Check each expected extension in the chain
+              all_found=true
               for ext in $expected_chain; do
                 if grep -q \"^\$ext\\\$\" \$manifest; then
                   echo \"  ✅ \$ext found in manifest (auto-installed)\"
+
+                  # Verify the extension actually installed by checking status
+                  if bash bin/extension-manager status \"\$ext\" >/dev/null 2>&1; then
+                    echo \"     ✓ \$ext status check passed\"
+                  else
+                    echo \"     ⚠️  \$ext in manifest but status check failed\"
+                    all_found=false
+                  fi
                 else
                   echo \"  ❌ \$ext NOT found in manifest\"
-                  echo \"\"
-                  echo \"Dependency resolution failed!\"
-                  echo \"Expected chain: $expected_chain\"
-                  echo \"Actual manifest:\"
-                  cat \$manifest
-                  exit 1
+                  all_found=false
                 fi
               done
 
+              if [ \"\$all_found\" = \"false\" ]; then
+                echo \"\"
+                echo \"❌ Dependency resolution verification failed!\"
+                echo \"Expected chain: $expected_chain\"
+                echo \"Actual manifest:\"
+                cat \$manifest
+                exit 1
+              fi
+
               echo \"\"
-              echo \"✅ All dependencies auto-installed correctly\"
+              echo \"✅ All dependencies auto-installed and verified\"
               echo \"======================================\"
               echo \"Test passed: ${{ matrix.test-case.description }}\"
               echo \"======================================\"
