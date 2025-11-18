@@ -124,7 +124,7 @@ runs:
         echo "🔍 Testing VM Configuration"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        if flyctl ssh console --app $app_name --user $user --command "
+        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -c '
           set -e
           echo \"\"
           echo \"📦 Checking Extension System...\"
@@ -161,7 +161,7 @@ runs:
 
           echo \"\"
           echo \"✅ All VM configuration tests passed\"
-        "; then
+        '"; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ VM configuration test passed"

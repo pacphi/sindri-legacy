@@ -50,16 +50,19 @@ jobs:
             top_level: "nodejs-devtools"
             expected_chain: "nodejs nodejs-devtools"
             description: "TypeScript tools should auto-install Node.js"
+            resource_tier: "heavy"  # npm installs require 6GB+ RAM
 
           - name: "openskills → nodejs"
             top_level: "openskills"
             expected_chain: "nodejs openskills"
             description: "OpenSkills should auto-install Node.js (git is pre-installed)"
+            resource_tier: "standard"  # Lightweight, 2GB sufficient
 
           - name: "playwright → nodejs"
             top_level: "playwright"
             expected_chain: "nodejs playwright"
             description: "Playwright should auto-install Node.js"
+            resource_tier: "heavy"  # Browser install requires 6GB+ RAM
 
     steps:
       - name: Checkout repository
@@ -73,8 +76,8 @@ jobs:
           extension-name: ${{ matrix.test-case.name }}
           fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
           region: ${{ inputs.region }}
-          # Use heavy tier for playwright (requires 6GB+ RAM), standard for others
-          resource-tier: ${{ contains(matrix.test-case.name, 'playwright') && 'heavy' || 'standard' }}
+          # Resource tier defined per test case in matrix
+          resource-tier: ${{ matrix.test-case.resource_tier }}
 
       - name: Deploy test environment
         uses: ./.github/actions/deploy-fly-app
@@ -112,8 +115,9 @@ jobs:
           echo "Expected dependency chain: $expected_chain"
           echo ""
 
-          # Execute test with retry
-          ssh_command_retry "$app_name" "/bin/bash -lc '
+          # Execute test WITHOUT retry - dependency tests should fail immediately on error
+          # Using direct flyctl ssh console instead of ssh_command_retry
+          timeout ${SSH_COMMAND_TIMEOUT}s flyctl ssh console -a "$app_name" --user developer -C "/bin/bash -lc '
             set -e
 
             cd /workspace/.system
@@ -132,8 +136,28 @@ jobs:
             echo \"\"
 
             if timeout 15m bash bin/extension-manager install-all 2>&1 | tee /tmp/install.log; then
+              install_exit_code=\${PIPESTATUS[0]}
               echo \"\"
-              echo \"=== install-all command completed ===\"
+              echo \"=== install-all exit code: \$install_exit_code ===\"
+
+              # Check if timeout occurred (exit code 124)
+              if [ \$install_exit_code -eq 124 ]; then
+                echo \"\"
+                echo \"❌ Installation timed out after 15 minutes!\"
+                tail -100 /tmp/install.log
+                exit 1
+              fi
+
+              # Check if command failed (non-zero exit code)
+              if [ \$install_exit_code -ne 0 ]; then
+                echo \"\"
+                echo \"❌ install-all command failed with exit code \$install_exit_code\"
+                tail -100 /tmp/install.log
+                exit 1
+              fi
+
+              echo \"\"
+              echo \"=== install-all command completed successfully ===\"
 
               echo \"\"
               echo \"=== Manifest (after install) ===\"
@@ -142,27 +166,39 @@ jobs:
               echo \"\"
               echo \"=== Checking for installation failures ===\"
 
-              # Check if any extensions failed to install
-              if grep -q \"ERROR.*Failed to install:\" /tmp/install.log; then
+              # Check for ERROR messages (handle ANSI color codes)
+              # Pattern matches: [ERROR], [0;31m[ERROR][0m, etc.
+              if grep -E \"(\\\[0;31m)?\\\[?ERROR\\\]?.*Failed to install:\" /tmp/install.log; then
                 echo \"\"
                 echo \"❌ One or more extensions failed to install!\"
                 echo \"\"
                 echo \"Failed extensions:\"
-                grep \"ERROR.*Failed to install:\" /tmp/install.log
+                grep -E \"(\\\[0;31m)?\\\[?ERROR\\\]?.*Failed to install:\" /tmp/install.log
                 echo \"\"
-                echo \"Installation log (last 50 lines):\"
-                tail -50 /tmp/install.log
+                echo \"Installation log (last 100 lines):\"
+                tail -100 /tmp/install.log
                 exit 1
               fi
 
-              # Check for failed installation count in summary
-              if grep -q \"ERROR.*Failed: [1-9]\" /tmp/install.log; then
+              # Check for failed installation count in summary (handle ANSI codes)
+              if grep -E \"(\\\[0;31m)?\\\[?ERROR\\\]?.*Failed: [1-9]\" /tmp/install.log; then
                 echo \"\"
                 echo \"❌ Installation summary shows failures!\"
-                grep \"Failed: [1-9]\" /tmp/install.log
+                grep -E \"Failed: [1-9]\" /tmp/install.log
                 echo \"\"
-                echo \"Installation log (last 50 lines):\"
-                tail -50 /tmp/install.log
+                echo \"Installation log (last 100 lines):\"
+                tail -100 /tmp/install.log
+                exit 1
+              fi
+
+              # Check for OOM errors (exit code 137)
+              if grep -i \"exit code 137\|killed\|out of memory\" /tmp/install.log; then
+                echo \"\"
+                echo \"❌ Installation failed due to out-of-memory errors!\"
+                echo \"\"
+                grep -B5 -A5 -i \"exit code 137\|killed\|out of memory\" /tmp/install.log
+                echo \"\"
+                echo \"This indicates insufficient VM memory. Check resource tier allocation.\"
                 exit 1
               fi
 
