@@ -796,7 +796,8 @@ install_extension() {
                 echo ""
 
                 # Use full dependency resolution
-                return install_extension_with_dependencies "$ext_name"
+                install_extension_with_dependencies "$ext_name"
+                return $?
             fi
         fi
     fi

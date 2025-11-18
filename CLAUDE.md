@@ -145,12 +145,14 @@ extension-manager resolve playwright
 ```
 
 **Dependency Graph:**
+
 - `openskills` → nodejs, git
 - `monitoring` → python
 - `playwright` → nodejs
 - `nodejs-devtools` → nodejs
 
 **How It Works:**
+
 1. System detects `EXT_DEPENDENCIES` metadata from extension files
 2. Builds dependency graph with cycle detection
 3. Performs topological sort to determine install order
@@ -158,6 +160,7 @@ extension-manager resolve playwright
 5. Installs dependencies first, then target extension
 
 **Benefits:**
+
 - No manual dependency management required
 - Prevents "missing prerequisite" errors
 - Ensures correct installation order

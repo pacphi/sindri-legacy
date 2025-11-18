@@ -105,11 +105,13 @@ Phase 5: extension-combinations (N VMs, 3 max concurrent, fail-after-all-complet
 Tests automatic dependency resolution (Extension API v2.2):
 
 **Test Cases:**
+
 1. `nodejs-devtools → nodejs` - TypeScript tools auto-install Node.js
 2. `openskills → nodejs + git` - OpenSkills auto-installs Node.js and git
 3. `playwright → nodejs` - Playwright auto-installs Node.js
 
 **Test Flow:**
+
 1. Create manifest with ONLY top-level extension (e.g., `playwright`)
 2. Run `extension-manager install-all`
 3. Verify dependencies automatically added to manifest
@@ -117,6 +119,7 @@ Tests automatic dependency resolution (Extension API v2.2):
 5. Verify all extensions validated successfully
 
 **What's Tested:**
+
 - Dependency detection from `EXT_DEPENDENCIES` metadata
 - Topological sort algorithm (correct install order)
 - Manifest auto-update with resolved dependencies

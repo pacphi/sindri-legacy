@@ -566,7 +566,7 @@ extension-manager resolve playwright
 
 The system detects circular dependencies and aborts with a clear error message:
 
-```
+```text
 ❌ Circular dependency detected involving: ext-a
 Cannot resolve dependencies.
 ```
