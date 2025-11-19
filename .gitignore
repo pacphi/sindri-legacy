@@ -9,6 +9,7 @@
 *.env.staging
 .env.*
 secrets/
+!docker/scripts/secrets/
 keys/
 certs/
 *.certificate

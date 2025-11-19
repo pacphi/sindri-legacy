@@ -12,15 +12,8 @@
 
 set -euo pipefail
 
-# Enable alias expansion (required for aliases to work in non-interactive shells)
-shopt -s expand_aliases
-
-# Source .bashrc to load user commands (aliases and functions)
-# This is required for non-interactive shells where .bashrc isn't auto-sourced
-# shellcheck disable=SC1090,SC1091
-if [ -f "$HOME/.bashrc" ]; then
-    source "$HOME/.bashrc"
-fi
+# Note: Secrets management commands are now standalone scripts in /workspace/bin
+# which is in PATH, so they work in both interactive and non-interactive shells
 
 # Colors for output
 RED='\033[0;31m'
@@ -272,35 +265,6 @@ test_environment_cleanup() {
 
     log_info "Validating encrypted secrets file (primary security benefit)..."
 
-    # Check that .bashrc is clean (no hardcoded secrets)
-    if [[ -f "$HOME/.bashrc" ]]; then
-        local bashrc_secrets=()
-        local secret_patterns=(
-            "ANTHROPIC_API_KEY"
-            "GITHUB_TOKEN"
-            "PERPLEXITY_API_KEY"
-            "OPENROUTER_API_KEY"
-            "GOOGLE_GEMINI_API_KEY"
-            "XAI_API_KEY"
-            "AWS_SECRET_ACCESS_KEY"
-            "AZURE_CLIENT_SECRET"
-        )
-
-        for pattern in "${secret_patterns[@]}"; do
-            if grep -q "export ${pattern}=" "$HOME/.bashrc" 2>/dev/null; then
-                bashrc_secrets+=("$pattern")
-            fi
-        done
-
-        if [[ ${#bashrc_secrets[@]} -eq 0 ]]; then
-            log_pass "No hardcoded secrets in .bashrc"
-        else
-            log_fail "Hardcoded secrets found in .bashrc: ${bashrc_secrets[*]}"
-            log_info "Secrets should only be in encrypted file, not .bashrc"
-            return 1
-        fi
-    fi
-
     # If secrets file doesn't exist, that's OK if no Fly.io secrets were set
     if [ ! -f "$HOME/.secrets/secrets.enc.yaml" ]; then
         if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -353,43 +317,48 @@ test_process_list_cleanup() {
 test_user_commands_available() {
     log_test "User commands availability"
 
-    # Debug: Check if .bashrc was sourced and has the commands
-    if grep -q "# Secrets Management Commands" "$HOME/.bashrc" 2>/dev/null; then
-        log_info ".bashrc contains secrets management commands"
-    else
-        log_fail ".bashrc does not contain secrets management commands"
-        log_info "Commands may not have been added during setup"
-        return 1
-    fi
-
+    local bin_dir="/workspace/bin"
     local commands=("view-secrets" "edit-secrets" "load-secrets" "with-secrets")
     local missing_commands=()
+    local non_executable=()
 
+    # Check each command exists and is executable
     for cmd in "${commands[@]}"; do
-        # Check if command/alias/function exists
-        # Use command -v which works better for aliases in non-interactive shells
-        if ! command -v "$cmd" &>/dev/null && ! type "$cmd" &>/dev/null; then
+        local cmd_path="$bin_dir/$cmd"
+
+        if [ ! -f "$cmd_path" ]; then
             missing_commands+=("$cmd")
+        elif [ ! -x "$cmd_path" ]; then
+            non_executable+=("$cmd")
         fi
     done
 
-    if [[ ${#missing_commands[@]} -eq 0 ]]; then
-        log_pass "All user commands available: ${commands[*]}"
-    else
-        log_info "Checking if aliases are defined in current shell..."
-        # Try to directly check alias
-        if alias view-secrets &>/dev/null; then
-            log_pass "Aliases are defined (bash limitation in non-interactive execution context)"
-            return 0
-        else
-            log_fail "Missing commands: ${missing_commands[*]}"
-            log_info "Commands defined in .bashrc but not available in test context"
-            log_info "This is a known limitation of non-interactive shells"
-            # Don't fail the test for this - it's a bash quirk, not a real issue
-            return 0
-        fi
+    # Report results
+    if [[ ${#missing_commands[@]} -gt 0 ]]; then
+        log_fail "Missing command scripts: ${missing_commands[*]}"
+        log_info "Expected location: $bin_dir"
+        return 1
     fi
 
+    if [[ ${#non_executable[@]} -gt 0 ]]; then
+        log_fail "Non-executable command scripts: ${non_executable[*]}"
+        log_info "Scripts exist but lack execute permissions"
+        return 1
+    fi
+
+    # All commands present and executable
+    log_pass "All user commands available and executable: ${commands[*]}"
+
+    # Verify commands are in PATH
+    for cmd in "${commands[@]}"; do
+        if ! command -v "$cmd" &>/dev/null; then
+            log_fail "Command '$cmd' not in PATH"
+            log_info "Current PATH: $PATH"
+            return 1
+        fi
+    done
+
+    log_pass "All commands accessible via PATH"
     return 0
 }
 

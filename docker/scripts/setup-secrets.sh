@@ -358,36 +358,48 @@ sync_flyio_secrets() {
 }
 
 # ------------------------------------------------------------------------------
-# add_user_commands - Add user-facing commands to bashrc
+# install_user_commands - Install user-facing command scripts
 # ------------------------------------------------------------------------------
-add_user_commands() {
-    echo "🛠️  Adding user commands..."
+install_user_commands() {
+    echo "🛠️  Installing user commands..."
 
-    # Check if commands already added (prevent duplicates)
-    if grep -q "# Secrets Management Commands" "$DEVELOPER_HOME/.bashrc" 2>/dev/null; then
-        echo "  ✓ User commands already configured"
+    local bin_dir="/workspace/bin"
+    local scripts_source="/docker/scripts/secrets"
+
+    # Ensure bin directory exists
+    mkdir -p "$bin_dir"
+
+    # Install each command script
+    local commands=("view-secrets" "edit-secrets" "load-secrets" "with-secrets")
+    local installed=0
+
+    for cmd in "${commands[@]}"; do
+        local source_file="$scripts_source/$cmd"
+        local dest_file="$bin_dir/$cmd"
+
+        if [ -f "$source_file" ]; then
+            # Copy script to bin directory
+            cp "$source_file" "$dest_file"
+            chmod 755 "$dest_file"
+            chown "$DEVELOPER_USER:$DEVELOPER_USER" "$dest_file"
+            echo "  ✓ Installed: $cmd"
+            ((installed++))
+        else
+            echo "  ⚠️  Warning: Script not found: $source_file"
+        fi
+    done
+
+    if [ $installed -gt 0 ]; then
+        echo "  ✓ Installed $installed command(s) to $bin_dir"
+        echo "    - view-secrets: View decrypted secrets"
+        echo "    - edit-secrets: Edit secrets (auto-encrypts on save)"
+        echo "    - load-secrets: Load secrets into current shell (use: source load-secrets)"
+        echo "    - with-secrets: Run command with secrets loaded"
         return 0
+    else
+        echo "  ⚠️  Warning: No commands were installed"
+        return 1
     fi
-
-    cat >> "$DEVELOPER_HOME/.bashrc" << 'BASHRC_EOF'
-
-# Secrets Management Commands
-alias view-secrets='SOPS_AGE_KEY_FILE=~/.age/key.txt sops --decrypt ~/.secrets/secrets.enc.yaml 2>/dev/null || echo "No secrets file found"'
-alias edit-secrets='SOPS_AGE_KEY_FILE=~/.age/key.txt sops ~/.secrets/secrets.enc.yaml'
-alias load-secrets='source ~/.secrets/lib.sh && load_secrets'
-
-# with-secrets command function
-with-secrets() {
-    source ~/.secrets/lib.sh
-    with_secrets "$@"
-}
-BASHRC_EOF
-
-    echo "  ✓ Added user commands to .bashrc"
-    echo "    - view-secrets: View decrypted secrets"
-    echo "    - edit-secrets: Edit secrets (auto-encrypts on save)"
-    echo "    - load-secrets: Load secrets into current shell"
-    echo "    - with-secrets: Run command with secrets loaded"
 }
 
 # ==============================================================================
@@ -411,8 +423,8 @@ main() {
         echo "⚠️  Warning: Failed to sync Fly.io secrets"
     fi
 
-    if ! add_user_commands; then
-        echo "⚠️  Warning: Failed to add user commands to .bashrc"
+    if ! install_user_commands; then
+        echo "⚠️  Warning: Failed to install user commands"
     fi
 
     # Ensure proper ownership (best effort)

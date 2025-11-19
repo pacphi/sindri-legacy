@@ -956,6 +956,9 @@ goalie "research"   # API key pre-configured
 
 ### Advanced: Direct Secret Management
 
+Secrets management commands are installed as standalone scripts in `/workspace/bin`, making them
+available in both interactive and non-interactive shells (CI/CD):
+
 ```bash
 # View decrypted secrets
 view-secrets
@@ -963,12 +966,15 @@ view-secrets
 # Edit secrets without VM restart
 edit-secrets
 
-# Load secrets into current shell (temporary)
-load-secrets
+# Load secrets into current shell (must be sourced)
+source load-secrets
 
 # Run command with secrets loaded
 with-secrets some-command
 ```
+
+**Note:** `load-secrets` must be sourced (not executed directly) to load secrets into your current
+shell environment. Use `source load-secrets` or `. load-secrets`.
 
 ### Security Features
 
