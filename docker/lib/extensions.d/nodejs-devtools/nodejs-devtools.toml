@@ -27,7 +27,6 @@ run = "tsc --noEmit"
 
 [settings]
 experimental = true
-# Limit parallel npm installs to reduce network contention
 jobs = 2
 
 [env]
@@ -42,3 +41,4 @@ npm_config_fetch_retry_mintimeout = "10000"
 npm_config_fetch_retry_maxtimeout = "60000"
 # Overall npm install timeout (10 minutes)
 npm_config_maxsockets = "10"
+npm_config_prefer_offline = "true"

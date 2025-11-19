@@ -1,5 +1,5 @@
 # nodejs-devtools-ci.toml - Minimal npm dev tools configuration for CI
-# Lightweight config for CI/CD pipelines
+# Lightweight config for CI/CD pipelines with memory optimization
 # Requires nodejs to be installed first
 
 [tools]
@@ -13,10 +13,21 @@
 experimental = true
 # Reduce verbosity in CI
 verbose = false
-# Limit parallel npm installs to reduce network contention
-jobs = 2
+# SEQUENTIAL installation to prevent memory competition (CI-only)
+# Production uses jobs=2 for faster installs, CI prioritizes stability
+jobs = 1
 
 [env]
+# Memory optimization for CI (6GB limit on 8GB VMs)
+# Production uses 4GB default, CI needs higher limit for large packages
+NODE_OPTIONS = "--max-old-space-size=6144"
+
+# npm optimization flags for CI
+npm_config_loglevel = "error"
+npm_config_audit = "false"
+npm_config_fund = "false"
+npm_config_prefer_offline = "true"
+
 # npm timeout configuration (in milliseconds)
 # fetch-timeout: maximum time for a single package download (5 minutes)
 # fetch-retries: number of times to retry failed downloads

@@ -73,10 +73,8 @@ prerequisites() {
 install() {
   print_status "Installing Playwright..."
 
-  # Ensure we're in workspace directory
   cd "$WORKSPACE_DIR" || return 1
 
-  # Check if Playwright is already installed
   if [[ -f "node_modules/.bin/playwright" ]]; then
     local pw_version
     if pw_version=$(npx playwright --version 2>/dev/null); then
@@ -86,7 +84,6 @@ install() {
     fi
   fi
 
-  # Initialize package.json if it doesn't exist
   if [[ ! -f "package.json" ]]; then
     print_status "Initializing Node.js project..."
     if ! npm init -y; then
@@ -95,36 +92,46 @@ install() {
     fi
   fi
 
-  # Set ES modules mode
   print_status "Setting up ES modules..."
   npm pkg set type="module"
 
-  # Install Playwright packages
-  print_status "Installing Playwright packages..."
-  if ! npm install -D playwright @playwright/test; then
-    print_error "Failed to install Playwright packages"
-    return 1
-  fi
+  # Set memory limit for npm operations
+  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"
 
-  print_success "Playwright packages installed"
+  # CI mode: Skip browsers, use optimized npm flags
+  if is_ci_mode; then
+    print_status "CI mode: Installing Playwright packages (browsers skipped)..."
+    export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-  # Install Chromium browser
-  print_status "Installing Chromium browser..."
-  if npx playwright install chromium; then
-    print_success "Chromium browser installed"
+    if ! npm install -D playwright @playwright/test --prefer-offline --no-audit --no-fund; then
+      print_error "Failed to install Playwright packages"
+      return 1
+    fi
+    print_success "Playwright packages installed (browsers skipped for CI)"
   else
-    print_warning "Chromium browser installation had issues"
+    # Production: Full installation with browsers
+    print_status "Installing Playwright packages..."
+    if ! npm install -D playwright @playwright/test; then
+      print_error "Failed to install Playwright packages"
+      return 1
+    fi
+    print_success "Playwright packages installed"
+
+    print_status "Installing Chromium browser..."
+    if npx playwright install chromium; then
+      print_success "Chromium browser installed"
+    else
+      print_warning "Chromium browser installation had issues"
+    fi
+
+    print_status "Installing Chromium system dependencies..."
+    if npx playwright install-deps chromium; then
+      print_success "Chromium dependencies installed"
+    else
+      print_warning "Chromium dependencies installation had issues"
+    fi
   fi
 
-  # Install Chromium dependencies
-  print_status "Installing Chromium system dependencies..."
-  if npx playwright install-deps chromium; then
-    print_success "Chromium dependencies installed"
-  else
-    print_warning "Chromium dependencies installation had issues"
-  fi
-
-  # Install TypeScript and build tools
   print_status "Installing TypeScript and development tools..."
   if npm install -D typescript @types/node; then
     print_success "TypeScript tools installed"
