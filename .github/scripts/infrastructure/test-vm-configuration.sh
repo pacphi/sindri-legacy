@@ -7,6 +7,7 @@ REQUIRED_TOOLS="${REQUIRED_TOOLS:-curl,git,ssh}"
 EXPECTED_MEMORY_MB="${EXPECTED_MEMORY_MB:-}"
 EXPECTED_CPUS="${EXPECTED_CPUS:-}"
 EXPECTED_CPU_KIND="${EXPECTED_CPU_KIND:-}"
+EXPECTED_VOLUME_SIZE="${EXPECTED_VOLUME_SIZE:-}"
 
 echo ""
 echo "📦 Checking Extension System..."
@@ -71,7 +72,7 @@ else
 fi
 
 # Resource verification (if any expected values provided)
-if [ -n "$EXPECTED_MEMORY_MB" ] || [ -n "$EXPECTED_CPUS" ] || [ -n "$EXPECTED_CPU_KIND" ]; then
+if [ -n "$EXPECTED_MEMORY_MB" ] || [ -n "$EXPECTED_CPUS" ] || [ -n "$EXPECTED_CPU_KIND" ] || [ -n "$EXPECTED_VOLUME_SIZE" ]; then
   echo ""
   echo "📊 Verifying VM Resources..."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -112,6 +113,20 @@ if [ -n "$EXPECTED_MEMORY_MB" ] || [ -n "$EXPECTED_CPUS" ] || [ -n "$EXPECTED_CP
       fi
     else
       printf "%-40s %-15s %-15s %s\n" "CPU Type" "Shared" "Shared" "✅ PASS"
+    fi
+  fi
+
+  # Volume size check
+  if [ -n "$EXPECTED_VOLUME_SIZE" ]; then
+    # Get actual volume size from df (in GB)
+    actual_volume_size=$(df -BG /workspace | awk 'NR==2{print $2}' | sed 's/G//')
+    # Allow some overhead (filesystem metadata, etc.) - accept if within 5% of expected
+    min_volume_size=$((EXPECTED_VOLUME_SIZE * 95 / 100))
+    if [ "$actual_volume_size" -lt "$min_volume_size" ]; then
+      printf "%-40s %-15s %-15s %s\n" "Volume Size (GB)" "${EXPECTED_VOLUME_SIZE}GB" "${actual_volume_size}GB" "❌ FAIL (below ${min_volume_size}GB min)"
+      exit 1
+    else
+      printf "%-40s %-15s %-15s %s\n" "Volume Size (GB)" "${EXPECTED_VOLUME_SIZE}GB" "${actual_volume_size}GB" "✅ PASS"
     fi
   fi
 fi

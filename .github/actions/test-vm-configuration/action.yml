@@ -28,6 +28,10 @@ inputs:
     description: "Expected CPU kind (shared or performance). If provided, will verify."
     required: false
     default: ""
+  expected-volume-size:
+    description: "Expected volume size in GB. If provided, will verify."
+    required: false
+    default: ""
 
 outputs:
   status:
@@ -78,7 +82,7 @@ runs:
         echo "🔍 Testing VM Configuration"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -c 'export REQUIRED_TOOLS=\"${{ inputs.required-tools }}\" EXPECTED_MEMORY_MB=\"${{ inputs.expected-memory-mb }}\" EXPECTED_CPUS=\"${{ inputs.expected-cpus }}\" EXPECTED_CPU_KIND=\"${{ inputs.expected-cpu-kind }}\"; bash $vm_script_path'"; then
+        if flyctl ssh console --app $app_name --user $user -C "/bin/bash -c 'export REQUIRED_TOOLS=\"${{ inputs.required-tools }}\" EXPECTED_MEMORY_MB=\"${{ inputs.expected-memory-mb }}\" EXPECTED_CPUS=\"${{ inputs.expected-cpus }}\" EXPECTED_CPU_KIND=\"${{ inputs.expected-cpu-kind }}\" EXPECTED_VOLUME_SIZE=\"${{ inputs.expected-volume-size }}\"; bash $vm_script_path'"; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ VM configuration test passed"

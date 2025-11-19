@@ -240,6 +240,9 @@ jobs:
           deploy-timeout: "600"
           pre-built-image: ${{ needs.setup-config.outputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          vm-memory: ${{ steps.setup.outputs.vm-memory }}
+          cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+          cpu-count: ${{ steps.setup.outputs.cpu-count }}
 
       - name: Wait for deployment
         uses: ./.github/actions/wait-fly-deployment

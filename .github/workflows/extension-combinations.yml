@@ -104,6 +104,10 @@ jobs:
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"
+          vm-memory: ${{ steps.setup.outputs.vm-memory }}
+          cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+          cpu-count: ${{ steps.setup.outputs.cpu-count }}
+          volume-size: ${{ steps.setup.outputs.volume-size }}
 
       # Using composite action for waiting
       - name: Wait for deployment

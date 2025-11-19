@@ -64,6 +64,10 @@ jobs:
           pre-built-image: ${{ inputs.pre_built_image }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-mode: "true"
+          vm-memory: ${{ steps.setup.outputs.vm-memory }}
+          cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+          cpu-count: ${{ steps.setup.outputs.cpu-count }}
+          volume-size: ${{ steps.setup.outputs.volume-size }}
 
       - name: Wait for deployment
         uses: ./.github/actions/wait-fly-deployment
@@ -87,6 +91,7 @@ jobs:
           expected-memory-mb: ${{ steps.setup.outputs.vm-memory }}
           expected-cpus: ${{ steps.setup.outputs.cpu-count }}
           expected-cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+          expected-volume-size: ${{ steps.setup.outputs.volume-size }}
 
       - name: Test VM deployment and basic workflow
         uses: ./.github/actions/run-vm-script

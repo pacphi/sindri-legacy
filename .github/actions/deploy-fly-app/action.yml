@@ -48,6 +48,18 @@ inputs:
     description: "Enable CI mode (uses CI manifest, skips heavy installations). Default: false for production safety."
     required: false
     default: "false"
+  vm-memory:
+    description: "VM memory in MB"
+    required: false
+    default: "8192"
+  cpu-kind:
+    description: "CPU kind (shared or performance)"
+    required: false
+    default: "shared"
+  cpu-count:
+    description: "Number of CPUs"
+    required: false
+    default: "4"
 
 outputs:
   deployment-status:
@@ -65,9 +77,9 @@ runs:
         REGION: ${{ inputs.region }}
         VOLUME_NAME: ${{ inputs.volume-name }}
         VOLUME_SIZE: ${{ inputs.volume-size }}
-        VM_MEMORY: "8192"
-        CPU_KIND: "shared"
-        CPU_COUNT: "4"
+        VM_MEMORY: ${{ inputs.vm-memory }}
+        CPU_KIND: ${{ inputs.cpu-kind }}
+        CPU_COUNT: ${{ inputs.cpu-count }}
         SSH_EXTERNAL_PORT: "10022"
       run: |
         echo "Preparing fly.toml configuration..."
