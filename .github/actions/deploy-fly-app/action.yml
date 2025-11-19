@@ -236,10 +236,15 @@ runs:
           echo "Using pre-built image (fast deployment)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Image: ${{ inputs.pre-built-image }}"
+          echo "VM: ${{ inputs.vm-memory }}MB RAM, ${{ inputs.cpu-count }} ${{ inputs.cpu-kind }} CPUs, ${{ inputs.volume-size }}GB volume"
           echo ""
 
           DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
             --image ${{ inputs.pre-built-image }} \
+            --vm-memory ${{ inputs.vm-memory }} \
+            --vm-cpus ${{ inputs.cpu-count }} \
+            --vm-cpu-kind ${{ inputs.cpu-kind }} \
+            --volume-initial-size ${{ inputs.volume-size }} \
             --strategy immediate \
             --wait-timeout ${{ inputs.deploy-timeout }}s \
             --yes"
@@ -247,9 +252,14 @@ runs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Building from source (no pre-built image)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "VM: ${{ inputs.vm-memory }}MB RAM, ${{ inputs.cpu-count }} ${{ inputs.cpu-kind }} CPUs, ${{ inputs.volume-size }}GB volume"
           echo ""
 
           DEPLOY_CMD="flyctl deploy --app ${{ inputs.app-name }} \
+            --vm-memory ${{ inputs.vm-memory }} \
+            --vm-cpus ${{ inputs.cpu-count }} \
+            --vm-cpu-kind ${{ inputs.cpu-kind }} \
+            --volume-initial-size ${{ inputs.volume-size }} \
             --strategy immediate \
             --wait-timeout ${{ inputs.deploy-timeout }}s \
             --yes"
