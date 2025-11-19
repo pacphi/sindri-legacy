@@ -98,6 +98,15 @@ jobs:
           timeout-seconds: "240"
           expected-status: "started"
 
+      - name: Validate VM resources
+        uses: ./.github/actions/test-vm-configuration
+        with:
+          app-name: ${{ steps.setup.outputs.app-name }}
+          fly-api-token: ${{ secrets.FLYIO_AUTH_TOKEN }}
+          expected-memory-mb: ${{ steps.setup.outputs.vm-memory }}
+          expected-cpus: ${{ steps.setup.outputs.cpu-count }}
+          expected-cpu-kind: ${{ steps.setup.outputs.cpu-kind }}
+
       - name: Test automatic dependency resolution
         env:
           FLY_API_TOKEN: ${{ secrets.FLYIO_AUTH_TOKEN }}

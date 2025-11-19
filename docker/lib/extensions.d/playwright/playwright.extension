@@ -103,6 +103,14 @@ install() {
     print_status "CI mode: Installing Playwright packages (browsers skipped)..."
     export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
+    # Install system dependencies first (even in CI mode - required for npm install)
+    print_status "Installing Playwright system dependencies..."
+    if npx playwright install-deps; then
+      print_success "System dependencies installed"
+    else
+      print_warning "Some system dependencies may be missing - continuing anyway"
+    fi
+
     if ! npm install -D playwright @playwright/test --prefer-offline --no-audit --no-fund; then
       print_error "Failed to install Playwright packages"
       return 1
