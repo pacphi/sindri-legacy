@@ -197,22 +197,23 @@ echo "Verifying /workspace volume mount..."
 if mountpoint -q /workspace 2>/dev/null; then
   echo "✅ /workspace is a mount point"
 else
-  # On some systems, /workspace might not show as mountpoint but still be writable
-  if [ -w "/workspace" ]; then
-    echo "✅ /workspace is writable (may or may not be a mount point)"
+  # On some systems, /workspace might not show as mountpoint
+  # Verify the volume is functional by checking developer-owned directories
+  if [ -d "/workspace/developer" ] && [ -w "/workspace/developer" ]; then
+    echo "✅ /workspace exists and developer directories are writable (may or may not show as mount point)"
   else
-    echo "❌ /workspace is not writable"
+    echo "❌ /workspace volume not properly configured"
     exit 1
   fi
 fi
 
-echo "Testing write permissions on /workspace..."
-test_file="/workspace/.test-write-$$"
+echo "Testing write permissions on /workspace/developer..."
+test_file="/workspace/developer/.test-write-$$"
 if echo "test" > "$test_file" 2>/dev/null; then
   rm -f "$test_file"
-  echo "✅ /workspace has write permissions"
+  echo "✅ /workspace/developer has write permissions"
 else
-  echo "❌ /workspace does not have write permissions"
+  echo "❌ /workspace/developer does not have write permissions"
   exit 1
 fi
 
