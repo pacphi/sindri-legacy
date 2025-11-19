@@ -14,9 +14,8 @@ set -e
 
 # Source test helpers
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/lib"
-source "$LIB_DIR/test-helpers.sh"
-source "$LIB_DIR/assertions.sh"
+source "$SCRIPT_DIR/lib/test-helpers.sh"
+source "$SCRIPT_DIR/lib/assertions.sh"
 
 # Parse arguments
 extension="$1"
