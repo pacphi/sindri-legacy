@@ -176,7 +176,11 @@ validate() {
   # Verify mise is tracking these npm tools
   print_status "Checking mise-managed npm tools..."
   if command_exists mise; then
-    local mise_tools=$(mise ls 'npm:*' 2>/dev/null | grep -c "npm:" || echo "0")
+    local mise_tools
+    mise_tools=$(mise ls 'npm:*' 2>/dev/null | grep -c "npm:" 2>/dev/null || echo "0")
+    # Ensure we have a clean numeric value
+    mise_tools=$(echo "$mise_tools" | tr -d '\n' | grep -o '[0-9]*' | head -1)
+    mise_tools=${mise_tools:-0}
     if [[ $mise_tools -gt 0 ]]; then
       print_success "Found $mise_tools npm tools managed by mise"
     else

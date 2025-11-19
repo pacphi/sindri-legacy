@@ -58,7 +58,7 @@ jobs:
           - { name: "golang", tier: "standard", depends: "" }
           - { name: "nodejs-devtools", tier: "standard", depends: "nodejs" }
           - { name: "claude-marketplace", tier: "standard", depends: "" }
-          - { name: "openskills", tier: "standard", depends: "nodejs git" }
+          - { name: "openskills", tier: "standard", depends: "nodejs" }
           - { name: "php", tier: "standard", depends: "" }
           - { name: "playwright", tier: "standard", depends: "nodejs" }
 

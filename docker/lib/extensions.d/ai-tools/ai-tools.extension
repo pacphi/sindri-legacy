@@ -24,6 +24,7 @@ EXT_CATEGORY="ai-tools"
 EXT_INSTALL_METHOD="mixed"  # Native + mise
 EXT_UPGRADE_STRATEGY="automatic"
 EXT_OPTIONAL_SECRETS="google_gemini_api_key,xai_api_key"
+EXT_DEPENDENCIES="nodejs python golang github-cli"  # Required for full AI tools functionality
 
 # Initialize extension environment
 extension_init
