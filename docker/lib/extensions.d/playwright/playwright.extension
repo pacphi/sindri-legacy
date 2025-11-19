@@ -98,6 +98,14 @@ install() {
   # Set memory limit for npm operations
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"
 
+  # Always install system dependencies first (required for npm packages in both CI and production)
+  print_status "Installing Playwright system dependencies..."
+  if npx playwright install-deps; then
+    print_success "System dependencies installed"
+  else
+    print_warning "Some system dependencies may be missing - continuing anyway"
+  fi
+
   # CI mode: Skip browsers, use optimized npm flags
   if is_ci_mode; then
     print_status "CI mode: Installing Playwright packages (browsers skipped)..."
@@ -130,13 +138,6 @@ install() {
       print_success "Chromium browser installed"
     else
       print_warning "Chromium browser installation had issues"
-    fi
-
-    print_status "Installing Chromium system dependencies..."
-    if npx playwright install-deps chromium; then
-      print_success "Chromium dependencies installed"
-    else
-      print_warning "Chromium dependencies installation had issues"
     fi
   fi
 
