@@ -64,9 +64,18 @@ test_sops_installation() {
         local version
         version=$(sops --version 2>&1 | head -1 || echo "unknown")
         log_pass "SOPS is installed: $version"
+        log_info "SOPS path: $(which sops)"
+
+        # Test if SOPS actually works
+        if echo "test: value" | sops --encrypt --age "$(cat /dev/null 2>&1 || echo 'age1test')" /dev/stdin > /dev/null 2>&1; then
+            log_info "SOPS encryption test: working"
+        else
+            log_info "SOPS encryption test: may have issues"
+        fi
         return 0
     else
         log_fail "SOPS binary not found in PATH"
+        log_info "PATH=$PATH"
         return 1
     fi
 }
@@ -186,18 +195,32 @@ test_secrets_file_encryption() {
 
     local secrets_file="$HOME/.secrets/secrets.enc.yaml"
 
-    # Create a test secret
+    # Create a test secret with detailed error output
     source "$HOME/.secrets/lib.sh" 2>/dev/null
-    set_secret "test_encrypted" "sensitive_data" 2>/dev/null
+
+    # Try to create a secret and capture any errors
+    log_info "Attempting to create encrypted secret..."
+    if ! set_secret "test_encrypted" "sensitive_data" 2>&1 | tee /tmp/set_secret_output.log; then
+        log_fail "set_secret() command failed"
+        log_info "Error output:"
+        cat /tmp/set_secret_output.log
+        return 1
+    fi
 
     if [[ -f "$secrets_file" ]]; then
         log_pass "Encrypted secrets file created"
+
+        # Show first few lines for debugging
+        log_info "First 5 lines of secrets file:"
+        head -5 "$secrets_file" || true
 
         # Verify file is actually encrypted (should contain SOPS metadata)
         if grep -q "sops:" "$secrets_file" && grep -q "age:" "$secrets_file"; then
             log_pass "Secrets file contains SOPS encryption metadata"
         else
             log_fail "Secrets file does not appear to be encrypted"
+            log_info "File content (first 10 lines):"
+            head -10 "$secrets_file" || true
             return 1
         fi
 
