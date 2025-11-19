@@ -145,18 +145,20 @@ set_secret() {
         echo "# Encrypted secrets managed by SOPS + age" > "${SECRETS_DIR}/secrets.yaml"
         SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" \
         SOPS_AGE_RECIPIENTS="$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
-        sops --encrypt --age "$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
+        sops --encrypt --input-type=yaml --output-type=yaml --age "$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
              "${SECRETS_DIR}/secrets.yaml" > "$SECRETS_FILE"
         rm "${SECRETS_DIR}/secrets.yaml"
     fi
 
     # Decrypt, update, re-encrypt
     local temp_file=$(mktemp)
-    SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" sops --decrypt "$SECRETS_FILE" > "$temp_file" 2>/dev/null
+    SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" sops --decrypt --output-type=yaml "$SECRETS_FILE" > "$temp_file" 2>/dev/null
 
     # Update or add secret
     if grep -q "^${secret_name}:" "$temp_file"; then
-        sed -i "s|^${secret_name}:.*|${secret_name}: ${secret_value}|" "$temp_file"
+        # Use different sed syntax for Linux (no backup file extension needed)
+        sed "s|^${secret_name}:.*|${secret_name}: ${secret_value}|" "$temp_file" > "$temp_file.new"
+        mv "$temp_file.new" "$temp_file"
     else
         echo "${secret_name}: ${secret_value}" >> "$temp_file"
     fi
@@ -164,7 +166,7 @@ set_secret() {
     # Re-encrypt
     SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" \
     SOPS_AGE_RECIPIENTS="$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
-    sops --encrypt --age "$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
+    sops --encrypt --input-type=yaml --output-type=yaml --age "$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')" \
          "$temp_file" > "$SECRETS_FILE"
 
     rm "$temp_file"
@@ -328,10 +330,10 @@ sync_flyio_secrets() {
         # Get age public key for encryption
         local age_recipient=$(grep '^# public key:' "$AGE_KEY_FILE" | cut -d':' -f2 | tr -d ' ')
 
-        # Single encrypt operation for all secrets
+        # Single encrypt operation for all secrets (force YAML format)
         if SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" \
            SOPS_AGE_RECIPIENTS="$age_recipient" \
-           sops --encrypt --age "$age_recipient" "$temp_secrets" > "$SECRETS_FILE" 2>/dev/null; then
+           sops --encrypt --input-type=yaml --output-type=yaml --age "$age_recipient" "$temp_secrets" > "$SECRETS_FILE" 2>/dev/null; then
 
             chmod 600 "$SECRETS_FILE"
             echo "  ✓ All secrets encrypted and stored ($secrets_count total)"
