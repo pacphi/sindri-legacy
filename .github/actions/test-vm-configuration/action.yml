@@ -56,9 +56,10 @@ runs:
           tool=$(echo "$tool" | xargs)  # Trim whitespace
           tool_checks="$tool_checks
           if which $tool > /dev/null 2>&1; then
-            echo \"  ✅ $tool found\"
+            tool_path=\$(which $tool)
+            printf \"%-40s %-30s %s\\n\" \"$tool\" \"\$tool_path\" \"✅ PASS\"
           else
-            echo \"  ❌ $tool not found\"
+            printf \"%-40s %-30s %s\\n\" \"$tool\" \"Not found\" \"❌ FAIL\"
             exit 1
           fi"
         done
@@ -73,6 +74,9 @@ runs:
           resource_checks="
           echo \"\"
           echo \"📊 Verifying VM Resources...\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
+          printf \"%-40s %-15s %-15s %s\\n\" \"Resource\" \"Expected\" \"Actual\" \"Status\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
           "
         fi
 
@@ -81,12 +85,11 @@ runs:
           min_memory=$((expected_memory * 90 / 100))
           resource_checks="$resource_checks
           actual_memory=\$(free -m | awk '/^Mem:/{print \$2}')
-          echo \"  💾 Memory: \${actual_memory}MB (expected ~${expected_memory}MB)\"
           if [ \"\$actual_memory\" -lt \"$min_memory\" ]; then
-            echo \"    ❌ Memory below minimum threshold (${min_memory}MB)\"
+            printf \"%-40s %-15s %-15s %s\\n\" \"Memory (MB)\" \"${expected_memory}MB\" \"\${actual_memory}MB\" \"❌ FAIL (below ${min_memory}MB min)\"
             exit 1
           else
-            echo \"    ✅ Memory OK\"
+            printf \"%-40s %-15s %-15s %s\\n\" \"Memory (MB)\" \"${expected_memory}MB\" \"\${actual_memory}MB\" \"✅ PASS\"
           fi
           "
         fi
@@ -94,27 +97,26 @@ runs:
         if [ -n "$expected_cpus" ]; then
           resource_checks="$resource_checks
           actual_cpus=\$(nproc)
-          echo \"  ⚡ CPUs: \${actual_cpus} (expected ${expected_cpus})\"
           if [ \"\$actual_cpus\" != \"$expected_cpus\" ]; then
-            echo \"    ❌ CPU count mismatch\"
+            printf \"%-40s %-15s %-15s %s\\n\" \"CPU Count\" \"$expected_cpus\" \"\$actual_cpus\" \"❌ FAIL\"
             exit 1
           else
-            echo \"    ✅ CPU count OK\"
+            printf \"%-40s %-15s %-15s %s\\n\" \"CPU Count\" \"$expected_cpus\" \"\$actual_cpus\" \"✅ PASS\"
           fi
           "
         fi
 
         if [ -n "$expected_cpu_kind" ]; then
           resource_checks="$resource_checks
-          echo \"  🔧 CPU kind: ${expected_cpu_kind}\"
           if [ \"$expected_cpu_kind\" = \"performance\" ]; then
             if grep -q \"Xeon\\|EPYC\" /proc/cpuinfo 2>/dev/null; then
-              echo \"    ✅ Detected performance CPU (dedicated)\"
+              cpu_model=\$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)
+              printf \"%-40s %-15s %-15s %s\\n\" \"CPU Type\" \"Performance\" \"Detected\" \"✅ PASS (\$cpu_model)\"
             else
-              echo \"    ⚠️  Could not confirm performance CPU type\"
+              printf \"%-40s %-15s %-15s %s\\n\" \"CPU Type\" \"Performance\" \"Unknown\" \"⚠️  WARNING (Could not confirm)\"
             fi
           else
-            echo \"    ✅ Shared CPU configuration (no validation needed)\"
+            printf \"%-40s %-15s %-15s %s\\n\" \"CPU Type\" \"Shared\" \"Shared\" \"✅ PASS\"
           fi
           "
         fi
@@ -128,32 +130,51 @@ runs:
           set -e
           echo \"\"
           echo \"📦 Checking Extension System...\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
+          printf \"%-40s %-30s %s\\n\" \"Component\" \"Expected\" \"Status\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
 
+          # Check extension manager
           if [ -f \"/workspace/.system/bin/extension-manager\" ]; then
-            echo \"  ✅ Extension manager found\"
+            printf \"%-40s %-30s %s\\n\" \"Extension Manager\" \"/workspace/.system/bin/extension-manager\" \"✅ PASS\"
           else
-            echo \"  ❌ Extension manager missing\"
+            printf \"%-40s %-30s %s\\n\" \"Extension Manager\" \"/workspace/.system/bin/extension-manager\" \"❌ FAIL\"
             exit 1
           fi
 
-          if [ -d \"/workspace/scripts/lib/extensions.d\" ]; then
-            ext_count=\$(ls -1 /workspace/scripts/lib/extensions.d/*.extension 2>/dev/null | wc -l)
-            echo \"  ✅ Extension directory found with \$ext_count extension examples\"
+          # Check extension definitions directory (from Docker image)
+          if [ -d \"/docker/lib/extensions.d\" ]; then
+            ext_count=\$(ls -1 /docker/lib/extensions.d/*.extension 2>/dev/null | wc -l)
+            printf \"%-40s %-30s %s\\n\" \"Extension Definitions\" \"/docker/lib/extensions.d/\" \"✅ PASS (\$ext_count files)\"
           else
-            echo \"  ❌ Extensions directory missing\"
+            printf \"%-40s %-30s %s\\n\" \"Extension Definitions\" \"/docker/lib/extensions.d/\" \"❌ FAIL\"
+            exit 1
+          fi
+
+          # Check manifest directory
+          if [ -d \"/workspace/.system/manifest\" ]; then
+            printf \"%-40s %-30s %s\\n\" \"Manifest Directory\" \"/workspace/.system/manifest/\" \"✅ PASS\"
+          else
+            printf \"%-40s %-30s %s\\n\" \"Manifest Directory\" \"/workspace/.system/manifest/\" \"❌ FAIL\"
             exit 1
           fi
 
           echo \"\"
           echo \"🛠️  Checking Required Tools...\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
+          printf \"%-40s %-30s %s\\n\" \"Tool\" \"Command\" \"Status\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
           $tool_checks
 
           echo \"\"
           echo \"📁 Checking Workspace Directory...\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
+          printf \"%-40s %-30s %s\\n\" \"Component\" \"Expected\" \"Status\"
+          echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
           if ls -la /workspace/ > /dev/null 2>&1; then
-            echo \"  ✅ Workspace directory accessible\"
+            printf \"%-40s %-30s %s\\n\" \"Workspace Directory\" \"/workspace/\" \"✅ PASS\"
           else
-            echo \"  ❌ Workspace directory issue\"
+            printf \"%-40s %-30s %s\\n\" \"Workspace Directory\" \"/workspace/\" \"❌ FAIL\"
             exit 1
           fi
 
