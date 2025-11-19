@@ -110,7 +110,7 @@ runs:
           resource_checks="$resource_checks
           if [ \"$expected_cpu_kind\" = \"performance\" ]; then
             if grep -q \"Xeon\\|EPYC\" /proc/cpuinfo 2>/dev/null; then
-              cpu_model=\$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)
+              cpu_model=\$(grep -m1 \"model name\" /proc/cpuinfo | cut -d: -f2 | xargs)
               printf \"%-40s %-15s %-15s %s\\n\" \"CPU Type\" \"Performance\" \"Detected\" \"✅ PASS (\$cpu_model)\"
             else
               printf \"%-40s %-15s %-15s %s\\n\" \"CPU Type\" \"Performance\" \"Unknown\" \"⚠️  WARNING (Could not confirm)\"
