@@ -69,6 +69,7 @@ create_secrets_library() {
     echo "📚 Creating secrets library..."
 
     mkdir -p "$SECRETS_DIR"
+    chmod 700 "$SECRETS_DIR"
 
     cat > "$SECRETS_LIBRARY" << 'LIBRARY_EOF'
 #!/bin/bash

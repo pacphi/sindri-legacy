@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# Enable alias expansion (required for aliases to work in non-interactive shells)
+shopt -s expand_aliases
+
 # Source .bashrc to load user commands (aliases and functions)
 # This is required for non-interactive shells where .bashrc isn't auto-sourced
 # shellcheck disable=SC1090,SC1091
@@ -215,8 +218,14 @@ test_secrets_file_encryption() {
         head -5 "$secrets_file" || true
 
         # Verify file is actually encrypted (should contain SOPS metadata)
-        if grep -q "sops:" "$secrets_file" && grep -q "age:" "$secrets_file"; then
-            log_pass "Secrets file contains SOPS encryption metadata"
+        # SOPS can output YAML or JSON format - check for both
+        if grep -q '"sops"' "$secrets_file" || grep -q "sops:" "$secrets_file"; then
+            if grep -q '"age"' "$secrets_file" || grep -q "age:" "$secrets_file"; then
+                log_pass "Secrets file contains SOPS encryption metadata (JSON or YAML)"
+            else
+                log_fail "SOPS metadata found but no age encryption"
+                return 1
+            fi
         else
             log_fail "Secrets file does not appear to be encrypted"
             log_info "File content (first 10 lines):"
@@ -303,9 +312,9 @@ test_environment_cleanup() {
         fi
     fi
 
-    # Verify encrypted file is valid
-    if grep -q "sops:" "$HOME/.secrets/secrets.enc.yaml" && \
-       grep -q "age:" "$HOME/.secrets/secrets.enc.yaml"; then
+    # Verify encrypted file is valid (check for both JSON and YAML formats)
+    if (grep -q '"sops"' "$HOME/.secrets/secrets.enc.yaml" || grep -q "sops:" "$HOME/.secrets/secrets.enc.yaml") && \
+       (grep -q '"age"' "$HOME/.secrets/secrets.enc.yaml" || grep -q "age:" "$HOME/.secrets/secrets.enc.yaml"); then
         log_pass "Secrets file is properly SOPS-encrypted"
     else
         log_fail "Secrets file exists but is not properly encrypted"
