@@ -5,9 +5,14 @@
 [tools]
 # Core npm development tools for CI testing
 "npm:typescript" = "latest"
+"npm:ts-node" = "latest"
 "npm:eslint" = "latest"
+"npm:@typescript-eslint/parser" = "latest"
+"npm:@typescript-eslint/eslint-plugin" = "latest"
 "npm:prettier" = "latest"
 "npm:nodemon" = "latest"
+"npm:goalie" = "latest"
+"npm:research-swarm" = "latest"
 
 [settings]
 experimental = true
