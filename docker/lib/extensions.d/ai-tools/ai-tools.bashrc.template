@@ -29,3 +29,8 @@ alias ghce="gh copilot explain"
 
 # AWS Q
 alias awsq="aws q"
+
+# Grok CLI
+alias gr="grok"
+alias grp="grok --prompt"
+alias gri="grok"  # Interactive mode

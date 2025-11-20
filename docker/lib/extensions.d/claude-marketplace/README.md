@@ -155,11 +155,12 @@ The `marketplaces.yml.example` includes these pre-selected marketplaces:
 | **n8n-mcp-skills**                 | Workflow automation integration                     | czlonkowski/n8n-skills                    |
 | **life-sciences**                  | Anthropic's official life sciences research plugins | anthropics/life-sciences                  |
 | **awesome-claude-skills**          | Community-curated collection of useful skills       | ComposioHQ/awesome-claude-skills          |
+| **claude-code-marketplace**        | Prompt improver for enriching vague prompts         | severity1/claude-code-prompt-improver     |
 
 ### File Locations
 
 - **Claude Settings**: `~/.claude/settings.json` (merged configuration)
-- **YAML Template**: `/workspace/marketplaces.yml.example` (full list, 6 marketplaces)
+- **YAML Template**: `/workspace/marketplaces.yml.example` (full list, 7 marketplaces)
 - **CI YAML Template**: `/workspace/marketplaces.ci.yml.example` (CI testing, 3 marketplaces)
 - **YAML Config**: `/workspace/marketplaces.yml` (user-created working file)
 - **Default Settings**: Extension includes `default-settings.json` as merge base

@@ -61,6 +61,13 @@ extraKnownMarketplaces:
       source: github
       repo: ComposioHQ/awesome-claude-skills
 
+  # Claude Code Prompt Improver - Enriches vague prompts with research and clarification
+  # https://github.com/severity1/claude-code-prompt-improver
+  claude-code-marketplace:
+    source:
+      source: github
+      repo: severity1/claude-code-prompt-improver
+
   # ============================================================================
   # OTHER MARKETPLACES
   # ============================================================================
@@ -108,6 +115,7 @@ enabledPlugins:
   document-skills-pdf@awesome-claude-skills: true
   document-skills-pptx@awesome-claude-skills: true
   document-skills-xlsx@awesome-claude-skills: true
+  prompt-improver@claude-code-marketplace: true
 
   # ============================================================================
   # OTHER PLUGINS
