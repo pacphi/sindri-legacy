@@ -61,41 +61,30 @@ prerequisites() {
 install() {
   print_status "Installing Node.js development tools via mise..."
 
-  # Create .npmrc to prevent native module compilation (use pre-built binaries)
-  # This must be done BEFORE mise install to ensure npm reads it during package installation
-  local npmrc_path="$HOME/.npmrc"
-  local npmrc_backup=""
+  # Export npm configuration as environment variables
+  # mise runs `npm install -g package --prefix /path`, which may not read .npmrc properly
+  # Environment variables with npm_config_ prefix are ALWAYS honored by npm
+  print_status "Configuring npm to use pre-built binaries (via environment variables)..."
 
-  # Backup existing .npmrc if present
-  if [[ -f "$npmrc_path" ]]; then
-    npmrc_backup="$npmrc_path.backup.$(date +%s)"
-    cp "$npmrc_path" "$npmrc_backup"
-    print_debug "Backed up existing .npmrc to $npmrc_backup"
-  fi
+  # Force use of pre-built binaries (skip native module compilation)
+  # This prevents long compilation times for packages like sqlite3 (10+ minutes in CI)
+  export npm_config_build_from_source=false
+  export npm_config_fallback_to_build=false
 
-  # Create .npmrc with pre-built binary settings
-  print_status "Configuring npm to use pre-built binaries..."
-  cat > "$npmrc_path" << 'EOF'
-# Force use of pre-built binaries (skip native module compilation)
-# This prevents long compilation times for packages like sqlite3 (10+ minutes in CI)
-build-from-source=false
-fallback-to-build=false
+  # sqlite3-specific: use pre-built binaries from TryGhost releases
+  export npm_config_sqlite3_binary_host_mirror="https://github.com/TryGhost/node-sqlite3/releases/download"
 
-# sqlite3-specific: use pre-built binaries from TryGhost releases
-sqlite3_binary_host_mirror=https://github.com/TryGhost/node-sqlite3/releases/download
-EOF
-
-  print_debug "Created .npmrc at $npmrc_path"
+  print_debug "Set npm_config environment variables for pre-built binaries"
 
   # Install via mise using shared helper
+  # The environment variables will be inherited by npm during installation
   if install_mise_config "nodejs-devtools"; then
     print_success "Installation completed"
   else
-    # Restore backup on failure
-    if [[ -n "$npmrc_backup" && -f "$npmrc_backup" ]]; then
-      mv "$npmrc_backup" "$npmrc_path"
-      print_debug "Restored .npmrc from backup"
-    fi
+    # Clean up environment variables on failure
+    unset npm_config_build_from_source
+    unset npm_config_fallback_to_build
+    unset npm_config_sqlite3_binary_host_mirror
     return 1
   fi
 
@@ -104,6 +93,11 @@ EOF
   if mise reshim; then
     print_debug "mise reshim completed"
   fi
+
+  # Clean up environment variables after installation
+  unset npm_config_build_from_source
+  unset npm_config_fallback_to_build
+  unset npm_config_sqlite3_binary_host_mirror
 
   return 0
 }
