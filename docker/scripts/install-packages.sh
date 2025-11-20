@@ -36,7 +36,6 @@ apt_install_retry 3 \
     net-tools \
     netcat-openbsd \
     openssh-server \
-    pipx \
     pkg-config \
     postgresql-client \
     redis-tools \
