@@ -409,7 +409,7 @@ Docker image and not tested as extensions.
 | docker                       | docker, compose    | -                   | Container runtime        |
 | infra-tools                  | terraform, ansible | -                   | IaC tools                |
 | cloud-tools                  | aws                | -                   | Cloud CLIs               |
-| ai-tools                     | codex, gemini      | nodejs              | AI assistants            |
+| ai-tools                     | codex, gemini, droid | nodejs            | AI assistants (incl. Factory AI Droid) |
 | **Utilities**                |                    |                     |                          |
 | playwright                   | playwright         | nodejs              | Browser automation       |
 | monitoring                   | claude-monitor     | python, nodejs      | Usage tracking           |
@@ -782,7 +782,7 @@ Sindri uses a 4-tier resource classification system to optimize VM resources bas
 - docker (container runtime)
 - infra-tools (Terraform, Ansible, kubectl)
 - cloud-tools (AWS, Azure, GCP CLIs)
-- ai-tools (multiple AI CLIs)
+- ai-tools (multiple AI CLIs including Factory AI Droid)
 
 **XHeavy Tier** (16GB/4CPU):
 

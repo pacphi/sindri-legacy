@@ -216,12 +216,12 @@ All tools are managed via mise with the npm backend, ensuring version consistenc
 
 ### Infrastructure & DevOps
 
-| Extension     | Description                                        | Tool Manager        | Version |
-| ------------- | -------------------------------------------------- | ------------------- | ------- |
-| `docker`      | Docker Engine with compose, dive, ctop             | apt + binary        | 2.1.0   |
-| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel          | Mixed               | 2.1.0   |
-| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs         | Official installers | 2.1.0   |
-| `ai-tools`    | AI coding assistants (Codex, Gemini, Ollama, etc.) | Mixed               | 2.1.0   |
+| Extension     | Description                                                              | Tool Manager        | Version |
+| ------------- | ------------------------------------------------------------------------ | ------------------- | ------- |
+| `docker`      | Docker Engine with compose, dive, ctop                                   | apt + binary        | 2.1.0   |
+| `infra-tools` | Terraform, Ansible, kubectl, Helm, Carvel                                | Mixed               | 2.1.0   |
+| `cloud-tools` | AWS, Azure, GCP, Oracle, DigitalOcean CLIs                               | Official installers | 2.1.0   |
+| `ai-tools`    | AI coding assistants (Factory AI Droid, Codex, Gemini, Ollama, and more) | Mixed               | 2.0.0   |
 
 ### Monitoring & Utilities
 
@@ -615,7 +615,7 @@ Use standard categories for consistency:
 | `language`       | Language runtimes                  | nodejs, python, rust, golang                      |
 | `devtools`       | Development utilities              | nodejs-devtools, monitoring                       |
 | `infrastructure` | Infrastructure tools               | docker, infra-tools, cloud-tools                  |
-| `ai`             | AI coding assistants               | claude-marketplace, openskills, ai-tools, agent-manager |
+| `ai-tools`       | AI coding assistants               | claude-marketplace, openskills, ai-tools, agent-manager |
 | `utility`        | General utilities                  | tmux-workspace, playwright, github-cli, context-loader |
 
 ---

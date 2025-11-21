@@ -23,7 +23,7 @@ EXT_DESCRIPTION="AI CLI tools and coding assistants (hybrid: native + mise-manag
 EXT_CATEGORY="ai-tools"
 EXT_INSTALL_METHOD="mixed"  # Native + mise
 EXT_UPGRADE_STRATEGY="automatic"
-EXT_OPTIONAL_SECRETS="google_gemini_api_key,xai_api_key"
+EXT_OPTIONAL_SECRETS="google_gemini_api_key,grok_api_key"
 EXT_DEPENDENCIES="nodejs python golang github-cli"  # Required for full AI tools functionality
 
 # Initialize extension environment
@@ -257,6 +257,32 @@ install() {
   # PLATFORM CLIs (No change - installed via platform-specific methods)
   # ========================================================================
 
+  # Factory AI Droid - AI-powered development agent
+  print_status "Installing Factory AI CLI (Droid)..."
+  if command_exists droid; then
+    print_warning "Factory AI CLI already installed"
+  else
+    case "$(uname)" in
+      Darwin|Linux)
+        if curl -fsSL https://app.factory.ai/cli | bash 2>&1; then
+          if command_exists droid; then
+            print_success "Factory AI CLI installed"
+            print_status "Authenticate with: droid"
+          else
+            print_warning "Factory AI CLI installation completed but command not found"
+            print_status "You may need to reload your shell or add ~/.factory/bin to PATH"
+          fi
+        else
+          print_warning "Failed to install Factory AI CLI"
+        fi
+        ;;
+      *)
+        print_warning "Factory AI CLI installation not supported on $(uname)"
+        print_status "Manual installation: https://docs.factory.ai/cli/getting-started/quickstart"
+        ;;
+    esac
+  fi
+
   # GitHub Copilot CLI
   print_status "Installing GitHub Copilot CLI..."
   if command_exists gh; then
@@ -282,25 +308,26 @@ install() {
     print_status "Install cloud-tools extension for AWS CLI"
   fi
 
-  # Python-based tools (xAI Grok SDK)
-  if command_exists pip || command_exists pip3; then
-    local pip_cmd="pip"
-    command_exists pip3 && pip_cmd="pip3"
-
-    print_status "Installing xAI Grok SDK..."
-    if $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
-      print_warning "xAI Grok SDK already installed"
+  # Grok CLI (npm-based tool)
+  if command_exists npm; then
+    print_status "Installing Grok CLI..."
+    if command_exists grok; then
+      print_warning "Grok CLI already installed"
     else
-      if $pip_cmd install xai-grok-sdk 2>&1; then
-        print_success "xAI Grok SDK installed"
-        print_status "Use in Python: from xai_grok_sdk import GrokClient"
+      if npm install -g @vibe-kit/grok-cli 2>&1; then
+        if command_exists grok; then
+          print_success "Grok CLI installed"
+          print_status "Configure with: export GROK_API_KEY=your_key"
+        else
+          print_warning "Grok CLI installed but command not found"
+        fi
       else
-        print_warning "Failed to install xAI Grok SDK"
+        print_warning "Failed to install Grok CLI"
       fi
     fi
   else
-    print_warning "pip not found - skipping xAI Grok SDK"
-    print_status "Install python extension for Python-based tools"
+    print_warning "npm not found - skipping Grok CLI"
+    print_status "Install nodejs extension for Grok CLI"
   fi
 
   return 0
@@ -345,9 +372,23 @@ configure() {
     export PATH=$PATH:$HOME/go/bin
   fi
 
+  # Configure Factory AI Droid PATH
+  local factory_bin="$HOME/.factory/bin"
+  if [[ -d "$factory_bin" ]]; then
+    if ! echo "$PATH" | grep -q "$factory_bin"; then
+      if ! grep -q "factory/bin" "$HOME/.bashrc" 2>/dev/null; then
+        echo "" >> "$HOME/.bashrc"
+        echo "# ${EXT_NAME} - Factory AI" >> "$HOME/.bashrc"
+        echo 'export PATH="$HOME/.factory/bin:$PATH"' >> "$HOME/.bashrc"
+        print_success "Added Factory AI to PATH"
+      fi
+    fi
+    export PATH="$HOME/.factory/bin:$PATH"
+  fi
+
   # Create SSH wrappers
   if command_exists create_tool_wrapper 2>/dev/null; then
-    local ai_tools=(codex gemini ollama fabric hector)
+    local ai_tools=(codex gemini ollama fabric hector droid grok)
     for tool in "${ai_tools[@]}"; do
       if command_exists "$tool"; then
         create_tool_wrapper "$tool" "$(which $tool)"
@@ -396,19 +437,22 @@ EOF
       print_success "Gemini CLI configured with API key"
     fi
 
-    # Configure xAI Grok SDK if API key available
-    if has_secret "xai_api_key" 2>/dev/null; then
-      print_status "Configuring xAI Grok SDK with API key..."
+    # Configure Grok CLI if API key available
+    if has_secret "grok_api_key" 2>/dev/null; then
+      print_status "Configuring Grok CLI with API key..."
 
       local api_key
-      api_key=$(get_secret "xai_api_key")
+      api_key=$(get_secret "grok_api_key")
 
-      mkdir -p "$HOME/.config/xai"
-      cat > "$HOME/.config/xai/credentials" << EOF
-XAI_API_KEY=$api_key
+      mkdir -p "$HOME/.grok"
+      cat > "$HOME/.grok/user-settings.json" << EOF
+{
+  "apiKey": "$api_key",
+  "model": "grok-code-fast-1"
+}
 EOF
-      chmod 600 "$HOME/.config/xai/credentials"
-      print_success "xAI Grok SDK configured with API key"
+      chmod 600 "$HOME/.grok/user-settings.json"
+      print_success "Grok CLI configured with API key"
     fi
   fi
 
@@ -462,18 +506,22 @@ validate() {
     ((tools_found++))
   fi
 
-  # Python-based tools
-  print_status "Checking Python-based SDKs..."
-  local pip_cmd="pip"
-  command_exists pip3 && pip_cmd="pip3"
-  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
-    print_success "xai-grok-sdk: installed"
+  # Grok CLI
+  print_status "Checking Grok CLI..."
+  if command_exists grok; then
+    local grok_version=$(grok --version 2>/dev/null || echo "installed")
+    print_success "grok: $grok_version"
     ((tools_found++))
   fi
 
   # Platform CLIs
   print_status "Checking platform CLIs..."
   local platform_found=0
+  if command_exists droid; then
+    local droid_version=$(droid --version 2>/dev/null | head -1 || echo "installed")
+    print_success "Factory AI Droid: $droid_version"
+    ((platform_found++))
+  fi
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
     print_success "GitHub Copilot CLI: installed"
     ((platform_found++))
@@ -525,7 +573,7 @@ status() {
 
   # Check installation status - at least one tool should be present
   local any_tool_found=false
-  local all_tools=(codex gemini ollama fabric hector)
+  local all_tools=(codex gemini ollama fabric hector droid grok)
   for tool in "${all_tools[@]}"; do
     if command_exists "$tool"; then
       any_tool_found=true
@@ -605,20 +653,25 @@ status() {
     echo "    Go-based: (Go not available)"
   fi
 
-  # Python-based tools
+  # Grok CLI
   echo ""
-  echo "  Python-based SDKs:"
-  local pip_cmd="pip"
-  command_exists pip3 && pip_cmd="pip3"
-  if command_exists $pip_cmd && $pip_cmd list 2>/dev/null | grep -q "xai-grok-sdk"; then
-    echo "    ✓ xai-grok-sdk: installed"
+  echo "  Grok CLI:"
+  if command_exists grok; then
+    local version=$(grok --version 2>/dev/null || echo "installed")
+    echo "    ✓ grok: $version"
   else
-    echo "    ✗ xai-grok-sdk: not installed (requires pip)"
+    echo "    ✗ grok: not installed (requires npm)"
   fi
 
   # Platform CLIs
   echo ""
   echo "  Platform CLIs:"
+  if command_exists droid; then
+    local version=$(droid --version 2>/dev/null | head -1 || echo "installed")
+    echo "    ✓ Factory AI Droid: $version"
+  else
+    echo "    ✗ Factory AI Droid (not installed)"
+  fi
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
     echo "    ✓ GitHub Copilot CLI (via gh extension)"
   else
@@ -633,13 +686,14 @@ status() {
   # API key requirements
   echo ""
   print_status "API key requirements:"
+  echo "  • Factory AI Droid: Requires browser authentication"
   echo "  • Ollama: None (local models)"
   echo "  • Fabric: Optional (for AI features)"
   echo "  • Codex: Requires API key"
   echo "  • Gemini: Requires GOOGLE_GEMINI_API_KEY"
+  echo "  • Grok CLI: Requires GROK_API_KEY"
   echo "  • GitHub Copilot: Requires GitHub subscription"
   echo "  • AWS Q: Requires AWS credentials"
-  echo "  • xAI Grok SDK: Requires XAI_API_KEY"
 
   # Dependencies
   echo ""
@@ -818,7 +872,7 @@ upgrade() {
 remove() {
   print_warning "Uninstalling AI CLI tools (hybrid approach)..."
 
-  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "hector"
+  show_dependent_extensions_warning "codex" "gemini" "ollama" "fabric" "hector" "droid" "grok"
 
   if ! prompt_confirmation "Continue with AI tools removal?"; then
     print_status "Removal cancelled"
@@ -862,6 +916,28 @@ remove() {
     done
   fi
 
+  # Remove Factory AI Droid
+  if command_exists droid; then
+    print_status "Removing Factory AI CLI (Droid)..."
+    local droid_path=$(which droid)
+    if [[ -n "$droid_path" ]]; then
+      rm -f "$droid_path" 2>/dev/null || print_warning "Could not remove droid at: $droid_path"
+    fi
+    if [[ -d "$HOME/.factory/bin" ]]; then
+      rm -rf "$HOME/.factory/bin"
+    fi
+    print_success "Factory AI CLI binaries removed"
+
+    # Optionally remove config
+    if [[ -d "$HOME/.factory" ]]; then
+      read -p "Remove Factory AI configuration (~/.factory)? (y/N): " -r
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -rf "$HOME/.factory"
+        print_success "Factory AI configuration removed"
+      fi
+    fi
+  fi
+
   # Remove GitHub Copilot extension
   if command_exists gh && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
     gh extension remove github/gh-copilot 2>/dev/null
@@ -890,11 +966,16 @@ remove() {
     [[ -f "$HOME/go/bin/hector" ]] && rm -f "$HOME/go/bin/hector"
   fi
 
-  # Remove Python-based tools
-  if command_exists pip || command_exists pip3; then
-    local pip_cmd="pip"
-    command_exists pip3 && pip_cmd="pip3"
-    $pip_cmd uninstall -y xai-grok-sdk 2>/dev/null
+  # Remove Grok CLI
+  if command_exists npm && npm list -g @vibe-kit/grok-cli 2>/dev/null | grep -q "@vibe-kit/grok-cli"; then
+    npm uninstall -g @vibe-kit/grok-cli 2>/dev/null
+    print_success "Grok CLI removed"
+  fi
+
+  # Remove Grok CLI config
+  if [[ -d "$HOME/.grok" ]]; then
+    rm -rf "$HOME/.grok"
+    print_success "Grok CLI configuration removed"
   fi
 
   # Remove aliases
@@ -905,6 +986,9 @@ remove() {
 
   # Remove local bin PATH from bashrc
   cleanup_bashrc "# ${EXT_NAME} - Local bin"
+
+  # Remove Factory AI PATH from bashrc
+  cleanup_bashrc "# ${EXT_NAME} - Factory AI"
 
   # Remove workspace
   # Use global WORKSPACE_DIR from common.sh
