@@ -1,4 +1,4 @@
-# Sindri
+# Sindri Legacy
 
 [![Version](https://img.shields.io/github/v/release/pacphi/sindri?include_prereleases)](https://github.com/pacphi/sindri/releases)
 [![License](https://img.shields.io/github/license/pacphi/sindri)](LICENSE)
@@ -21,6 +21,11 @@ auto-suspend VMs, and persistent storage.
    🔨 Forging Software with AI • Running on Fly.io
    📦 https://github.com/pacphi/sindri
 ```
+
+> [!CAUTION]
+> 2025-11-21: THIS PROJECT IS NO LONGER UNDER ACTIVE DEVELOPMENT
+
+> Visit https://github.com/pacphi/sindri for continued support and innovations.
 
 ## About the Name
 
